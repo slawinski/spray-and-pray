@@ -1,0 +1,64 @@
+{
+  "personal_info": {
+    "name": "Jane Doe",
+    "email": "jane@example.com",
+    "phone": "+1 555-0100",
+    "linkedin": "https://www.linkedin.com/in/janedoe",
+    "github": "https://github.com/janedoe",
+    "website": "https://janedoe.com",
+    "location": "New York, USA"
+  },
+  "summary": "Software Engineer with X years of experience in...",
+  "skills": {
+    "languages": ["JavaScript", "Python"],
+    "frameworks_and_libraries": ["React", "FastAPI"],
+    "tools_and_infrastructure": ["Docker", "Git"],
+    "soft_skills": ["Mentoring", "Public Speaking"]
+  },
+  "experience": [
+    {
+      "title": "Senior Software Engineer",
+      "company": "Tech Corp",
+      "location": "Remote",
+      "start_date": "01/2020",
+      "end_date": "Present",
+      "achievements": [
+        "Led the development of..."
+      ]
+    }
+  ],
+  "speaking_and_community": [
+    {
+      "organization": "Local Tech Meetup",
+      "url": "https://example.com/meetup",
+      "role": "Speaker",
+      "start_date": "2021",
+      "end_date": "Present",
+      "activities": ["Gave talks on..."],
+      "talks": ["Talk title (2023)"]
+    }
+  ],
+  "education": [
+    {
+      "degree": "B.S. in Computer Science",
+      "university": "State University",
+      "start_date": "2015",
+      "end_date": "2019"
+    }
+  ],
+  "certifications": [
+    {
+      "name": "AWS Certified Solutions Architect",
+      "issuer": "Amazon Web Services",
+      "issue_date": "05/2021"
+    }
+  ],
+  "languages": [
+    {
+      "language": "English",
+      "proficiency": "Native"
+    }
+  ],
+  "hobbies": ["Hiking", "Photography"],
+  "disclaimer": "I give consent for my personal data included in my application to be processed for the purposes of the recruitment process..."
+}
