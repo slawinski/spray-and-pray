@@ -21,9 +21,40 @@ logger = logging.getLogger(__name__)
 def cmd_optimize(args):
     """Original CV optimization flow."""
     try:
-        logger.info(f"Loading Master CV from {args.master_cv}...")
-        with open(args.master_cv, "r", encoding="utf-8") as f:
-            master_cv_data = json.load(f)
+        # If app_id is provided, override the output paths and job description from the tracker.
+        if getattr(args, 'app_id', None) is not None:
+            from cv_optimizer import db
+            from cv_optimizer.tracker import _build_app_dir, _build_cv_filename
+            db.init_db()
+            app = db.get_application(args.app_id)
+            if app is None:
+                logger.error(f"Application #{args.app_id} not found.")
+                sys.exit(1)
+            
+            company, role, jd_path = app[1], app[2], app[3]
+            
+            # Use the tracked JD path if no job-offer is provided, else keep user's choice
+            if args.job_offer == settings.job_description_path and jd_path:
+                args.job_offer = jd_path
+
+            logger.info(f"Loading Master CV from {args.master_cv}...")
+            with open(args.master_cv, "r", encoding="utf-8") as f:
+                master_cv_data = json.load(f)
+
+            app_dir = _build_app_dir(args.app_id, company, role)
+            candidate_name = master_cv_data.get("personal_info", {}).get("name", "Candidate")
+            cv_base_name = _build_cv_filename(candidate_name, role)
+
+            args.output_md = str(app_dir / f"{cv_base_name}.md")
+            args.output_pdf = str(app_dir / f"{cv_base_name}.pdf")
+            
+            # Make sure directory exists if it was deleted
+            app_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Using application directory: {app_dir}")
+        else:
+            logger.info(f"Loading Master CV from {args.master_cv}...")
+            with open(args.master_cv, "r", encoding="utf-8") as f:
+                master_cv_data = json.load(f)
 
         logger.info(f"Extracting job description from {args.job_offer}...")
         job_description = PDFExtractor.extract_text(args.job_offer)
@@ -44,6 +75,11 @@ def cmd_optimize(args):
         generator = PDFGenerator()
         generator.generate(optimized_cv_md, args.output_pdf)
 
+        if getattr(args, 'app_id', None) is not None:
+            from cv_optimizer import db
+            db.init_db()
+            db.update_application(args.app_id, cv_path=args.output_pdf)
+
         logger.info("Success! Optimization complete.")
 
     except FileNotFoundError as e:
@@ -61,7 +97,7 @@ def cmd_track(args):
     """Initializes a new application in the DB."""
     from cv_optimizer.tracker import track
     try:
-        app_id = track(args.company, args.role, args.jd)
+        app_id = track(args.company, args.role, args.jd, args.master_cv)
         print(f"✓ Application #{app_id} tracked: {args.company} — {args.role}")
     except FileNotFoundError as e:
         logger.error(str(e))
@@ -139,6 +175,11 @@ def main():
         help=f"Path to job offer PDF (default: {settings.job_description_path})"
     )
     opt_parser.add_argument(
+        "--app-id",
+        type=int,
+        help="Optional. Re-optimize for an existing application ID. If provided, overrides output paths to save directly in the application folder."
+    )
+    opt_parser.add_argument(
         "--output-md",
         default=settings.output_md_path,
         help=f"Path to save optimized markdown (default: {settings.output_md_path})"
@@ -159,6 +200,11 @@ def main():
     track_parser.add_argument(
         "--jd", required=True,
         help="Path to the Job Description file (PDF or TXT)"
+    )
+    track_parser.add_argument(
+        "--master-cv",
+        default=settings.master_cv_path,
+        help=f"Path to master CV JSON (default: {settings.master_cv_path})"
     )
     track_parser.set_defaults(func=cmd_track)
 

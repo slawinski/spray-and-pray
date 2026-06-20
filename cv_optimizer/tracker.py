@@ -46,7 +46,7 @@ def _build_cv_filename(name: str, role: str) -> str:
     # Keep original case, replace non-alphanumeric with underscores
     return re.sub(r'[^\w]+', '_', combined).strip('_')
 
-def track(company: str, role: str, jd_path: str) -> int:
+def track(company: str, role: str, jd_path: str, master_cv_path: str = None) -> int:
     """
     Initializes a new application:
     1. Creates DB record
@@ -81,7 +81,8 @@ def track(company: str, role: str, jd_path: str) -> int:
     try:
         job_description = PDFExtractor.extract_text(str(jd_source))
 
-        with open(settings.master_cv_path, "r", encoding="utf-8") as f:
+        actual_master_cv = master_cv_path if master_cv_path else settings.master_cv_path
+        with open(actual_master_cv, "r", encoding="utf-8") as f:
             master_cv_data = json.load(f)
 
         optimizer = CVOptimizer(
