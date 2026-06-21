@@ -4,7 +4,25 @@
 
 ---
 
-## Milestone 1: The Frictionless "1-Click" Trigger (Current Focus)
+## ✅ Milestone 0: Core CV Optimizer CLI (Completed)
+**Objective:** A foundational command-line tool that takes a master CV and a job description, uses an LLM to tailor the CV to the specific role, and generates a formatted PDF.
+
+### Architecture Components
+- **CLI Interface:** A Python terminal application (`cv-opt`) for manual triggering and tracking.
+- **LLM Engine:** Connects to an LLM provider to rewrite bullet points, align keywords, and restructure sections based on the target Job Description.
+- **Local Database:** SQLite database to track applications, statuses, and generated CV paths.
+- **PDF Generator:** Compiles the tailored CV data into a styled PDF document.
+
+### Implementation Steps
+- [x] **Step 0.1:** Define the Master CV JSON structure.
+- [x] **Step 0.2:** Implement the LLM prompt chain for tailoring experience and skills.
+- [x] **Step 0.3:** Build the PDF compilation pipeline.
+- [x] **Step 0.4:** Implement the SQLite database to persist application records.
+- [x] **Step 0.5:** Wrap in a clean CLI interface with `track` and `status` commands.
+
+---
+
+## ✅ Milestone 1: The Frictionless "1-Click" Trigger (Done)
 **Objective:** Eliminate the need to manually copy/paste job descriptions and run terminal commands. You browse job boards normally, click an extension button, and get notified when your optimized CV is ready to upload.
 
 ### Architecture Components
@@ -22,10 +40,10 @@
    - **Message Format:** *"✅ CV generated for **[Role]** at **[Company]**. The PDF is ready in `/applications/[id]`. [Link to job board]."*
 
 ### Implementation Steps
-- [ ] **Step 1.1:** Build the local FastAPI server with a single `/api/track` endpoint.
-- [ ] **Step 1.2:** Modify the local server to trigger the `cv-opt` pipeline and handle success/failure states.
-- [ ] **Step 1.3:** Set up a Telegram Bot or Discord Webhook and integrate the HTTP request into the server's success flow.
-- [ ] **Step 1.4:** Create the browser extension (manifest.json, popup.html, content.js) to scrape LinkedIn/Indeed and hit `http://localhost:8000/api/track`.
+- [x] **Step 1.1:** Build the local FastAPI server with a single `/api/track` endpoint.
+- [x] **Step 1.2:** Modify the local server to trigger the `cv-opt` pipeline and handle success/failure states.
+- [x] **Step 1.3:** Set up a Telegram Bot or Discord Webhook and integrate the HTTP request into the server's success flow.
+- [x] **Step 1.4:** Create the browser extension (manifest.json, popup.html, content.js) to scrape LinkedIn/Indeed and hit `http://localhost:8000/api/track`.
 
 ---
 

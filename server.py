@@ -5,6 +5,7 @@ import subprocess
 import os
 from pathlib import Path
 import logging
+from cv_optimizer.config import settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,32 +25,62 @@ class TrackRequest(BaseModel):
     role: str
     jd: str
 
+def send_discord_notification(title: str, description: str, color: int, url: str = None):
+    webhook_url = settings.discord_webhook_url
+    if not webhook_url:
+        logger.warning("Discord webhook URL not configured. Skipping push notification.")
+        return
+        
+    import requests
+    
+    embed = {
+        "title": title,
+        "description": description,
+        "color": color
+    }
+    
+    if url:
+        embed["url"] = url
+        
+    payload = {
+        "content": "@everyone",
+        "embeds": [embed]
+    }
+    
+    try:
+        response = requests.post(webhook_url, json=payload, timeout=10)
+        response.raise_for_status()
+        logger.info("Discord notification sent successfully.")
+    except Exception as e:
+        logger.warning(f"Failed to send Discord notification: {e}")
+
 def run_cv_optimizer(company: str, role: str, jd_text: str):
-    # Create a temporary file for the job description text
     temp_jd_path = Path("temp_jd.txt")
     temp_jd_path.write_text(jd_text, encoding="utf-8")
     
     try:
-        logger.info(f"Triggering cv-opt track for {company} - {role}")
-        # Run the cv-opt track command
-        result = subprocess.run(
-            ["./cv-opt", "track", company, role, "--jd", str(temp_jd_path)],
-            capture_output=True,
-            text=True
-        )
+        logger.info(f"Triggering tracking pipeline for {company} - {role}")
+        from cv_optimizer.tracker import track
+        app_id = track(company, role, str(temp_jd_path))
         
-        if result.returncode != 0:
-            logger.error(f"cv-opt failed: {result.stderr}")
-            os.system(f"""osascript -e 'display notification "Optimization failed for {company}." with title "❌ CV Optimizer"'""")
-        else:
-            logger.info(f"cv-opt success: {result.stdout}")
-            os.system(f"""osascript -e 'display notification "Optimization complete for {role} at {company}!" with title "✅ CV Optimizer"'""")
+        logger.info(f"Optimization success for app #{app_id}")
+        os.system(f"""osascript -e 'display notification "Optimization complete for {role} at {company}!" with title "✅ CV Optimizer"'""")
+        send_discord_notification(
+            title="✅ CV Generated (Click to open Finder)",
+            description=f"Successfully generated tailored CV for **{role}** at **{company}**.\nReady in `applications/`.",
+            color=0x00FF00,
+            url=f"http://localhost:8000/api/open/{app_id}"
+        )
             
     except Exception as e:
-        logger.error(f"Error executing cv-opt: {e}")
+        logger.error(f"Error executing optimization: {e}")
         os.system(f"""osascript -e 'display notification "Error executing command." with title "❌ CV Optimizer"'""")
+        send_discord_notification(
+            title="❌ CV Generation Failed",
+            description=f"Failed to generate CV for **{role}** at **{company}**.\nError: `{str(e)}`",
+            color=0xFF0000
+        )
     finally:
-        # Clean up temporary file
         if temp_jd_path.exists():
             temp_jd_path.unlink()
 
@@ -62,6 +93,38 @@ async def track_application(request: TrackRequest, background_tasks: BackgroundT
     background_tasks.add_task(run_cv_optimizer, request.company, request.role, request.jd)
     
     return {"status": "success", "message": f"Tracking initiated for {request.company} - {request.role}"}
+
+from fastapi.responses import HTMLResponse
+
+@app.get("/api/open/{app_id}", response_class=HTMLResponse)
+async def open_in_finder(app_id: int):
+    from cv_optimizer import db
+    db.init_db()
+    app_data = db.get_application(app_id)
+    if not app_data or not app_data[4]:
+        raise HTTPException(status_code=404, detail="Application or CV not found")
+    
+    cv_path = app_data[4]
+    abs_path = os.path.abspath(cv_path)
+    
+    if os.path.exists(abs_path):
+        # Reveal file in Finder
+        subprocess.run(["open", "-R", abs_path])
+        return HTMLResponse("""
+        <html>
+            <head><title>Opened!</title></head>
+            <body style="font-family: sans-serif; text-align: center; margin-top: 50px;">
+                <h2>✅ Opened in Finder!</h2>
+                <p>You can safely close this tab now.</p>
+                <script>
+                    // Attempt to close the window automatically
+                    setTimeout(function() { window.close(); }, 1500);
+                </script>
+            </body>
+        </html>
+        """)
+    else:
+        raise HTTPException(status_code=404, detail="File does not exist on disk")
 
 # To run:
 # uvicorn server:app --host localhost --port 8000
