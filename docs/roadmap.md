@@ -91,6 +91,23 @@
 
 ---
 
+## Milestone 6: Terminal UI Dashboard
+**Objective:** Replace the flat CLI (`track`, `status`) with an interactive terminal dashboard for browsing, filtering, and managing applications — no browser needed.
+
+### Architecture Components
+- **TUI Framework:** A Python terminal library (`textual` or `rich.panel`/`rich.table`) providing keyboard-driven navigation through application records, PDF previews, and inline status editing.
+- **Live Data Layer:** Queries the local SQLite DB in real time (no reload), rendered as paginated tables with search/filter bars for company, status, date range.
+- **Actions Panel:** Context-sensitive keybindings — `A` to apply (opens the extension flow summary), `I` to log interview notes, `E` to review/reject email drafts, `Ctrl+R` to re-generate a CV.
+- **Notification Ticker:** A scrolling footer showing incoming notifications (from Discord/Telegram listener) alongside active operations — "Generating CV…", "Applied to X", "Email received from Y".
+
+### Implementation Steps
+- [ ] **Step 6.1:** Scaffold the TUI framework (`textual` app with layout: header ticker / body table / footer status).
+- [ ] **Step 6.2:** Implement paginated application table with keyboard navigation and inline search/filter.
+- [ ] **Step 6.3:** Add context-sensitive action handler (apply, review, log notes, regenerate CV) bound to single keys.
+- [ ] **Step 6.4:** Wire up the notification ticker from the existing Telegram/Discord listener into the footer panel.
+
+---
+
 ## Milestone 5: AI-Driven Autonomous Scraping & Applying (The Final Form)
 **Objective:** Fully remove the human from the top of the funnel. You only step in for interviews.
 
