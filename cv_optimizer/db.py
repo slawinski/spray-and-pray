@@ -103,6 +103,34 @@ def list_applications() -> list[tuple]:
     return rows
 
 
+def list_applications_with_status() -> list[dict]:
+    """Return all apps with their latest status and full history."""
+    init_db()
+    apps = list_applications()
+    result = []
+    with _connect() as conn:
+        for app in apps:
+            app_id, company, role, jd_path, cv_path, created_at = app
+            history_rows = conn.execute(
+                "SELECT status, transitioned_at FROM status_history "
+                "WHERE application_id = ? ORDER BY transitioned_at ASC",
+                (app_id,),
+            ).fetchall()
+            history = [{"status": r[0], "transitioned_at": r[1]} for r in history_rows]
+            latest_status = history[-1]["status"] if history else "unknown"
+            result.append({
+                "id": app_id,
+                "company": company,
+                "role": role,
+                "jd_path": jd_path,
+                "cv_path": cv_path,
+                "created_at": created_at,
+                "latest_status": latest_status,
+                "history": history,
+            })
+    return result
+
+
 def update_application(
     application_id: int,
     jd_path: str = None,

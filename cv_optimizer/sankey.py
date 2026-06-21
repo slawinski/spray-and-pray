@@ -1,7 +1,10 @@
 """Sankey-style funnel diagram from application tracking transitions."""
 
 import logging
+import tempfile
+import webbrowser
 from collections import defaultdict
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -106,3 +109,114 @@ def generate_sankey() -> str:
 
     flows = build_sankey_flows(transitions)
     return render_sankey(flows)
+
+
+STATUS_COLORS_SANKEY = {
+    "applied": "rgba(0, 188, 212, 0.8)",
+    "interview 1": "rgba(76, 175, 80, 0.8)",
+    "interview 2": "rgba(139, 195, 74, 0.8)",
+    "interview 3": "rgba(205, 220, 57, 0.8)",
+    "offer": "rgba(255, 193, 7, 0.8)",
+    "accepted": "rgba(0, 200, 83, 0.9)",
+    "rejected": "rgba(244, 67, 54, 0.8)",
+    "ghosted": "rgba(158, 158, 158, 0.6)",
+}
+
+
+def _node_color(status: str) -> str:
+    base = status.rsplit(None, 1)[0] if "interview" in status else status
+    return STATUS_COLORS_SANKEY.get(status, STATUS_COLORS_SANKEY.get(base, "rgba(100, 100, 100, 0.8)"))
+
+
+def generate_sankey_html() -> Path:
+    """Generate a Plotly Sankey HTML file and open it in the browser."""
+    from cv_optimizer import db
+
+    transitions = db.get_all_transitions()
+    flows = build_sankey_flows(transitions)
+
+    nodes_set: set[str] = set()
+    for src, tgt in flows:
+        nodes_set.add(src)
+        nodes_set.add(tgt)
+    nodes = sorted(nodes_set, key=lambda s: (
+        0 if s == "applied" else
+        1 if s.startswith("interview") else
+        2 if s == "offer" else
+        3 if s == "accepted" else
+        4 if s == "rejected" else 5,
+        s,
+    ))
+    node_index = {n: i for i, n in enumerate(nodes)}
+
+    source = []
+    target = []
+    value = []
+    for (src, tgt), weight in flows.items():
+        source.append(node_index[src])
+        target.append(node_index[tgt])
+        value.append(weight)
+
+    labels_json = str(nodes)
+    colors_json = str([_node_color(n) for n in nodes])
+    source_json = str(source)
+    target_json = str(target)
+    value_json = str(value)
+
+    total_apps = sum(
+        weight for (src, _), weight in flows.items()
+        if src == "applied"
+    )
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Application Funnel — Sankey</title>
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+<style>
+  body {{ margin: 0; background: #1e1e2e; display: flex; justify-content: center; align-items: center; height: 100vh; }}
+  #sankey {{ width: 900px; height: 600px; }}
+</style>
+</head>
+<body>
+<div id="sankey"></div>
+<script>
+  var data = [{{
+    type: "sankey",
+    orientation: "h",
+    node: {{
+      pad: 20,
+      thickness: 20,
+      line: {{ color: "rgba(255,255,255,0.2)", width: 1 }},
+      label: {labels_json},
+      color: {colors_json},
+    }},
+    link: {{
+      source: {source_json},
+      target: {target_json},
+      value: {value_json},
+      color: "rgba(255,255,255,0.15)",
+    }}
+  }}];
+  var layout = {{
+    title: {{
+      text: "Application Funnel — {total_apps} total applications",
+      font: {{ color: "#cdd6f4", size: 18 }},
+    }},
+    font: {{ color: "#cdd6f4", size: 13 }},
+    paper_bgcolor: "#1e1e2e",
+    plot_bgcolor: "#1e1e2e",
+    margin: {{ l: 20, r: 20, t: 50, b: 20 }},
+  }};
+  Plotly.newPlot("sankey", data, layout, {{ responsive: true }});
+</script>
+</body>
+</html>"""
+
+    out = Path(tempfile.mkdtemp()) / "sankey.html"
+    out.write_text(html)
+    webbrowser.open(f"file://{out.resolve()}")
+    logger.info("Opened Sankey diagram at %s", out)
+    return out

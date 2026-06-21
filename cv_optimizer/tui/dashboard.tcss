@@ -1,0 +1,110 @@
+Screen {
+    layout: vertical;
+}
+
+Header {
+    dock: top;
+    height: 1;
+}
+
+#filter-bar {
+    dock: top;
+    height: 3;
+    padding: 0 1;
+}
+
+#filter-input {
+    width: 100%;
+}
+
+DataTable {
+    height: 1fr;
+}
+
+#detail-panel {
+    height: 5;
+    display: none;
+    border-top: solid $primary;
+    padding: 1 2;
+}
+
+#detail-panel.visible {
+    display: block;
+}
+
+#status-bar {
+    height: 1;
+    min-height: 1;
+    background: $panel;
+    color: $text;
+    padding: 0 1;
+    content-align: left middle;
+}
+
+Footer {
+    dock: bottom;
+    height: 1;
+}
+
+#status-modal {
+    width: 50;
+    height: auto;
+    border: thick $primary;
+    padding: 2;
+    background: $surface;
+}
+
+#status-modal Label {
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+#status-modal Horizontal {
+    height: 3;
+    align: center middle;
+    margin-top: 1;
+}
+
+#status-modal Button {
+    margin: 0 1;
+}
+
+#confirm-modal {
+    width: 50;
+    height: auto;
+    border: thick $primary;
+    padding: 2;
+    background: $surface;
+}
+
+#confirm-title {
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+#confirm-message {
+    margin-bottom: 1;
+}
+
+#confirm-modal Horizontal {
+    height: 3;
+    align: center middle;
+    margin-top: 1;
+}
+
+#confirm-modal Button {
+    margin: 0 1;
+}
+
+#sankey-container {
+    width: 50;
+    height: auto;
+    border: thick $primary;
+    padding: 1 2;
+    background: $surface;
+    margin: 2 4;
+}
+
+#sankey-content {
+    padding: 1;
+}

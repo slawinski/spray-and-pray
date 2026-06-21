@@ -132,6 +132,12 @@ def cmd_sankey(args):
         sys.exit(1)
 
 
+def cmd_dashboard(args=None) -> None:
+    """Launches the interactive TUI dashboard."""
+    from cv_optimizer.tui.app import main as tui_main
+    tui_main()
+
+
 def cmd_list(args):
     """Lists all tracked applications."""
     from cv_optimizer.tracker import list_all
@@ -234,8 +240,8 @@ def main():
     args = parser.parse_args()
 
     if args.command is None:
-        parser.print_help()
-        sys.exit(0)
+        cmd_dashboard()
+        return
 
     args.func(args)
 
