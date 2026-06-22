@@ -7,7 +7,10 @@ from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = (Path(__file__).parent / "prompts" / "system.md").read_text()
+# PROMPT_FILE = "ats-engineer.md"
+# PROMPT_FILE = "ats-engineer-plus.md"
+PROMPT_FILE = "recruiter-human-first.md"
+SYSTEM_PROMPT = (Path(__file__).parent / "prompts" / PROMPT_FILE).read_text()
 
 class CVOptimizer:
     def __init__(self, base_url: str, api_key: str, model_name: str, temperature: float = 0.2, num_ctx: int = 32768):

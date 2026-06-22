@@ -9,7 +9,7 @@ class Settings(BaseModel):
     ollama_base_url: str = Field(default="http://localhost:11434/v1")
     ollama_api_key: str = Field(default="ollama")
     model_name: str = Field(default="qwen3.6:35b")
-    temperature: float = Field(default=0.2)
+    temperature: float = Field(default=0.1)
     num_ctx: int = Field(default=32768)
     
     master_cv_path: str = Field(default="master_cv.json")
