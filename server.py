@@ -56,8 +56,11 @@ def send_discord_notification(title: str, description: str, color: int, url: str
         logger.warning(f"Failed to send Discord notification: {e}")
 
 def run_cv_optimizer(company: str, role: str, jd_text: str, job_url: str = None):
-    temp_jd_path = Path("temp_jd.txt")
-    temp_jd_path.write_text(jd_text, encoding="utf-8")
+    import tempfile
+    temp_jd = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+    temp_jd.write(jd_text)
+    temp_jd.close()
+    temp_jd_path = Path(temp_jd.name)
     
     try:
         logger.info(f"Triggering tracking pipeline for {company} - {role}")
@@ -94,7 +97,15 @@ def run_cv_optimizer(company: str, role: str, jd_text: str, job_url: str = None)
 async def track_application(request: TrackRequest, background_tasks: BackgroundTasks):
     if not request.company or not request.role or not request.jd:
         raise HTTPException(status_code=400, detail="Missing required fields")
-    
+
+    from cv_optimizer import db
+    existing = db.find_application(request.company, request.role)
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Already tracked — Application #{existing['id']}: {existing['company']} — {existing['role']}"
+        )
+
     # We run the optimization in the background so the extension UI returns immediately
     background_tasks.add_task(run_cv_optimizer, request.company, request.role, request.jd, request.url)
     

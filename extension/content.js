@@ -1,4 +1,27 @@
 (function() {
+    function extractFromJsonLd() {
+        const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+        for (const script of scripts) {
+            try {
+                const data = JSON.parse(script.textContent);
+                const items = data["@graph"] || [data];
+                for (const item of items) {
+                    if (item["@type"] === "JobPosting" || item.title) {
+                        const role = item.title;
+                        const company = item.hiringOrganization?.name || item.hiringOrganization?.legalName;
+                        const jd = item.description || item.jd;
+                        if (role && company && jd) {
+                            return { role, company, jd };
+                        }
+                    }
+                }
+            } catch {
+                continue;
+            }
+        }
+        return null;
+    }
+
     const extractors = {
         "linkedin.com": () => {
             // LinkedIn's DOM changes frequently and has multiple layouts (standalone vs split-view)
@@ -35,6 +58,55 @@
                 company: companyEl.innerText.trim(),
                 jd: descEl.innerText.trim()
             };
+        },
+        "justjoin.it": () => {
+            // Try JSON-LD first (most stable)
+            const jsonld = extractFromJsonLd();
+            if (jsonld && jsonld.role && jsonld.company && jsonld.jd) {
+                return jsonld;
+            }
+
+            const titleEl = document.querySelector('h1');
+            const companyEl = document.querySelector('a[href*="companies="] h2');
+            const descEl = document.querySelector('div.mui-n1fnon');
+
+            if (!titleEl || !companyEl || !descEl) {
+                const missing = [];
+                if (!titleEl) missing.push('Role');
+                if (!companyEl) missing.push('Company');
+                if (!descEl) missing.push('Job Description');
+                return { error: `Could not find fields: ${missing.join(', ')}` };
+            }
+
+            return {
+                role: titleEl.innerText.trim(),
+                company: companyEl.innerText.trim(),
+                jd: descEl.innerText.trim()
+            };
+        },
+        "nofluffjobs.com": () => {
+            const jsonld = extractFromJsonLd();
+            if (jsonld && jsonld.role && jsonld.company && jsonld.jd) {
+                return jsonld;
+            }
+
+            const titleEl = document.querySelector('common-posting-header h1');
+            const companyLink = document.querySelector('#postingCompanyUrl');
+            const descEl = document.querySelector('#posting-description') || document.querySelector('[data-cy-section="JobOffer_Requirements"]');
+
+            if (!titleEl || !companyLink || !descEl) {
+                const missing = [];
+                if (!titleEl) missing.push('Role');
+                if (!companyLink) missing.push('Company');
+                if (!descEl) missing.push('Job Description');
+                return { error: `Could not find fields: ${missing.join(', ')}` };
+            }
+
+            return {
+                role: titleEl.innerText.trim(),
+                company: companyLink.innerText.trim(),
+                jd: descEl.innerText.trim()
+            };
         }
     };
 
@@ -50,6 +122,10 @@
     }
 
     if (!extractor) {
+        const jsonld = extractFromJsonLd();
+        if (jsonld && jsonld.role && jsonld.company && jsonld.jd) {
+            return jsonld;
+        }
         return { error: "Unsupported Job Board" };
     }
 

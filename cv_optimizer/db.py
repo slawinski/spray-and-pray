@@ -109,6 +109,15 @@ def list_applications() -> list[tuple]:
     return rows
 
 
+def find_application(company: str, role: str) -> dict | None:
+    """Return the first application matching company+role (case-insensitive), or None."""
+    init_db()
+    for app in list_applications_with_status():
+        if app["company"].lower() == company.lower() and app["role"].lower() == role.lower():
+            return app
+    return None
+
+
 def list_applications_with_status() -> list[dict]:
     """Return all apps with their latest status and full history."""
     init_db()

@@ -41,7 +41,8 @@ document.getElementById('extract-btn').addEventListener('click', async () => {
         });
         
         if (!response.ok) {
-            throw new Error("Server returned " + response.status);
+            const body = await response.json().catch(() => ({}));
+            throw new Error(body.detail || `Server returned ${response.status}`);
         }
         
         statusEl.textContent = '✅ Success! CV is generating.';
