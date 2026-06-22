@@ -169,6 +169,7 @@ class CvDashboard(App):
                 panel.update(
                     f"Application #{app['id']} — {app['company']} — {app['role']}\n"
                     f"Status: {app['latest_status']} (last updated: {last_updated})\n"
+                    f"URL: {app['job_url'] or 'N/A'}\n"
                     f"JD: {app['jd_path'] or 'N/A'}\n"
                     f"CV: {app['cv_path'] or 'N/A'}\n"
                     f"Status History: {history_str}"

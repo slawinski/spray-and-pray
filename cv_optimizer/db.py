@@ -26,6 +26,7 @@ def init_db() -> None:
                 role       TEXT NOT NULL,
                 jd_path    TEXT,
                 cv_path    TEXT,
+                job_url    TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -38,6 +39,10 @@ def init_db() -> None:
             );
             """
         )
+    try:
+        conn.execute("ALTER TABLE applications ADD COLUMN job_url TEXT")
+    except Exception:
+        pass
     logger.info("Database initialised at %s", DB_PATH)
 
 
@@ -46,13 +51,14 @@ def insert_application(
     role: str,
     jd_path: str = None,
     cv_path: str = None,
+    job_url: str = None,
 ) -> int:
     """Inserts a new application and returns its id."""
     init_db()
     with _connect() as conn:
         cursor = conn.execute(
-            "INSERT INTO applications (company, role, jd_path, cv_path) VALUES (?, ?, ?, ?)",
-            (company, role, jd_path, cv_path),
+            "INSERT INTO applications (company, role, jd_path, cv_path, job_url) VALUES (?, ?, ?, ?, ?)",
+            (company, role, jd_path, cv_path, job_url),
         )
         new_id = cursor.lastrowid
     logger.info("Inserted application %d — %s @ %s", new_id, role, company)
@@ -110,7 +116,7 @@ def list_applications_with_status() -> list[dict]:
     result = []
     with _connect() as conn:
         for app in apps:
-            app_id, company, role, jd_path, cv_path, created_at = app
+            app_id, company, role, jd_path, cv_path, created_at, job_url = app
             history_rows = conn.execute(
                 "SELECT status, transitioned_at FROM status_history "
                 "WHERE application_id = ? ORDER BY transitioned_at ASC",
@@ -124,6 +130,7 @@ def list_applications_with_status() -> list[dict]:
                 "role": role,
                 "jd_path": jd_path,
                 "cv_path": cv_path,
+                "job_url": job_url,
                 "created_at": created_at,
                 "latest_status": latest_status,
                 "history": history,

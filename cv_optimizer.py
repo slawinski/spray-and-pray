@@ -150,7 +150,7 @@ def cmd_list(args):
         print(f"\n{'ID':>4}  {'Company':<20}  {'Role':<30}  {'Created'}")
         print("─" * 80)
         for app in apps:
-            app_id, company, role, jd_path, cv_path, created_at = app
+            app_id, company, role, jd_path, cv_path, created_at, *_ = app
             print(f"{app_id:>4}  {company:<20}  {role:<30}  {created_at}")
         print(f"\nTotal: {len(apps)} applications\n")
     except Exception as e:

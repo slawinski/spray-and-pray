@@ -35,7 +35,8 @@ document.getElementById('extract-btn').addEventListener('click', async () => {
             body: JSON.stringify({
                 company: jobData.company,
                 role: jobData.role,
-                jd: jobData.jd
+                jd: jobData.jd,
+                url: tab.url
             })
         });
         

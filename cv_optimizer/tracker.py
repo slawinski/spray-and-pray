@@ -46,7 +46,7 @@ def _build_cv_filename(name: str, role: str) -> str:
     # Keep original case, replace non-alphanumeric with underscores
     return re.sub(r'[^\w]+', '_', combined).strip('_')
 
-def track(company: str, role: str, jd_path: str, master_cv_path: str = None) -> int:
+def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job_url: str = None) -> int:
     """
     Initializes a new application:
     1. Creates DB record
@@ -62,7 +62,7 @@ def track(company: str, role: str, jd_path: str, master_cv_path: str = None) -> 
         raise FileNotFoundError(f"Job description file not found: {jd_path}")
 
     # 1. Create DB record
-    app_id = db.insert_application(company, role)
+    app_id = db.insert_application(company, role, job_url=job_url)
     logger.info(f"Created application #{app_id}: {company} — {role}")
 
     # 2. Generate directory
