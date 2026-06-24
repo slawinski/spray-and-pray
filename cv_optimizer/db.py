@@ -51,6 +51,17 @@ def init_db() -> None:
                 completed_at    DATETIME,
                 FOREIGN KEY (application_id) REFERENCES applications(id)
             );
+
+            CREATE TABLE IF NOT EXISTS lessons (
+                id              INTEGER PRIMARY KEY,
+                session_id      INTEGER,
+                application_id  INTEGER,
+                concept         TEXT NOT NULL,
+                content_json    TEXT NOT NULL,
+                created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES interview_sessions(id),
+                FOREIGN KEY (application_id) REFERENCES applications(id)
+            );
             """
         )
     try:
@@ -275,3 +286,81 @@ def get_latest_readiness(app_id: int) -> int | None:
             (app_id,),
         ).fetchone()
     return row[0] if row else None
+
+
+def create_lesson(
+    concept: str,
+    content_json: str,
+    session_id: int | None = None,
+    app_id: int | None = None,
+) -> int:
+    init_db()
+    with _connect() as conn:
+        cursor = conn.execute(
+            "INSERT INTO lessons (concept, content_json, session_id, application_id) VALUES (?, ?, ?, ?)",
+            (concept, content_json, session_id, app_id),
+        )
+        return cursor.lastrowid
+
+
+def get_lesson(lesson_id: int) -> dict | None:
+    init_db()
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM lessons WHERE id = ?",
+            (lesson_id,),
+        ).fetchone()
+    if not row:
+        return None
+    return {
+        "id": row[0],
+        "session_id": row[1],
+        "application_id": row[2],
+        "concept": row[3],
+        "content_json": row[4],
+        "created_at": row[5],
+    }
+
+
+def list_lessons() -> list[dict]:
+    init_db()
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM lessons ORDER BY created_at DESC"
+        ).fetchall()
+    return [
+        {
+            "id": row[0],
+            "session_id": row[1],
+            "application_id": row[2],
+            "concept": row[3],
+            "content_json": row[4],
+            "created_at": row[5],
+        }
+        for row in rows
+    ]
+
+
+def find_lesson_by_concept(concept: str, app_id: int | None = None) -> dict | None:
+    init_db()
+    with _connect() as conn:
+        if app_id is not None:
+            row = conn.execute(
+                "SELECT * FROM lessons WHERE concept = ? AND application_id = ? ORDER BY created_at DESC LIMIT 1",
+                (concept, app_id),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT * FROM lessons WHERE concept = ? ORDER BY created_at DESC LIMIT 1",
+                (concept,),
+            ).fetchone()
+    if not row:
+        return None
+    return {
+        "id": row[0],
+        "session_id": row[1],
+        "application_id": row[2],
+        "concept": row[3],
+        "content_json": row[4],
+        "created_at": row[5],
+    }

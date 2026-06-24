@@ -268,6 +268,103 @@ async def latest_readiness(app_id: int):
     return {"app_id": app_id, "readiness_score": score}
 
 
+class LearnRequest(BaseModel):
+    concept: str
+    context: str = ""
+    session_id: int | None = None
+    app_id: int | None = None
+
+
+@app.post("/api/learn/generate")
+async def generate_lesson_endpoint(request: LearnRequest):
+    from cv_optimizer.interview import generate_lesson
+
+    if not request.concept:
+        raise HTTPException(status_code=400, detail="concept is required")
+
+    result = generate_lesson(
+        request.concept,
+        request.context,
+        request.session_id,
+        request.app_id,
+    )
+    return {
+        "lesson_id": result["lesson_id"],
+        "url": f"http://localhost:8000/learn/{result['lesson_id']}",
+    }
+
+
+@app.get("/api/learn/generate")
+async def generate_lesson_from_query(
+    concept: str = "",
+    context: str = "",
+    session_id: int | None = None,
+):
+    from cv_optimizer.interview import generate_lesson
+
+    if not concept:
+        raise HTTPException(status_code=400, detail="concept query parameter is required")
+
+    result = generate_lesson(concept, context, session_id)
+    return {
+        "lesson_id": result["lesson_id"],
+        "url": f"http://localhost:8000/learn/{result['lesson_id']}",
+    }
+
+
+@app.get("/learn/{lesson_id}", response_class=HTMLResponse)
+async def lesson_page(request: Request, lesson_id: int):
+    from cv_optimizer import db as db_mod
+
+    lesson = db_mod.get_lesson(lesson_id)
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+
+    content = json_mod.loads(lesson["content_json"])
+    sections = content.get("sections", [])
+    related = content.get("related_concepts", [])
+    title = content.get("title", lesson["concept"])
+    difficulty = content.get("difficulty", "intermediate")
+    read_time = content.get("read_time_minutes", 5)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="lesson.html",
+        context={
+            "title": title,
+            "difficulty": difficulty,
+            "read_time_minutes": read_time,
+            "sections": sections,
+            "related_concepts": related,
+            "lesson_json": json_mod.dumps(content),
+        },
+    )
+
+
+@app.get("/learn", response_class=HTMLResponse)
+async def lesson_library(request: Request):
+    from cv_optimizer import db as db_mod
+
+    rows = db_mod.list_lessons()
+    lessons = []
+    for row in rows:
+        content = json_mod.loads(row["content_json"])
+        lessons.append({
+            "id": row["id"],
+            "title": content.get("title", row["concept"]),
+            "concept": row["concept"],
+            "difficulty": content.get("difficulty", "intermediate"),
+            "read_time": content.get("read_time_minutes", 5),
+            "tags": content.get("related_concepts", [])[:4],
+        })
+
+    return templates.TemplateResponse(
+        request=request,
+        name="lesson_library.html",
+        context={"lessons": lessons},
+    )
+
+
 @app.get("/api/open/{app_id}", response_class=HTMLResponse)
 async def open_in_finder(app_id: int):
     from cv_optimizer import db

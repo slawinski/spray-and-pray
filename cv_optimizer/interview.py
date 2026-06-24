@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 GENERATOR_PROMPT = (PROMPTS_DIR / "interview-generator.md").read_text()
 EVALUATOR_PROMPT = (PROMPTS_DIR / "interview-evaluator.md").read_text()
+LESSON_PROMPT = (PROMPTS_DIR / "lesson-generator.md").read_text()
 MASTER_CV_PATH = Path("master_cv.json")
 COMPANY_INTEL_PATH = Path("company_intel.json")
 
@@ -172,3 +173,60 @@ class InterviewEvaluator:
 
         logger.info("Evaluated session #%d — readiness: %d", session_id, result.get("readiness_score", 0))
         return result
+
+
+def generate_lesson(
+    concept: str,
+    context: str = "",
+    session_id: int | None = None,
+    app_id: int | None = None,
+) -> dict:
+    existing = db.find_lesson_by_concept(concept, app_id)
+    if existing:
+        logger.info("Returning existing lesson #%d for concept '%s'", existing["id"], concept)
+        return {"lesson_id": existing["id"], "lesson": json.loads(existing["content_json"])}
+
+    client = _build_client()
+    user_parts = [f"CONCEPT: {concept}"]
+
+    if context:
+        user_parts.append(f"CONTEXT: {context}")
+
+    jd_text = ""
+    if app_id:
+        app = db.get_application(app_id)
+        if app and app[3] and Path(app[3]).exists():
+            jd_text = Path(app[3]).read_text()
+            user_parts.append(f"JOB DESCRIPTION (for technology context):\n{jd_text}")
+
+    if not jd_text and session_id:
+        sess = db.get_interview_session(session_id)
+        if sess:
+            s_app = db.get_application(sess["application_id"])
+            if s_app and s_app[3] and Path(s_app[3]).exists():
+                jd_text = Path(s_app[3]).read_text()
+                user_parts.append(f"JOB DESCRIPTION (for technology context):\n{jd_text}")
+
+    user_content = "\n\n".join(user_parts)
+
+    logger.info("Generating lesson for concept '%s'", concept)
+    response = client.chat.completions.create(
+        model=settings.model_name,
+        messages=[
+            {"role": "system", "content": LESSON_PROMPT},
+            {"role": "user", "content": user_content},
+        ],
+        temperature=0.1,
+        extra_body={"options": {"num_ctx": settings.num_ctx}},
+    )
+
+    raw = response.choices[0].message.content or ""
+    lesson = _parse_json_response(raw)
+
+    if not isinstance(lesson, dict):
+        raise ValueError(f"Expected JSON object, got {type(lesson).__name__}")
+
+    lesson_id = db.create_lesson(concept, json.dumps(lesson), session_id, app_id)
+    logger.info("Created lesson #%d for concept '%s'", lesson_id, concept)
+
+    return {"lesson_id": lesson_id, "lesson": lesson}

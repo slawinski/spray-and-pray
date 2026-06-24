@@ -77,6 +77,7 @@ class CvDashboard(App):
         Binding("o", "open_folder", "Open"),
         Binding("ctrl+r", "regenerate_cv", "Regen"),
         Binding("P", "prepare", "Prepare"),
+        Binding("L", "lessons", "Lessons"),
         Binding("n", "next_page", "Next"),
         Binding("S", "sankey", "Sankey"),
         Binding("p", "prev_page", "Prev"),
@@ -155,6 +156,10 @@ class CvDashboard(App):
         self._notify("[bold blue]⟳[/] Opening Sankey in browser...")
         generate_sankey_html()
         self._notify("[bold green]✓[/] Sankey opened in browser")
+
+    def action_lessons(self) -> None:
+        webbrowser.open("http://localhost:8000/learn")
+        self._notify("[bold green]✓[/] Lesson library opened in browser")
 
     def action_refresh(self) -> None:
         self.refresh_apps()

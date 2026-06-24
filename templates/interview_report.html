@@ -172,7 +172,7 @@
       <div class="strength">✓ {{ s }}</div>
     {% endfor %}
     {% for w in eval.weaknesses %}
-      <div class="weakness">✗ {{ w }}</div>
+      <div class="weakness">✗ {{ w }}  <a href="/api/learn/generate?concept={{ w | urlencode }}&session_id={{ session_id }}" target="_blank" style="color:var(--accent); font-size:0.8rem; text-decoration:none; white-space:nowrap;">Deep Dive →</a></div>
     {% endfor %}
   </div>
   {% endfor %}

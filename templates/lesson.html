@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ title }} — SAP</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-dim: #8b949e;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --yellow: #d2991d;
+      --red: #f85149;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0 auto;
+      padding: 32px 16px;
+      line-height: 1.7;
+    }
+    header {
+      max-width: 700px;
+      margin: 0 auto 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    header a { color: var(--accent); text-decoration: none; font-size: 0.85rem; }
+    header a:hover { text-decoration: underline; }
+    .meta-top {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      padding: 1px 8px;
+      border-radius: 10px;
+      background: rgba(88, 166, 255, 0.12);
+      color: var(--accent);
+    }
+    .read-time { color: var(--text-dim); font-size: 0.8rem; }
+
+    main { max-width: 700px; margin: 0 auto; }
+    section { margin-bottom: 28px; }
+    section h2 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    section p, section li { font-size: 0.95rem; }
+    section ul, section ol { padding-left: 24px; margin: 8px 0; }
+    section li { margin-bottom: 4px; }
+    pre.text-output {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      overflow-x: auto;
+    }
+
+    /* Code editor section */
+    .code-section { }
+    .code-panes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+    @media (max-width: 700px) { .code-panes { grid-template-columns: 1fr; } }
+    .code-pane {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .code-pane-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 6px 12px;
+      background: #21262d;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+    .editor-container { height: 280px; }
+    .output-container { height: 280px; overflow-y: auto; padding: 12px; }
+    .show-solution-btn {
+      margin-top: 8px;
+      padding: 6px 16px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--accent);
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .show-solution-btn:hover { background: #21262d; }
+    .solution-block { display: none; margin-top: 12px; }
+    .solution-block.visible { display: block; }
+    .solution-block .editor-container { height: 200px; }
+
+    /* Chart section */
+    .chart-section canvas { max-height: 320px; }
+    .caption {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      margin-top: 8px;
+      font-style: italic;
+    }
+
+    /* Diagram section */
+    .diagram-section { text-align: center; }
+    .diagram-section svg { max-width: 100%; }
+
+    /* Widget section */
+    .widget-section {
+      background: rgba(88, 166, 255, 0.04);
+      border: 1px solid rgba(88, 166, 255, 0.2);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+    }
+    .widget-section .widget-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+    .control-row label {
+      min-width: 160px;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+    }
+    .control-row input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent);
+    }
+    .control-row .range-value {
+      min-width: 50px;
+      text-align: right;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .toggle-row input[type="checkbox"] { accent-color: var(--accent); }
+    .output-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+    .output-card {
+      flex: 1;
+      min-width: 150px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      text-align: center;
+    }
+    .output-card .label {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .output-card .value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .widget-insight {
+      margin-top: 14px;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+    }
+
+    /* Related concepts */
+    .related { max-width: 700px; margin: 32px auto 0; padding-top: 20px; border-top: 1px solid var(--border); }
+    .related h3 { font-size: 0.9rem; margin-bottom: 8px; color: var(--text-dim); }
+    .related-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+    .related-tag {
+      padding: 4px 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      font-size: 0.8rem;
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .related-tag:hover { background: #21262d; border-color: var(--accent); }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.50.0/min/vs/loader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.50.0/min/vs' } });
+    require(['vs/editor/editor.main'], function() {
+      window.__monacoReady = true;
+      if (window.__onMonacoReady) window.__onMonacoReady();
+    });
+    mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+  </script>
+</head>
+<body>
+  <header>
+    <a href="/learn">← Back to Library</a>
+    <div class="meta-top">
+      <span class="badge">{{ difficulty }}</span>
+      <span class="read-time">{{ read_time_minutes }} min read</span>
+    </div>
+    <h1 style="font-size:1.5rem;font-weight:700;margin-top:4px;">{{ title }}</h1>
+  </header>
+
+  <main>
+    {% for s in sections %}
+    <section>
+      {% if s.heading %}<h2>{{ s.heading }}</h2>{% endif %}
+
+      {% if s.type == "interactive" %}
+        <div class="code-section">
+          {% if s.description %}<p style="margin-bottom:10px;">{{ s.description }}</p>{% endif %}
+          <div class="code-panes">
+            <div class="code-pane">
+              <div class="code-pane-label">Your Code</div>
+              <div class="editor-container" id="editor-{{ loop.index }}"
+                   data-language="{{ s.language or 'javascript' }}"
+                   data-starter="{{ s.starter_code | e }}"></div>
+            </div>
+            <div class="code-pane">
+              <div class="code-pane-label">Expected Output</div>
+              <div class="output-container">
+                <pre class="text-output" style="margin:0;height:100%;">{{ s.expected_output }}</pre>
+              </div>
+            </div>
+          </div>
+          <button class="show-solution-btn" id="solution-btn-{{ loop.index }}"
+                  onclick="toggleSolution({{ loop.index }})">Show Solution</button>
+          <div class="solution-block" id="solution-{{ loop.index }}">
+            <div class="code-pane" style="margin-bottom:10px;">
+              <div class="code-pane-label">Solution</div>
+              <div class="editor-container" id="solution-editor-{{ loop.index }}"
+                   data-language="{{ s.language or 'javascript' }}"
+                   data-code="{{ s.solution_code | e }}"></div>
+            </div>
+            {% if s.explanation %}<p style="font-size:0.9rem; color:var(--text-dim);">{{ s.explanation }}</p>{% endif %}
+          </div>
+        </div>
+
+      {% elif s.type == "chart" %}
+        <div class="chart-section">
+          <canvas id="chart-{{ loop.index }}"></canvas>
+          {% if s.caption %}<div class="caption">{{ s.caption }}</div>{% endif %}
+        </div>
+        <script>
+          window.__chartsToRender = window.__chartsToRender || [];
+          window.__chartsToRender.push({
+            id: "chart-{{ loop.index }}",
+            type: {{ s.chart_type | tojson }},
+            config: {{ s.chart_config | tojson }},
+            options: {{ s.chart_options | tojson if s.chart_options else '{}' }}
+          });
+        </script>
+
+      {% elif s.type == "diagram" %}
+        <div class="diagram-section">
+          <pre class="mermaid">{{ s.diagram_code }}</pre>
+          {% if s.caption %}<div class="caption">{{ s.caption }}</div>{% endif %}
+        </div>
+
+      {% elif s.type == "interactive_widget" %}
+        <div class="widget-section" id="widget-{{ s.widget_id }}">
+          <div class="widget-label">Experiment</div>
+          {% if s.description %}<p style="margin:6px 0 14px;font-size:0.9rem;">{{ s.description }}</p>{% endif %}
+          {% for c in s.controls %}
+            {% if c.type == "range" %}
+            <div class="control-row">
+              <label>{{ c.label }}</label>
+              <input type="range" id="ctrl-{{ c.id }}" min="{{ c.min }}" max="{{ c.max }}" step="{{ c.step }}" value="{{ c.default }}" />
+              <span class="range-value" id="val-{{ c.id }}">{{ c.default }}</span>
+            </div>
+            {% elif c.type == "toggle" %}
+            <div class="toggle-row">
+              <input type="checkbox" id="ctrl-{{ c.id }}" {% if c.default %}checked{% endif %} />
+              <label style="min-width:auto;">{{ c.label }}</label>
+            </div>
+            {% endif %}
+          {% endfor %}
+          <div class="output-row">
+            {% for o in s.outputs %}
+            <div class="output-card">
+              <div class="label">{{ o.label }}</div>
+              <div class="value" id="out-{{ o.id }}">—</div>
+              {% if o.unit %}<div style="font-size:0.75rem;color:var(--text-dim);">{{ o.unit }}</div>{% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          {% if s.insight %}<div class="widget-insight">{{ s.insight }}</div>{% endif %}
+        </div>
+        <script>
+          window.__widgetsToInit = window.__widgetsToInit || [];
+          window.__widgetsToInit.push({
+            id: {{ s.widget_id | tojson }},
+            controls: {{ s.controls | tojson }},
+            outputs: {{ s.outputs | tojson }}
+          });
+        </script>
+
+      {% else %}
+        {% if s.body %}
+          {% for paragraph in s.body.split('\n\n') %}
+            {% set p_trimmed = paragraph.strip() %}
+            {% if p_trimmed.startswith('- ') or p_trimmed.startswith('* ') %}
+              <ul>
+              {% for item in p_trimmed.split('\n') %}
+                {% set item_clean = item.strip().lstrip('- ').lstrip('* ') %}
+                {% if item_clean %}<li>{{ item_clean | safe }}</li>{% endif %}
+              {% endfor %}
+              </ul>
+            {% elif p_trimmed.startswith('1. ') %}
+              <ol>
+              {% for item in p_trimmed.split('\n') %}
+                {% set item_clean = item.strip() %}
+                {% if item_clean %}<li>{{ item_clean | regex_replace('^\\d+\\.\\s*', '') | safe }}</li>{% endif %}
+              {% endfor %}
+              </ol>
+            {% else %}
+              <p>{{ p_trimmed | safe }}</p>
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+      {% endif %}
+    </section>
+    {% endfor %}
+  </main>
+
+  {% if related_concepts %}
+  <div class="related">
+    <h3>Related Concepts</h3>
+    <div class="related-tags">
+      {% for rc in related_concepts %}
+        <a class="related-tag" href="/api/learn/generate?concept={{ rc | urlencode }}">{{ rc }}</a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <script id="lesson-data" type="application/json">
+  {{ lesson_json | safe }}
+  </script>
+  <script src="/static/lesson.js"></script>
+</body>
+</html>

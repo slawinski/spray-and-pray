@@ -51,12 +51,20 @@
     document.getElementById("hint-text").textContent = q.hint || "";
     var conceptsDiv = document.getElementById("hint-concepts");
     conceptsDiv.innerHTML = "";
+    var deepDive = document.getElementById("hint-deep-dive");
+    deepDive.style.display = "none";
     if (q.expected_concepts) {
       q.expected_concepts.forEach(function (c) {
         var span = document.createElement("span");
         span.textContent = c;
         conceptsDiv.appendChild(span);
       });
+      var dl = document.getElementById("hint-concept-name");
+      if (q.expected_concepts[0] && dl) {
+        dl.textContent = q.expected_concepts[0];
+        deepDive.href = "/api/learn/generate?concept=" + encodeURIComponent(q.expected_concepts[0]);
+        deepDive.style.display = "inline-block";
+      }
     }
 
     document.getElementById("prev-btn").disabled = currentIdx === 0;

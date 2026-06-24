@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lesson Library — SAP</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-dim: #8b949e;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --yellow: #d2991d;
+      --red: #f85149;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 32px 16px;
+      line-height: 1.6;
+    }
+    header {
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 { font-size: 1.5rem; font-weight: 600; }
+    header p { color: var(--text-dim); font-size: 0.9rem; margin-top: 4px; }
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      transition: border-color 0.15s;
+    }
+    .card:hover { border-color: var(--accent); }
+    .card h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .card h2 a { color: var(--accent); text-decoration: none; }
+    .card h2 a:hover { text-decoration: underline; }
+    .card .meta {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      display: flex;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .card .concept { font-size: 0.85rem; color: var(--text-dim); }
+    .badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      padding: 1px 6px;
+      border-radius: 10px;
+      background: rgba(88, 166, 255, 0.12);
+      color: var(--accent);
+    }
+    .tags {
+      margin-top: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .tag {
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      background: rgba(139, 148, 158, 0.1);
+      border-radius: 12px;
+      color: var(--text-dim);
+    }
+    .empty {
+      text-align: center;
+      padding: 48px;
+      color: var(--text-dim);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Lesson Library</h1>
+    <p>{{ lessons | length }} lesson{{ 's' if lessons|length != 1 else '' }} generated</p>
+  </header>
+
+  {% if not lessons %}
+  <div class="empty">
+    <p>No lessons yet. Complete a mock interview evaluation and click "Deep Dive" on a weakness to generate your first lesson.</p>
+  </div>
+  {% endif %}
+
+  <div class="grid">
+  {% for lesson in lessons %}
+    <div class="card">
+      <h2><a href="/learn/{{ lesson.id }}">{{ lesson.title }}</a></h2>
+      <div class="meta">
+        <span>{{ lesson.difficulty }}</span>
+        <span>{{ lesson.read_time }} min read</span>
+      </div>
+      <div class="concept">{{ lesson.concept }}</div>
+      {% if lesson.tags %}
+      <div class="tags">
+        {% for tag in lesson.tags %}
+        <span class="tag">{{ tag }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  {% endfor %}
+  </div>
+</body>
+</html>
