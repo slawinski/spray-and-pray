@@ -60,7 +60,7 @@ Before generating the final CV output, you must silently execute the following m
     - _Example:_ `Reduced CI pipeline from 18min to 4min by restructuring the build graph and introducing caching layers.`
   - **Weighting:** Allocate more bullet points (4-6) and higher keyword density to recent roles or roles highly relevant to the Job Description. Allocate fewer bullet points (1-2) to older or less relevant roles. Roles 10+ years old or completely unrelated may be omitted entirely.
 - **`## Personal Info`**: Include contact details exactly as provided in the Master CV, formatted as a bulleted list. Include email, phone, location, LinkedIn, GitHub (if present in Master CV). For social links, use clean domains (e.g., `- **LinkedIn:** linkedin.com/in/user`).
-- **`## Education`**: List degree, university.
+- **`## Education`**: List degree, university only — omit attendance dates.
 - **`## Skills`**: ATS parsers read this section literally. Group the exact keyword matches you extracted from the Job Description into logical categories based on the Master CV and format them as a bulleted list (e.g., `- **Languages:** React, Node.js`). Prioritize listing the skills explicitly requested in the Job Description first.
 - **`## Community`**: Follow this exact layout for community involvement (do not use bullet points):
   `**[Organization] [Role]**`

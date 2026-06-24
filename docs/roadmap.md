@@ -108,6 +108,28 @@
 
 ---
 
+## Milestone 7: Mock Interview & Preparation Review
+**Objective:** From any tracked application in the dashboard, trigger an interactive mock interview session that opens in the browser — simulating role-specific questions, live coding challenges, and personalized feedback to fully prepare the candidate for the role described in the Job Description.
+
+### Architecture Components
+- **LLM Interview Generator:** Given the Job Description and Master CV, the LLM generates role-specific questions (behavioral, technical, system design) and live coding prompts directly relevant to the target role. If the company has a known recruitment process (e.g., multi-stage interviews, take-home assignments, specific interview formats) or if an interview guide from sources like Glassdoor / interview reports is available, the session structure and questions should reflect that format accordingly.
+- **Web-Based Interview Session:** A lightweight web app (FastAPI + Jinja2 or a static page) launched by the dashboard, presenting one question at a time with:
+  - Question prompt and expected answer structure
+  - Built-in code editor for live coding exercises
+  - Hint/reveal button with guided answer framework
+  - Session timer and pacing guide
+- **Session Report & Readiness Score:** After completion, the system produces a scored report with answer feedback, coding exercise evaluation, suggested improvements, and an overall readiness score for that specific application.
+
+### Workflow
+1. User presses a keybinding (e.g., `P`) on a tracked application in the TUI dashboard.
+2. System generates a mock interview session via the LLM, tailored to that application's Job Description and the candidate's Master CV.
+3. Browser opens to a local web page with the interactive interview interface.
+4. User completes questions and coding exercises at their own pace.
+5. System saves the session report and logs it as a note in the application's status history.
+6. Dashboard shows a "readiness score" or preparation indicator for each application.
+
+---
+
 ## Milestone 5: AI-Driven Autonomous Scraping & Applying (The Final Form)
 **Objective:** Fully remove the human from the top of the funnel. You only step in for interviews.
 
