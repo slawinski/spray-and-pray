@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Interview Report — {{ company }} — {{ role }}</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-dim: #8b949e;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --yellow: #d2991d;
+      --red: #f85149;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 32px 16px;
+      line-height: 1.6;
+    }
+    header {
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 { font-size: 1.5rem; font-weight: 600; }
+    header .meta { color: var(--text-dim); font-size: 0.875rem; margin-top: 4px; }
+
+    .score-hero {
+      text-align: center;
+      padding: 32px;
+      margin-bottom: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .score-number {
+      font-size: 3.5rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .score-number.high { color: var(--green); }
+    .score-number.mid { color: var(--yellow); }
+    .score-number.low { color: var(--red); }
+    .score-label { color: var(--text-dim); font-size: 0.875rem; margin-top: 4px; }
+    .score-bar {
+      height: 10px;
+      background: var(--border);
+      border-radius: 5px;
+      margin: 16px 0;
+      overflow: hidden;
+    }
+    .score-bar-fill {
+      height: 100%;
+      border-radius: 5px;
+      transition: width 0.5s;
+    }
+
+    .report-summary {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 24px;
+      font-size: 0.95rem;
+      line-height: 1.7;
+    }
+
+    .question-result {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+    .question-result .q-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+    .question-result .q-prompt {
+      font-weight: 600;
+      flex: 1;
+      margin-right: 16px;
+    }
+    .question-result .q-score {
+      font-weight: 700;
+      font-size: 1.1rem;
+      white-space: nowrap;
+    }
+    .question-result .q-feedback {
+      font-size: 0.9rem;
+      color: var(--text-dim);
+      margin-bottom: 10px;
+    }
+    .strength, .weakness {
+      font-size: 0.85rem;
+      padding: 4px 0;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+    .strength { color: var(--green); }
+    .weakness { color: var(--red); }
+
+    .footer-actions {
+      text-align: center;
+      margin-top: 32px;
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+    button {
+      padding: 8px 20px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    button:hover { background: #21262d; }
+    button.primary {
+      background: #238636;
+      border-color: rgba(240, 246, 252, 0.1);
+      color: #fff;
+    }
+    button.primary:hover { background: #2ea043; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Interview Report</h1>
+    <div class="meta">{{ company }} — {{ role }}</div>
+  </header>
+
+  {% set ns = namespace(r_class='mid') %}
+  {% if readiness_score >= 70 %}{% set ns.r_class = 'high' %}
+  {% elif readiness_score < 40 %}{% set ns.r_class = 'low' %}
+  {% endif %}
+
+  <div class="score-hero">
+    <div class="score-number {{ ns.r_class }}">{{ readiness_score }}</div>
+    <div class="score-label">Readiness Score</div>
+    <div class="score-bar">
+      <div class="score-bar-fill" style="width:{{ readiness_score }}%; background: {% if readiness_score >= 70 %}#3fb950{% elif readiness_score >= 40 %}#d2991d{% else %}#f85149{% endif %};"></div>
+    </div>
+  </div>
+
+  <div class="report-summary">{{ report_text }}</div>
+
+  {% for eval in evaluations %}
+  <div class="question-result">
+    <div class="q-header">
+      <div class="q-prompt">{{ eval.get("prompt") or ("Question " ~ (eval.question_id|string)) }}</div>
+      {% set eq = eval.get("score", 0)|int %}
+      {% set eqc = 'green' if eq >= 70 else ('yellow' if eq >= 40 else 'red') %}
+      <div class="q-score" style="color:var(--{{ eqc }});">{{ eq }}</div>
+    </div>
+    <div class="q-feedback">{{ eval.feedback }}</div>
+    {% for s in eval.strengths %}
+      <div class="strength">✓ {{ s }}</div>
+    {% endfor %}
+    {% for w in eval.weaknesses %}
+      <div class="weakness">✗ {{ w }}</div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+
+  <div class="footer-actions">
+    <button onclick="window.close()">Close</button>
+    <button class="primary" onclick="window.location='/'">New Interview</button>
+  </div>
+</body>
+</html>

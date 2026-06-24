@@ -130,6 +130,24 @@
 
 ---
 
+## Milestone 8: Learning Aide — Interactive Skill-Builder
+**Objective:** Turn interview weaknesses into learning opportunities. From any hint or evaluation weakness, generate a blog-like interactive lesson with live code examples using Monaco Editor. Build a personal lesson library that grows as the candidate encounters new concepts.
+
+### Architecture Components
+- **LLM Lesson Generator:** Given a concept (e.g., "idempotency in message queues") and interview context, generates a structured tutorial with explanations, code examples, common pitfalls, and an interview angle section.
+- **Interactive Lesson Page:** Blog-style article with embedded Monaco Editor instances for each code example. "Show Solution" toggle reveals reference implementation and LLM-generated explanation.
+- **Touchpoints:** Triggered from (a) hint panel "Deep Dive →" links during mock interviews, (b) evaluation report weakness links, (c) standalone lesson library via TUI keybinding `[L]`.
+- **Lesson Library:** `/learn` page listing all generated lessons with difficulty badges, read time, and related concept tags. Grows organically — no hand-curated content.
+
+### Workflow
+1. Candidate misses a concept during mock interview → evaluation shows weakness.
+2. Candidate clicks "Deep Dive →" next to the weakness (or from hint panel during session).
+3. System generates a blog-like lesson via LLM with interactive code example.
+4. Browser opens the lesson — candidate reads, edits code, toggles solution.
+5. Lesson persisted in library → browsable from TUI `[L]` keybinding.
+
+---
+
 ## Milestone 5: AI-Driven Autonomous Scraping & Applying (The Final Form)
 **Objective:** Fully remove the human from the top of the funnel. You only step in for interviews.
 

@@ -1,0 +1,36 @@
+{
+  "companies": [
+    {
+      "name": "Google",
+      "aliases": ["Alphabet"],
+      "interview_process": [
+        {
+          "stage": "phone_screen",
+          "format": "technical",
+          "duration_minutes": 45
+        },
+        {
+          "stage": "onsite_1",
+          "format": "coding",
+          "duration_minutes": 60
+        },
+        {
+          "stage": "onsite_2",
+          "format": "system_design",
+          "duration_minutes": 60
+        },
+        {
+          "stage": "onsite_3",
+          "format": "behavioral",
+          "duration_minutes": 45
+        }
+      ],
+      "notes": "Heavy emphasis on data structures and algorithms. System design round focuses on distributed systems.",
+      "glassdoor_url": "https://www.glassdoor.com/Interview/Google-Interview-Questions-E9079.htm",
+      "known_questions": [
+        "Design a URL shortener",
+        "Implement a LRU cache"
+      ]
+    }
+  ]
+}

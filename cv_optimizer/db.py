@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import logging
 from pathlib import Path
@@ -35,6 +36,19 @@ def init_db() -> None:
                 application_id  INTEGER NOT NULL,
                 status          TEXT NOT NULL,
                 transitioned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (application_id) REFERENCES applications(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS interview_sessions (
+                id              INTEGER PRIMARY KEY,
+                application_id  INTEGER NOT NULL,
+                questions_json  TEXT NOT NULL,
+                answers_json    TEXT,
+                scores_json     TEXT,
+                readiness_score INTEGER,
+                report_text     TEXT,
+                created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+                completed_at    DATETIME,
                 FOREIGN KEY (application_id) REFERENCES applications(id)
             );
             """
@@ -174,3 +188,90 @@ def update_application(
             tuple(values),
         )
     logger.info("Updated application %d", application_id)
+
+
+def create_interview_session(application_id: int, questions: list[dict]) -> int:
+    init_db()
+    with _connect() as conn:
+        cursor = conn.execute(
+            "INSERT INTO interview_sessions (application_id, questions_json) VALUES (?, ?)",
+            (application_id, json.dumps(questions)),
+        )
+        return cursor.lastrowid
+
+
+def get_interview_session(session_id: int) -> dict | None:
+    init_db()
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM interview_sessions WHERE id = ?",
+            (session_id,),
+        ).fetchone()
+    if not row:
+        return None
+    return {
+        "id": row[0],
+        "application_id": row[1],
+        "questions_json": row[2],
+        "answers_json": row[3],
+        "scores_json": row[4],
+        "readiness_score": row[5],
+        "report_text": row[6],
+        "created_at": row[7],
+        "completed_at": row[8],
+    }
+
+
+def save_interview_answer(session_id: int, answers_json: str) -> None:
+    init_db()
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE interview_sessions SET answers_json = ? WHERE id = ?",
+            (answers_json, session_id),
+        )
+
+
+def complete_interview_session(
+    session_id: int,
+    scores_json: str,
+    readiness_score: int,
+    report_text: str,
+) -> None:
+    init_db()
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE interview_sessions SET scores_json = ?, readiness_score = ?, report_text = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (scores_json, readiness_score, report_text, session_id),
+        )
+
+
+def get_in_progress_session(app_id: int) -> dict | None:
+    init_db()
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM interview_sessions WHERE application_id = ? AND completed_at IS NULL ORDER BY created_at DESC LIMIT 1",
+            (app_id,),
+        ).fetchone()
+    if not row:
+        return None
+    return {
+        "id": row[0],
+        "application_id": row[1],
+        "questions_json": row[2],
+        "answers_json": row[3],
+        "scores_json": row[4],
+        "readiness_score": row[5],
+        "report_text": row[6],
+        "created_at": row[7],
+        "completed_at": row[8],
+    }
+
+
+def get_latest_readiness(app_id: int) -> int | None:
+    init_db()
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT readiness_score FROM interview_sessions WHERE application_id = ? AND readiness_score IS NOT NULL ORDER BY created_at DESC LIMIT 1",
+            (app_id,),
+        ).fetchone()
+    return row[0] if row else None

@@ -1,6 +1,7 @@
 import logging
 import subprocess
 import sys
+import webbrowser
 from datetime import datetime
 from pathlib import Path
 
@@ -31,6 +32,7 @@ COLUMNS = [
     ("Company", 25),
     ("Role", 30),
     ("Status", 14),
+    ("Readiness", 10),
     ("Created", 10),
     ("JD", 3),
     ("CV", 3),
@@ -53,6 +55,15 @@ def _truncate(text: str, max_len: int) -> str:
     return text if len(text) <= max_len else text[:max_len - 1] + "…"
 
 
+def _readiness_bar(score: int | None) -> str:
+    if score is None:
+        return "[dim]—[/]"
+    filled = max(1, round(score / 10))
+    empty = 10 - filled
+    color = "green" if score >= 70 else ("yellow" if score >= 40 else "red")
+    return f"[{color}]{'█' * filled}{'░' * empty}[/] {score:3d}"
+
+
 class CvDashboard(App):
     CSS_PATH = "dashboard.tcss"
 
@@ -65,6 +76,7 @@ class CvDashboard(App):
         Binding("s", "change_status", "Status"),
         Binding("o", "open_folder", "Open"),
         Binding("ctrl+r", "regenerate_cv", "Regen"),
+        Binding("P", "prepare", "Prepare"),
         Binding("n", "next_page", "Next"),
         Binding("S", "sankey", "Sankey"),
         Binding("p", "prev_page", "Prev"),
@@ -121,6 +133,7 @@ class CvDashboard(App):
                 _truncate(app["company"], 25),
                 _truncate(app["role"], 30),
                 _status_rich(app["latest_status"]),
+                _readiness_bar(db.get_latest_readiness(app["id"])),
                 created,
                 _checkmark(app["jd_path"]),
                 _checkmark(app["cv_path"]),
@@ -169,12 +182,62 @@ class CvDashboard(App):
                 panel.update(
                     f"Application #{app['id']} — {app['company']} — {app['role']}\n"
                     f"Status: {app['latest_status']} (last updated: {last_updated})\n"
+                    f"Readiness: {_readiness_bar(db.get_latest_readiness(app['id']))}\n"
                     f"URL: {app['job_url'] or 'N/A'}\n"
                     f"JD: {app['jd_path'] or 'N/A'}\n"
                     f"CV: {app['cv_path'] or 'N/A'}\n"
                     f"Status History: {history_str}"
                 )
                 panel.add_class("visible")
+
+    def action_prepare(self) -> None:
+        table = self.query_one("#apps-table", DataTable)
+        row = table.cursor_row
+        if row is None or row >= len(self.filtered):
+            return
+        app = self.filtered[row]
+
+        if not app["jd_path"] or not Path(app["jd_path"]).exists():
+            self._notify(f"No JD file found for application #{app['id']}")
+            return
+
+        self._notify(
+            f"[bold yellow]⟳[/] Generating interview questions for {app['company']}..."
+        )
+        self._start_interview(app)
+
+    @work(exclusive=True, thread=True)
+    def _start_interview(self, app: dict) -> None:
+        import requests
+        try:
+            resp = requests.post(
+                f"http://localhost:8000/api/interview/{app['id']}/start",
+                timeout=120,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                url = data.get("session_url", "")
+                webbrowser.open(url)
+                self.call_from_thread(
+                    self._notify,
+                    "[bold green]✓[/] Interview session opened in browser",
+                )
+            elif resp.status_code == 404:
+                self.call_from_thread(
+                    self._notify,
+                    f"[red]✗[/] Application #{app['id']} not found on server",
+                )
+            else:
+                detail = resp.json().get("detail", str(resp.status_code))
+                self.call_from_thread(
+                    self._notify,
+                    f"[red]✗[/] {detail}",
+                )
+        except Exception as e:
+            self.call_from_thread(
+                self._notify,
+                f"[red]✗[/] Is the server running? (localhost:8000)",
+            )
 
     def action_change_status(self) -> None:
         table = self.query_one("#apps-table", DataTable)

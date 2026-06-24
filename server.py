@@ -1,8 +1,12 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 import subprocess
 import os
+import json as json_mod
 from pathlib import Path
 import logging
 from cv_optimizer.config import settings
@@ -19,6 +23,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 
 class TrackRequest(BaseModel):
     company: str
@@ -111,7 +118,155 @@ async def track_application(request: TrackRequest, background_tasks: BackgroundT
     
     return {"status": "success", "message": f"Tracking initiated for {request.company} - {request.role}"}
 
-from fastapi.responses import HTMLResponse
+
+class AnswerRequest(BaseModel):
+    question_id: int
+    answer_text: str = ""
+    code: str = ""
+
+
+@app.post("/api/interview/{app_id}/start")
+async def start_interview(app_id: int):
+    from cv_optimizer import db as db_mod
+    from cv_optimizer.interview import InterviewGenerator
+    import webbrowser
+
+    app_data = db_mod.get_application(app_id)
+    if not app_data:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    existing = db_mod.get_in_progress_session(app_id)
+    if existing:
+        url = f"http://localhost:8000/interview/{existing['id']}"
+        webbrowser.open(url)
+        return {
+            "session_id": existing["id"],
+            "session_url": url,
+            "resumed": True,
+        }
+
+    generator = InterviewGenerator()
+    result = generator.generate(app_id)
+    session_id = result["session_id"]
+    url = f"http://localhost:8000/interview/{session_id}"
+    webbrowser.open(url)
+
+    return {
+        "session_id": session_id,
+        "session_url": url,
+    }
+
+
+@app.get("/interview/{session_id}", response_class=HTMLResponse)
+async def interview_page(request: Request, session_id: int):
+    from cv_optimizer import db as db_mod
+
+    session = db_mod.get_interview_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Interview session not found")
+
+    questions = json_mod.loads(session["questions_json"])
+    answers = json_mod.loads(session["answers_json"] or "[]")
+
+    app_data = db_mod.get_application(session["application_id"])
+    company = str(app_data[1]) if app_data else "Unknown"
+    role = str(app_data[2]) if app_data else "Unknown"
+
+    return templates.TemplateResponse(
+        request=request,
+        name="interview.html",
+        context={
+            "session_id": session_id,
+            "company": company,
+            "role": role,
+            "questions": questions,
+            "answers": answers,
+            "evaluated": session["completed_at"] is not None,
+        },
+    )
+
+
+@app.post("/api/interview/{session_id}/answer")
+async def save_answer(session_id: int, request: AnswerRequest):
+    from cv_optimizer import db as db_mod
+
+    session = db_mod.get_interview_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session["completed_at"] is not None:
+        raise HTTPException(status_code=400, detail="Session already evaluated")
+
+    answers = json_mod.loads(session["answers_json"] or "[]")
+    existing = [a for a in answers if a["question_id"] != request.question_id]
+    existing.append({
+        "question_id": request.question_id,
+        "answer_text": request.answer_text,
+        "code": request.code,
+    })
+    db_mod.save_interview_answer(session_id, json_mod.dumps(existing))
+
+    return {"ok": True}
+
+
+@app.post("/api/interview/{session_id}/evaluate")
+async def evaluate_interview(session_id: int):
+    from cv_optimizer import db as db_mod
+    from cv_optimizer.interview import InterviewEvaluator
+
+    session = db_mod.get_interview_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session["completed_at"] is not None:
+        raise HTTPException(status_code=400, detail="Session already evaluated")
+
+    evaluator = InterviewEvaluator()
+    result = evaluator.evaluate(session_id)
+
+    return result
+
+
+@app.get("/api/interview/{session_id}/report", response_class=HTMLResponse)
+async def interview_report_page(request: Request, session_id: int):
+    from cv_optimizer import db as db_mod
+
+    session = db_mod.get_interview_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Interview session not found")
+
+    if session["completed_at"] is None:
+        raise HTTPException(status_code=400, detail="Session not yet evaluated")
+
+    app_data = db_mod.get_application(session["application_id"])
+    company = str(app_data[1]) if app_data else "Unknown"
+    role = str(app_data[2]) if app_data else "Unknown"
+
+    evaluations = json_mod.loads(session["scores_json"] or "[]")
+    readiness_score = session["readiness_score"]
+    report_text = session["report_text"] or ""
+
+    return templates.TemplateResponse(
+        request=request,
+        name="interview_report.html",
+        context={
+            "session_id": session_id,
+            "company": company,
+            "role": role,
+            "evaluations": evaluations,
+            "readiness_score": readiness_score,
+            "report_text": report_text,
+        },
+    )
+
+
+@app.get("/api/interview/{app_id}/latest")
+async def latest_readiness(app_id: int):
+    from cv_optimizer import db as db_mod
+
+    score = db_mod.get_latest_readiness(app_id)
+    return {"app_id": app_id, "readiness_score": score}
+
 
 @app.get("/api/open/{app_id}", response_class=HTMLResponse)
 async def open_in_finder(app_id: int):
