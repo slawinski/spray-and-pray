@@ -8,151 +8,280 @@
     :root {
       --bg: #0d1117;
       --surface: #161b22;
+      --surface-alt: #1c2128;
       --border: #30363d;
       --text: #c9d1d9;
       --text-dim: #8b949e;
       --accent: #58a6ff;
+      --accent-muted: rgba(88, 166, 255, 0.08);
+      --accent-border: rgba(88, 166, 255, 0.18);
       --green: #3fb950;
       --yellow: #d2991d;
       --red: #f85149;
       --radius: 8px;
+      --font-mono: "SF Mono", "Fira Code", "Cascadia Code", monospace;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
       background: var(--bg);
       color: var(--text);
-      margin: 0 auto;
-      padding: 32px 16px;
+      padding: 40px 20px 80px;
       line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
     }
+
+    /* ── Header ── */
     header {
-      max-width: 700px;
-      margin: 0 auto 24px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid var(--border);
+      max-width: 68ch;
+      margin: 0 auto 36px;
     }
-    header a { color: var(--accent); text-decoration: none; font-size: 0.85rem; }
-    header a:hover { text-decoration: underline; }
-    .meta-top {
+    .nav-links {
       display: flex;
-      gap: 12px;
+      gap: 16px;
+      margin-bottom: 18px;
+      font-size: 0.8125rem;
+    }
+    .nav-links a {
+      color: var(--accent);
+      text-decoration: none;
+      transition: color 150ms;
+    }
+    .nav-links a:hover { color: #79c0ff; }
+    .nav-links .sep { color: var(--border); }
+    .meta-row {
+      display: flex;
+      gap: 10px;
       align-items: center;
-      margin-bottom: 8px;
+      margin-bottom: 10px;
     }
     .badge {
-      display: inline-block;
-      font-size: 0.7rem;
+      font-size: 0.6875rem;
       font-weight: 600;
       text-transform: uppercase;
-      padding: 1px 8px;
+      letter-spacing: 0.04em;
+      padding: 2px 8px;
       border-radius: 10px;
-      background: rgba(88, 166, 255, 0.12);
+      background: var(--accent-muted);
       color: var(--accent);
+      border: 1px solid var(--accent-border);
     }
-    .read-time { color: var(--text-dim); font-size: 0.8rem; }
+    .read-time {
+      font-size: 0.8125rem;
+      color: var(--text-dim);
+    }
+    header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      line-height: 1.25;
+      letter-spacing: -0.01em;
+      text-wrap: balance;
+    }
 
-    main { max-width: 700px; margin: 0 auto; }
-    section { margin-bottom: 28px; }
-    section h2 {
-      font-size: 1.15rem;
-      font-weight: 600;
-      margin-bottom: 12px;
-      padding-bottom: 6px;
-      border-bottom: 1px solid var(--border);
+    /* ── Main content ── */
+    main {
+      max-width: 68ch;
+      margin: 0 auto;
     }
-    section p, section li { font-size: 0.95rem; }
-    section ul, section ol { padding-left: 24px; margin: 8px 0; }
-    section li { margin-bottom: 4px; }
+    section {
+      margin-bottom: 44px;
+    }
+    section h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 14px;
+      line-height: 1.35;
+      letter-spacing: -0.005em;
+      text-wrap: balance;
+    }
+    section h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin: 20px 0 8px;
+      color: var(--text);
+    }
+
+    /* ── Prose (markdown body) ── */
+    section p {
+      margin-bottom: 14px;
+      font-size: 0.9375rem;
+      line-height: 1.75;
+    }
+    section ul, section ol {
+      margin: 8px 0 16px;
+      padding-left: 24px;
+      font-size: 0.9375rem;
+    }
+    section li { margin-bottom: 6px; }
+    section li p { margin-bottom: 4px; }
+    section strong { font-weight: 600; color: #e6edf3; }
+    section em { font-style: italic; color: var(--text-dim); }
+
+    /* Inline code */
+    :not(pre) > code {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-family: var(--font-mono);
+      font-size: 0.85em;
+      color: #e6edf3;
+    }
+
+    /* Fenced code blocks */
+    pre:not(.mermaid):not(.text-output) {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      overflow-x: auto;
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      line-height: 1.55;
+      margin: 12px 0 18px;
+    }
+    pre code { background: none; border: none; padding: 0; font-size: inherit; }
+
+    /* Blockquotes */
+    section blockquote {
+      margin: 14px 0 18px;
+      padding: 10px 16px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      color: var(--text-dim);
+      font-style: italic;
+    }
+
+    /* Tables */
+    section table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 18px;
+      font-size: 0.875rem;
+    }
+    section th, section td {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      text-align: left;
+    }
+    section th {
+      background: var(--surface);
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* Horizontal rules */
+    section hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 20px 0;
+    }
+
     pre.text-output {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 12px 16px;
-      font-family: "SF Mono", "Fira Code", monospace;
-      font-size: 0.85rem;
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
       line-height: 1.5;
       overflow-x: auto;
     }
 
-    /* Code editor section */
-    .code-section { }
-    .code-panes {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-bottom: 12px;
-    }
-    @media (max-width: 700px) { .code-panes { grid-template-columns: 1fr; } }
-    .code-pane {
+    /* ── Interactive container (shared by code, chart, diagram, widget) ── */
+    .interactive-box {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-    }
-    .code-pane-label {
-      font-size: 0.75rem;
-      font-weight: 600;
-      padding: 6px 12px;
-      background: #21262d;
-      border-bottom: 1px solid var(--border);
-      color: var(--text-dim);
-      text-transform: uppercase;
-    }
-    .editor-container { height: 280px; }
-    .output-container { height: 280px; overflow-y: auto; padding: 12px; }
-    .show-solution-btn {
-      margin-top: 8px;
-      padding: 6px 16px;
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      background: var(--surface);
-      color: var(--accent);
-      font-size: 0.85rem;
-      cursor: pointer;
-    }
-    .show-solution-btn:hover { background: #21262d; }
-    .solution-block { display: none; margin-top: 12px; }
-    .solution-block.visible { display: block; }
-    .solution-block .editor-container { height: 200px; }
-
-    /* Chart section */
-    .chart-section canvas { max-height: 320px; }
-    .caption {
-      font-size: 0.85rem;
-      color: var(--text-dim);
-      margin-top: 8px;
-      font-style: italic;
-    }
-
-    /* Diagram section */
-    .diagram-section { text-align: center; }
-    .diagram-section svg { max-width: 100%; }
-
-    /* Widget section */
-    .widget-section {
-      background: rgba(88, 166, 255, 0.04);
-      border: 1px solid rgba(88, 166, 255, 0.2);
       border-radius: var(--radius);
       padding: 20px 24px;
+      margin: 0 0 0 -16px;
+      width: calc(100% + 32px);
     }
-    .widget-section .widget-label {
-      font-size: 0.7rem;
+    .interactive-box .section-label {
+      font-size: 0.6875rem;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       color: var(--accent);
-      margin-bottom: 4px;
+      margin-bottom: 10px;
+    }
+
+    /* ── Code section ── */
+    .code-panes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 10px;
+    }
+    @media (max-width: 680px) { .code-panes { grid-template-columns: 1fr; } }
+    .code-pane {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .code-pane-label {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      padding: 6px 10px;
+      background: var(--surface-alt);
+      border-bottom: 1px solid var(--border);
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .editor-container { height: 260px; }
+    .output-container {
+      height: 260px;
+      overflow-y: auto;
+      padding: 10px 14px;
+    }
+    .show-solution-btn {
+      margin-top: 6px;
+      padding: 5px 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--surface-alt);
+      color: var(--accent);
+      font-size: 0.8125rem;
+      cursor: pointer;
+      transition: background 150ms, border-color 150ms;
+    }
+    .show-solution-btn:hover {
+      background: var(--surface);
+      border-color: var(--accent-border);
+    }
+    .solution-block { display: none; margin-top: 10px; }
+    .solution-block.visible { display: block; }
+    .solution-block .editor-container { height: 180px; }
+
+    /* ── Chart / Diagram ── */
+    .interactive-box.chart-box { padding-bottom: 16px; }
+    .chart-box canvas { max-height: 300px; }
+    .interactive-box.diagram-box { text-align: center; padding-bottom: 16px; }
+    .diagram-box svg { max-width: 100%; }
+
+    /* ── Widget ── */
+    .interactive-box.widget-box {
+      background: var(--accent-muted);
+      border-color: var(--accent-border);
+    }
+    .widget-box .widget-description {
+      font-size: 0.875rem;
+      color: var(--text-dim);
+      margin-bottom: 16px;
     }
     .control-row {
       display: flex;
       align-items: center;
-      gap: 16px;
-      margin-bottom: 14px;
+      gap: 14px;
+      margin-bottom: 12px;
     }
     .control-row label {
-      min-width: 160px;
-      font-size: 0.85rem;
+      min-width: 170px;
+      font-size: 0.8125rem;
       color: var(--text-dim);
     }
     .control-row input[type="range"] {
@@ -160,66 +289,95 @@
       accent-color: var(--accent);
     }
     .control-row .range-value {
-      min-width: 50px;
+      min-width: 46px;
       text-align: right;
-      font-size: 0.85rem;
+      font-size: 0.8125rem;
       font-weight: 600;
     }
     .toggle-row {
       display: flex;
       align-items: center;
-      gap: 12px;
-      margin-bottom: 14px;
+      gap: 10px;
+      margin-bottom: 12px;
     }
     .toggle-row input[type="checkbox"] { accent-color: var(--accent); }
     .output-row {
       display: flex;
-      gap: 16px;
+      gap: 12px;
       flex-wrap: wrap;
-      margin-top: 16px;
+      margin-top: 14px;
     }
     .output-card {
       flex: 1;
-      min-width: 150px;
+      min-width: 140px;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 14px 16px;
+      padding: 12px 14px;
       text-align: center;
     }
     .output-card .label {
-      font-size: 0.75rem;
+      font-size: 0.6875rem;
       color: var(--text-dim);
       text-transform: uppercase;
-      margin-bottom: 4px;
+      letter-spacing: 0.04em;
+      margin-bottom: 2px;
     }
     .output-card .value {
-      font-size: 1.6rem;
+      font-size: 1.5rem;
       font-weight: 700;
       line-height: 1.2;
     }
     .widget-insight {
-      margin-top: 14px;
-      font-size: 0.85rem;
+      margin-top: 12px;
+      font-size: 0.8125rem;
       color: var(--text-dim);
-      border-top: 1px solid var(--border);
+      border-top: 1px solid var(--accent-border);
       padding-top: 12px;
     }
 
-    /* Related concepts */
-    .related { max-width: 700px; margin: 32px auto 0; padding-top: 20px; border-top: 1px solid var(--border); }
-    .related h3 { font-size: 0.9rem; margin-bottom: 8px; color: var(--text-dim); }
+    .caption {
+      font-size: 0.8125rem;
+      color: var(--text-dim);
+      margin-top: 10px;
+      font-style: italic;
+    }
+
+    /* ── Related concepts ── */
+    .related {
+      max-width: 68ch;
+      margin: 40px auto 0;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+    }
+    .related h3 {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
     .related-tags { display: flex; flex-wrap: wrap; gap: 8px; }
     .related-tag {
-      padding: 4px 12px;
+      padding: 5px 14px;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 16px;
-      font-size: 0.8rem;
+      font-size: 0.8125rem;
       color: var(--accent);
       text-decoration: none;
+      transition: background 150ms, border-color 150ms;
     }
-    .related-tag:hover { background: #21262d; border-color: var(--accent); }
+    .related-tag:hover {
+      background: var(--surface-alt);
+      border-color: var(--accent-border);
+    }
+
+    /* ── Reduced motion ── */
+    @media (prefers-reduced-motion: reduce) {
+      * { transition-duration: 0.01ms !important; }
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.50.0/min/vs/loader.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -239,15 +397,18 @@
 </head>
 <body>
   <header>
-    <a href="/learn{% if session_id %}?session_id={{ session_id }}{% endif %}">← Back to Library</a>
-    {% if session_id %}
-    <a href="/interview/{{ session_id }}" style="display:block;margin-top:4px;">← Back to Interview</a>
-    {% endif %}
-    <div class="meta-top">
+    <div class="nav-links">
+      <a href="/learn{% if session_id %}?session_id={{ session_id }}{% endif %}">Library</a>
+      {% if session_id %}
+      <span class="sep">/</span>
+      <a href="/interview/{{ session_id }}">Interview</a>
+      {% endif %}
+    </div>
+    <div class="meta-row">
       <span class="badge">{{ difficulty }}</span>
       <span class="read-time">{{ read_time_minutes }} min read</span>
     </div>
-    <h1 style="font-size:1.5rem;font-weight:700;margin-top:4px;">{{ title }}</h1>
+    <h1>{{ title }}</h1>
   </header>
 
   <main>
@@ -256,8 +417,9 @@
       {% if s.heading %}<h2>{{ s.heading }}</h2>{% endif %}
 
       {% if s.type == "interactive" %}
-        <div class="code-section">
-          {% if s.description %}<p style="margin-bottom:10px;">{{ s.description }}</p>{% endif %}
+        <div class="interactive-box">
+          <div class="section-label">Interactive Exercise</div>
+          {% if s.description %}<p style="font-size:0.875rem;margin-bottom:14px;">{{ s.description }}</p>{% endif %}
           <div class="code-panes">
             <div class="code-pane">
               <div class="code-pane-label">Your Code</div>
@@ -275,18 +437,19 @@
           <button class="show-solution-btn" id="solution-btn-{{ loop.index }}"
                   onclick="toggleSolution({{ loop.index }})">Show Solution</button>
           <div class="solution-block" id="solution-{{ loop.index }}">
-            <div class="code-pane" style="margin-bottom:10px;">
+            <div class="code-pane" style="margin-bottom:8px;">
               <div class="code-pane-label">Solution</div>
               <div class="editor-container" id="solution-editor-{{ loop.index }}"
                    data-language="{{ s.language or 'javascript' }}"
                    data-code="{{ s.solution_code | e }}"></div>
             </div>
-            {% if s.explanation %}<p style="font-size:0.9rem; color:var(--text-dim);">{{ s.explanation }}</p>{% endif %}
+            {% if s.explanation %}<p style="font-size:0.85rem;color:var(--text-dim);">{{ s.explanation }}</p>{% endif %}
           </div>
         </div>
 
       {% elif s.type == "chart" %}
-        <div class="chart-section">
+        <div class="interactive-box chart-box">
+          <div class="section-label">Data</div>
           <canvas id="chart-{{ loop.index }}"></canvas>
           {% if s.caption %}<div class="caption">{{ s.caption }}</div>{% endif %}
         </div>
@@ -301,15 +464,16 @@
         </script>
 
       {% elif s.type == "diagram" %}
-        <div class="diagram-section">
+        <div class="interactive-box diagram-box">
+          <div class="section-label">Diagram</div>
           <pre class="mermaid">{{ s.diagram_code }}</pre>
           {% if s.caption %}<div class="caption">{{ s.caption }}</div>{% endif %}
         </div>
 
       {% elif s.type == "interactive_widget" %}
-        <div class="widget-section" id="widget-{{ s.widget_id }}">
-          <div class="widget-label">Experiment</div>
-          {% if s.description %}<p style="margin:6px 0 14px;font-size:0.9rem;">{{ s.description }}</p>{% endif %}
+        <div class="interactive-box widget-box" id="widget-{{ s.widget_id }}">
+          <div class="section-label">Experiment</div>
+          {% if s.description %}<div class="widget-description">{{ s.description }}</div>{% endif %}
           {% for c in s.controls %}
             {% if c.type == "range" %}
             <div class="control-row">
