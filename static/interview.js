@@ -62,7 +62,21 @@
       var dl = document.getElementById("hint-concept-name");
       if (q.expected_concepts[0] && dl) {
         dl.textContent = q.expected_concepts[0];
-        deepDive.href = "/prepare-learn?concept=" + encodeURIComponent(q.expected_concepts[0]) + "&session_id=" + sessionId;
+        var contextParts = [];
+        contextParts.push("Question type: " + (q.type || "unknown"));
+        contextParts.push("Question: \"" + (q.prompt || "") + "\"");
+        if (q.context) contextParts.push("Expectations: " + q.context);
+        if (q.hint) contextParts.push("Hint: " + q.hint);
+        if (ans.answer_text) {
+          var answerPreview = ans.answer_text.length > 500
+            ? ans.answer_text.slice(0, 500) + "..."
+            : ans.answer_text;
+          contextParts.push("Your answer: \"" + answerPreview + "\"");
+        }
+        var contextStr = contextParts.join("\n\n");
+        deepDive.href = "/prepare-learn?concept=" + encodeURIComponent(q.expected_concepts[0])
+          + "&session_id=" + sessionId
+          + "&context=" + encodeURIComponent(contextStr);
         deepDive.style.display = "inline-block";
       }
     }

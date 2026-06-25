@@ -6,8 +6,8 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 import subprocess
 import os
-import re
 import json as json_mod
+import markdown
 from pathlib import Path
 import logging
 from cv_optimizer.config import settings
@@ -27,7 +27,7 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
-templates.env.filters["regex_replace"] = lambda s, pattern, repl: re.sub(pattern, repl, s)
+templates.env.filters["markdown"] = lambda s: markdown.markdown(s, extensions=["fenced_code", "codehilite"]) if s else ""
 
 class TrackRequest(BaseModel):
     company: str
@@ -282,6 +282,22 @@ async def interview_report_page(request: Request, session_id: int):
     readiness_score = session["readiness_score"]
     report_text = session["report_text"] or ""
 
+    for eval_item in evaluations:
+        eval_item["_weakness_contexts"] = {}
+        for w in eval_item.get("weaknesses", []):
+            parts = [
+                "Question type: interview evaluation",
+                "Question: \"" + str(eval_item.get("prompt", "")) + "\"",
+                "Score: " + str(eval_item.get("score", 0)) + "/100",
+            ]
+            if eval_item.get("feedback"):
+                parts.append("Evaluator feedback: " + str(eval_item["feedback"]))
+            strengths = eval_item.get("strengths", [])
+            if strengths:
+                parts.append("What went well: " + "; ".join(strengths))
+            parts.append("Weakness to address: " + w)
+            eval_item["_weakness_contexts"][w] = "\n\n".join(parts)
+
     return templates.TemplateResponse(
         request=request,
         name="interview_report.html",
@@ -386,7 +402,7 @@ async def lesson_page(request: Request, lesson_id: int, session_id: int | None =
 
 
 @app.get("/learn", response_class=HTMLResponse)
-async def lesson_library(request: Request):
+async def lesson_library(request: Request, session_id: int | None = None):
     from cv_optimizer import db as db_mod
 
     rows = db_mod.list_lessons()
@@ -405,7 +421,7 @@ async def lesson_library(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="lesson_library.html",
-        context={"lessons": lessons},
+        context={"lessons": lessons, "session_id": session_id},
     )
 
 

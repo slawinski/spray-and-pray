@@ -223,19 +223,23 @@
   </style>
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.50.0/min/vs/loader.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
   <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      securityLevel: 'loose',
+    });
     require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.50.0/min/vs' } });
     require(['vs/editor/editor.main'], function() {
       window.__monacoReady = true;
       if (window.__onMonacoReady) window.__onMonacoReady();
     });
-    mermaid.initialize({ startOnLoad: true, theme: 'dark' });
   </script>
 </head>
 <body>
   <header>
-    <a href="/learn">← Back to Library</a>
+    <a href="/learn{% if session_id %}?session_id={{ session_id }}{% endif %}">← Back to Library</a>
     {% if session_id %}
     <a href="/interview/{{ session_id }}" style="display:block;margin-top:4px;">← Back to Interview</a>
     {% endif %}
@@ -342,26 +346,7 @@
 
       {% else %}
         {% if s.body %}
-          {% for paragraph in s.body.split('\n\n') %}
-            {% set p_trimmed = paragraph.strip() %}
-            {% if p_trimmed.startswith('- ') or p_trimmed.startswith('* ') %}
-              <ul>
-              {% for item in p_trimmed.split('\n') %}
-                {% set item_clean = item.strip().lstrip('- ').lstrip('* ') %}
-                {% if item_clean %}<li>{{ item_clean | safe }}</li>{% endif %}
-              {% endfor %}
-              </ul>
-            {% elif p_trimmed.startswith('1. ') %}
-              <ol>
-              {% for item in p_trimmed.split('\n') %}
-                {% set item_clean = item.strip() %}
-                {% if item_clean %}<li>{{ item_clean | regex_replace('^\\d+\\.\\s*', '') | safe }}</li>{% endif %}
-              {% endfor %}
-              </ol>
-            {% else %}
-              <p>{{ p_trimmed | safe }}</p>
-            {% endif %}
-          {% endfor %}
+          {{ s.body | markdown | safe }}
         {% endif %}
       {% endif %}
     </section>

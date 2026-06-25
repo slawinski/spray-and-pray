@@ -95,6 +95,9 @@
   <header>
     <h1>Lesson Library</h1>
     <p>{{ lessons | length }} lesson{{ 's' if lessons|length != 1 else '' }} generated</p>
+    {% if session_id %}
+    <a href="/interview/{{ session_id }}" style="display:inline-block;margin-top:8px;color:var(--accent);text-decoration:none;font-size:0.85rem;">← Back to Interview</a>
+    {% endif %}
   </header>
 
   {% if not lessons %}
@@ -106,7 +109,7 @@
   <div class="grid">
   {% for lesson in lessons %}
     <div class="card">
-      <h2><a href="/learn/{{ lesson.id }}">{{ lesson.title }}</a></h2>
+      <h2><a href="/learn/{{ lesson.id }}{% if session_id %}?session_id={{ session_id }}{% endif %}">{{ lesson.title }}</a></h2>
       <div class="meta">
         <span>{{ lesson.difficulty }}</span>
         <span>{{ lesson.read_time }} min read</span>
