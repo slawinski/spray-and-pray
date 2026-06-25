@@ -9,9 +9,7 @@ logger = logging.getLogger(__name__)
 
 from cv_optimizer.config import settings
 
-PROMPT_FILE = "ats-engineer.md"
-# PROMPT_FILE = "ats-engineer-plus.md"
-# PROMPT_FILE = "recruiter-human-first.md"
+PROMPT_FILE = "optimize.md"
 SYSTEM_PROMPT = (Path(__file__).parent / "prompts" / PROMPT_FILE).read_text()
 
 class CVOptimizer:
