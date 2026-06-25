@@ -93,11 +93,11 @@ body {
 
 /* Disclaimer */
 .disclaimer {
-    font-size: 8pt;
+    font-size: 9pt;
     color: #777;
     margin-top: 30px;
 }
-.disclaimer p { font-size: 8pt; }
+.disclaimer p { font-size: 9pt; }
 """
 
 class PDFGenerator:
@@ -218,9 +218,16 @@ class PDFGenerator:
             
             section_lines.append(line)
             
-        if section_lines:
-            sections[current_section] = self._md_to_html("\n".join(section_lines), current_section)
-            
+            if section_lines:
+                sections[current_section] = self._md_to_html("\n".join(section_lines), current_section)
+
+        # Warn if common sections are missing from parsed output
+        for expected in ["Summary", "Experience", "Skills", "Community", "GDPR Disclaimer"]:
+            if expected not in sections:
+                logger.warning("PDF: section '%s' not found in parsed markdown", expected)
+            elif not sections[expected].strip():
+                logger.warning("PDF: section '%s' is empty after parsing", expected)
+
         return sections
 
     def _md_to_html(self, md_text: str, section_name: str) -> str:
@@ -240,14 +247,14 @@ class PDFGenerator:
         return html
 
     def _normalize_key(self, key: str) -> str:
-        lowered = key.lower()
-        if "experience" in lowered or "employment" in lowered: return "Experience"
-        if "profile" in lowered or "summary" in lowered: return "Summary"
+        lowered = key.strip().lower()
+        if "experience" in lowered or "employment" in lowered or "work" in lowered: return "Experience"
+        if "profile" in lowered or "summary" in lowered or "about" in lowered: return "Summary"
         if "contact" in lowered or "detail" in lowered or "personal" in lowered or "link" in lowered: return "Personal Info"
-        if "skill" in lowered: return "Skills"
-        if "edu" in lowered: return "Education"
-        if "extracurricular" in lowered or "community" in lowered or "activities" in lowered: return "Community"
-        if "disclaimer" in lowered or "gdpr" in lowered: return "GDPR Disclaimer"
-        if "hobby" in lowered or "hobbies" in lowered: return "Hobbies"
+        if "skill" in lowered or "tech" in lowered: return "Skills"
+        if "edu" in lowered or "degree" in lowered or "university" in lowered: return "Education"
+        if "community" in lowered or "extracurricular" in lowered or "activities" in lowered or "volunteer" in lowered or "speaker" in lowered: return "Community"
+        if "disclaimer" in lowered or "gdpr" in lowered or "consent" in lowered: return "GDPR Disclaimer"
+        if "hobby" in lowered or "hobbies" in lowered or "interest" in lowered: return "Hobbies"
         if "language" in lowered: return "Languages"
         return key

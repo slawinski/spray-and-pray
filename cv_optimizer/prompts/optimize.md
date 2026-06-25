@@ -39,12 +39,15 @@ Use this exact header order. Do not rename, omit, or reorder. If a section has n
 # SECTION INSTRUCTIONS
 
 ### `# [Name]`
+
 Exact name from Master CV.
 
 ### `### [Professional Title]`
-Align to the JD title if the candidate's background truthfully supports it.
+
+Use the candidate's actual, current title exactly as it appears in the Master CV. The Professional Title is the candidate's OWN role — NOT the JD's target title. You may optionally append a secondary designation (separated by `|`) if the candidate's achievements genuinely support it, e.g., `Senior Software Engineer | AI Developer`. CRITICAL: never replace the candidate's title with the JD title. Never promote — "Software Engineer" is not "Lead", "Senior", or "Principal" unless the Master CV explicitly states that exact title.
 
 ### `## Summary`
+
 2-3 sentences. Front-load with the JD's top-3 keywords. Must hook a busy recruiter in 5 seconds. Narrative that answers "why this candidate for this role."
 
 ### `## Experience`
@@ -61,27 +64,37 @@ Per role, use this exact layout (empty line before bullets):
 **Bullet formula:** `[Past-tense action verb] [Context / what was built] [Result, metric, and tech stack].`
 
 Examples:
+
 - `Architected a real-time notification pipeline handling 2M+ events/day using Kafka, WebSockets, and Postgres.`
 - `Reduced CI pipeline from 18min to 4min by restructuring the build graph and introducing caching layers.`
 
 **Action verbs proportional to role level.** Use verbs that match the candidate's actual seniority and responsibilities as described in the Master CV:
+
 - Individual contributor roles → `Built`, `Developed`, `Implemented`, `Created`, `Improved`
 - Lead or explicitly architectural roles → `Designed`, `Led`, `Architected`, `Spearheaded`
 - Never inflate the verb beyond what the candidate's title and achievements support. A "Frontend Developer" did not "architect" enterprise systems unless the achievement bullets explicitly describe architectural work.
 
 **Weighting:**
+
+- Every role from the Master CV must appear in the Experience section. Never omit a role.
 - Current or most relevant role → 4-6 bullets, highest keyword density
 - Older or less relevant roles → 1-2 bullets
-- Roles 10+ years old or completely unrelated → omit entirely
+- The only valid reason to omit a role is if the Master CV has zero achievements for it (empty array).
+
+**Ordering:** List roles in reverse chronological order by default (most recent first). Exception: if a prior role's tech stack, domain, and responsibilities significantly overlap with the JD — to a degree far exceeding the most recent role — hoist that role to the top. Only apply this exception when the match is obvious and significant, not for partial overlaps.
 
 ### `## Personal Info`
+
 Bulleted list. Clean social links (e.g., `linkedin.com/in/user`). Include email, phone, location, LinkedIn, and GitHub if present in Master CV.
 
 ### `## Education`
+
 Degree, university only. Omit attendance dates.
 
 ### `## Skills`
+
 Bulleted list grouped by category. Order by JD relevance — JD-requested skills first. Use the JD's exact terminology. Example:
+
 ```
 - **Languages:** TypeScript, Python, Go
 - **Frameworks:** React, Next.js, FastAPI
@@ -89,14 +102,24 @@ Bulleted list grouped by category. Order by JD relevance — JD-requested skills
 
 **CRITICAL — Skills anti-hallucination:** Every skill listed must appear verbatim in the Master CV (in the skills section or within specific role achievements). If the JD asks for a skill the candidate does not possess — omit it. The Skills section reflects what the candidate HAS, not what the JD wants. Never add skills — even marked "(basics)" or "(familiar)" — that do not exist in the Master CV.
 
+**No duplicates.** Each skill appears exactly once across all categories. Assign each skill to the single most relevant category — never repeat it.
+
 ### `## Community`
+
+Format exactly as follows (each line is a separate paragraph — do not merge):
+
 ```
-**[Organization] [Role]**
-One-sentence summary of activities, emphasizing subjects most relevant to the JD. Do not list talk titles.
+**[Organization] — [Role]**
+[Empty line]
+[One-sentence summary] of activities, emphasizing subjects most relevant to the JD. Do not list talk titles.
+[Empty line]
 [URL]
 ```
 
+Do NOT join the organization, summary, and URL into a single paragraph or line. Each of the three elements must be on its own line with an empty line between them for proper paragraph separation.
+
 ### `## Languages`, `## Hobbies`, `## GDPR Disclaimer`
+
 Populate directly from Master CV. Never fabricate.
 
 ---
@@ -127,6 +150,7 @@ Populate directly from Master CV. Never fabricate.
 # QUALITY CHECK (SILENT)
 
 Before finalizing, verify:
+
 - [ ] Is every fact traceable to the Master CV?
 - [ ] Are the top-3 JD keywords present in the Summary and first Experience bullets?
 - [ ] Is every bullet concrete (action + context + result/stack)?
