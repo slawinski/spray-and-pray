@@ -14,7 +14,7 @@ from textual import work
 from textual.worker import Worker, WorkerState
 
 from cv_optimizer import db
-from cv_optimizer.tracker import _build_app_dir, track, update_status, _validate_status
+from cv_optimizer.tracker import _build_app_dir, track, reoptimize, update_status, _validate_status
 
 logger = logging.getLogger(__name__)
 
@@ -279,11 +279,11 @@ class CvDashboard(App):
             if not app["jd_path"] or not Path(app["jd_path"]).exists():
                 self.call_from_thread(self._notify, f"No JD file found for application #{app['id']}")
                 return
-            track(app["company"], app["role"], app["jd_path"])
+            reoptimize(app["id"])
             self.call_from_thread(self.refresh_apps)
             self.call_from_thread(self._notify, f"[bold green]✓[/] CV regenerated for {app['company']} — {app['role']}")
         except Exception as e:
-            self.call_from_thread(self._notify, f"CV regeneration failed: {e}")
+            self.call_from_thread(self._notify, f"[red]✗[/] CV regeneration failed: {e}")
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
         if event.state == WorkerState.RUNNING:

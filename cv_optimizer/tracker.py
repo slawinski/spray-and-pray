@@ -122,6 +122,51 @@ def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job
     return app_id
 
 
+def reoptimize(app_id: int, master_cv_path: str = None) -> None:
+    """Regenerates the CV for an existing application in-place (no new DB row)."""
+    db.init_db()
+
+    app = db.get_application(app_id)
+    if app is None:
+        raise ValueError(f"Application #{app_id} not found.")
+
+    _id, company, role, jd_path, _cv_path, _job_url, _created_at = app
+
+    if not jd_path or not Path(jd_path).exists():
+        raise FileNotFoundError(f"JD file not found: {jd_path}")
+
+    actual_cv = master_cv_path or settings.master_cv_path
+    with open(actual_cv, "r", encoding="utf-8") as f:
+        master_cv_data = json.load(f)
+
+    jd_source = Path(jd_path)
+    job_description = PDFExtractor.extract_text(str(jd_source))
+
+    optimizer = CVOptimizer(
+        base_url=settings.llm_base_url,
+        api_key=settings.llm_api_key,
+        model_name=settings.model_name,
+        temperature=settings.temperature,
+    )
+    optimized_md = optimizer.optimize(master_cv_data, job_description)
+
+    app_dir = _build_app_dir(app_id, company, role)
+    app_dir.mkdir(parents=True, exist_ok=True)
+
+    candidate_name = master_cv_data.get("personal_info", {}).get("name", "Candidate")
+    cv_base_name = _build_cv_filename(candidate_name, role)
+
+    cv_md_path = app_dir / f"{cv_base_name}.md"
+    cv_pdf_path = app_dir / f"{cv_base_name}.pdf"
+
+    cv_md_path.write_text(optimized_md, encoding="utf-8")
+    PDFGenerator().generate(optimized_md, str(cv_pdf_path))
+
+    db.update_application(app_id, cv_path=str(cv_pdf_path))
+
+    logger.info(f"CV regenerated for application #{app_id}")
+
+
 def update_status(application_id: int, status: str) -> None:
     """Appends a new status transition for an existing application."""
     db.init_db()
