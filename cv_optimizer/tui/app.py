@@ -47,7 +47,9 @@ def _status_rich(status: str) -> str:
     return f"[{color}]{status}[/]"
 
 
-def _checkmark(path: str | None) -> str:
+def _checkmark(path: str | None, regenerating: bool = False) -> str:
+    if regenerating:
+        return "[yellow]⟳[/]"
     return "[green]✓[/]" if path else "[dim]—[/]"
 
 
@@ -92,6 +94,7 @@ class CvDashboard(App):
         super().__init__()
         self.applications: list[dict] = []
         self.filtered: list[dict] = []
+        self.regenerating_ids: set[int] = set()
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -137,7 +140,7 @@ class CvDashboard(App):
                 _readiness_bar(db.get_latest_readiness(app["id"])),
                 created,
                 _checkmark(app["jd_path"]),
-                _checkmark(app["cv_path"]),
+                _checkmark(app["cv_path"], app["id"] in self.regenerating_ids),
             )
 
         total = len(self.filtered)
@@ -279,10 +282,15 @@ class CvDashboard(App):
             if not app["jd_path"] or not Path(app["jd_path"]).exists():
                 self.call_from_thread(self._notify, f"No JD file found for application #{app['id']}")
                 return
+            self.regenerating_ids.add(app["id"])
+            self.call_from_thread(self.render_table)
             reoptimize(app["id"])
+            self.regenerating_ids.discard(app["id"])
             self.call_from_thread(self.refresh_apps)
             self.call_from_thread(self._notify, f"[bold green]✓[/] CV regenerated for {app['company']} — {app['role']}")
         except Exception as e:
+            self.regenerating_ids.discard(app["id"])
+            self.call_from_thread(self.render_table)
             self.call_from_thread(self._notify, f"[red]✗[/] CV regeneration failed: {e}")
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:

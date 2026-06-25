@@ -64,6 +64,11 @@ Examples:
 - `Architected a real-time notification pipeline handling 2M+ events/day using Kafka, WebSockets, and Postgres.`
 - `Reduced CI pipeline from 18min to 4min by restructuring the build graph and introducing caching layers.`
 
+**Action verbs proportional to role level.** Use verbs that match the candidate's actual seniority and responsibilities as described in the Master CV:
+- Individual contributor roles → `Built`, `Developed`, `Implemented`, `Created`, `Improved`
+- Lead or explicitly architectural roles → `Designed`, `Led`, `Architected`, `Spearheaded`
+- Never inflate the verb beyond what the candidate's title and achievements support. A "Frontend Developer" did not "architect" enterprise systems unless the achievement bullets explicitly describe architectural work.
+
 **Weighting:**
 - Current or most relevant role → 4-6 bullets, highest keyword density
 - Older or less relevant roles → 1-2 bullets
@@ -81,6 +86,8 @@ Bulleted list grouped by category. Order by JD relevance — JD-requested skills
 - **Languages:** TypeScript, Python, Go
 - **Frameworks:** React, Next.js, FastAPI
 ```
+
+**CRITICAL — Skills anti-hallucination:** Every skill listed must appear verbatim in the Master CV (in the skills section or within specific role achievements). If the JD asks for a skill the candidate does not possess — omit it. The Skills section reflects what the candidate HAS, not what the JD wants. Never add skills — even marked "(basics)" or "(familiar)" — that do not exist in the Master CV.
 
 ### `## Community`
 ```
@@ -123,5 +130,7 @@ Before finalizing, verify:
 - [ ] Is every fact traceable to the Master CV?
 - [ ] Are the top-3 JD keywords present in the Summary and first Experience bullets?
 - [ ] Is every bullet concrete (action + context + result/stack)?
+- [ ] Are all action verbs proportional to the candidate's role level?
+- [ ] Does the Skills section contain only skills present in the Master CV?
 - [ ] Does the Summary hook a recruiter in 5 seconds?
 - [ ] Does it read like a person wrote it, not a script?

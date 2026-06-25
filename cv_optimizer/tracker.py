@@ -61,6 +61,12 @@ def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job
     if not jd_source.exists():
         raise FileNotFoundError(f"Job description file not found: {jd_path}")
 
+    existing = db.find_application(company, role)
+    if existing:
+        raise ValueError(
+            f"Application already tracked — #{existing['id']}: {existing['company']} — {existing['role']}"
+        )
+
     # 1. Create DB record
     app_id = db.insert_application(company, role, job_url=job_url)
     logger.info(f"Created application #{app_id}: {company} — {role}")
