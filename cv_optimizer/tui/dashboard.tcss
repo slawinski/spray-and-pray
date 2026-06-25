@@ -46,6 +46,10 @@ Footer {
     height: 1;
 }
 
+ModalScreen {
+    align: center middle;
+}
+
 #status-modal {
     width: 50;
     height: auto;

@@ -91,6 +91,29 @@
       const companyEl = document.querySelector('a[href*="companies="] h2');
       const descEl = document.querySelector("div.mui-n1fnon");
 
+      // Extract tech stack keywords
+      let techStack = "";
+      const techHeading = Array.from(document.querySelectorAll("h3")).find(
+        (el) => el.innerText.trim().toLowerCase() === "tech stack"
+      );
+      if (techHeading) {
+        const container = techHeading.closest(".MuiStack-root");
+        if (container) {
+          const skills = container.querySelectorAll(
+            "h4.MuiTypography-subtitle3"
+          );
+          const levels = container.querySelectorAll(
+            "span.MuiTypography-subtitle5"
+          );
+          techStack = Array.from(skills)
+            .map((skill, i) => {
+              const level = levels[i] ? levels[i].innerText.trim() : "";
+              return level ? `${skill.innerText.trim()} (${level})` : skill.innerText.trim();
+            })
+            .join(", ");
+        }
+      }
+
       if (!titleEl || !companyEl || !descEl) {
         const missing = [];
         if (!titleEl) missing.push("Role");
@@ -102,7 +125,9 @@
       return {
         role: titleEl.innerText.trim(),
         company: companyEl.innerText.trim(),
-        jd: descEl.innerText.trim(),
+        jd: techStack
+          ? descEl.innerText.trim() + "\n\nTECH STACK: " + techStack
+          : descEl.innerText.trim(),
       };
     },
     "nofluffjobs.com": () => {
@@ -117,6 +142,20 @@
         document.querySelector("#posting-description") ||
         document.querySelector('[data-cy-section="JobOffer_Requirements"]');
 
+      // Extract requirements from the requirements section
+      let techStack = "";
+      const reqSection = document.querySelector(
+        '[data-cy-section="JobOffer_Requirements"]'
+      );
+      if (reqSection) {
+        const reqItems = reqSection.querySelectorAll("ul li");
+        techStack = Array.from(reqItems)
+          .map((li) => li.innerText.trim())
+          .filter((t) => t && !t.match(/^(Oryginalny|Pokaż|What you|Nice to|Substantial|Strong|Hands|Experience|Solid|Commercial|Exposure)/))
+          .map((t) => t.replace(/&nbsp;/g, " ").trim())
+          .join(", ");
+      }
+
       if (!titleEl || !companyLink || !descEl) {
         const missing = [];
         if (!titleEl) missing.push("Role");
@@ -128,7 +167,9 @@
       return {
         role: titleEl.innerText.trim(),
         company: companyLink.innerText.trim(),
-        jd: descEl.innerText.trim(),
+        jd: techStack
+          ? descEl.innerText.trim() + "\n\nREQUIREMENTS: " + techStack
+          : descEl.innerText.trim(),
       };
     },
     "theprotocol.it": () => {

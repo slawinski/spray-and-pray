@@ -40,15 +40,15 @@ Use this exact header order. Do not rename, omit, or reorder. If a section has n
 
 ### `# [Name]`
 
-Exact name from Master CV.
+Exact name from Master CV — every character, every diacritic, every letter. Do not normalize, do not ASCII-fold, do not strip accents. If the Master CV says "Piotr Sławiński", output "Piotr Sławiński".
 
 ### `### [Professional Title]`
 
-Use the candidate's actual, current title exactly as it appears in the Master CV. The Professional Title is the candidate's OWN role — NOT the JD's target title. You may optionally append a secondary designation (separated by `|`) if the candidate's achievements genuinely support it, e.g., `Senior Software Engineer | AI Developer`. CRITICAL: never replace the candidate's title with the JD title. Never promote — "Software Engineer" is not "Lead", "Senior", or "Principal" unless the Master CV explicitly states that exact title.
+Use the candidate's actual, current title exactly as it appears in the Master CV. The Professional Title is the candidate's OWN role — NOT the JD's target title. You may optionally append a secondary designation (separated by `|`) if the candidate's achievements genuinely support it, e.g., `Senior Software Engineer | AI Developer`. The secondary designation must be a single, non-compound role or domain — never join multiple roles with `&`, `/`, or `and` (e.g., never `| Frontend & Full Stack Engineer`). CRITICAL: never replace the candidate's title with the JD title. Never promote — "Software Engineer" is not "Lead", "Senior", or "Principal" unless the Master CV explicitly states that exact title.
 
 ### `## Summary`
 
-2-3 sentences. Front-load with the JD's top-3 keywords. Must hook a busy recruiter in 5 seconds. Narrative that answers "why this candidate for this role."
+2-3 sentences. The first sentence must begin with the candidate's Professional Title (e.g., "Senior Software Engineer with..."). Never start with a different role, a JD-aligned title, or vague phrasing like "Experienced professional." Source the narrative from the Master CV's `summary` field, adapting its phrasing with the JD's top-3 keywords woven in naturally. Must hook a busy recruiter in 5 seconds and answer "why this candidate for this role."
 
 ### `## Experience`
 
@@ -81,7 +81,7 @@ Examples:
 - Older or less relevant roles → 1-2 bullets
 - The only valid reason to omit a role is if the Master CV has zero achievements for it (empty array).
 
-**Ordering:** List roles in reverse chronological order by default (most recent first). Exception: if a prior role's tech stack, domain, and responsibilities significantly overlap with the JD — to a degree far exceeding the most recent role — hoist that role to the top. Only apply this exception when the match is obvious and significant, not for partial overlaps.
+**Ordering:** List roles in reverse chronological order by default (most recent first). Exception: if a prior role's tech stack, domain, and responsibilities overlap with the JD — to a degree far exceeding the most recent role — hoist that role to the top. Only apply this exception when the match is obvious and significant, not for partial overlaps.
 
 ### `## Personal Info`
 
@@ -89,7 +89,15 @@ Bulleted list. Clean social links (e.g., `linkedin.com/in/user`). Include email,
 
 ### `## Education`
 
-Degree, university only. Omit attendance dates.
+Format exactly:
+
+```
+**[University]**
+[Empty line]
+[Degree]
+```
+
+University first (bold), Degree is on the next line, no bullet. Omit attendance dates. Populate from Master CV only — never fabricate.
 
 ### `## Skills`
 

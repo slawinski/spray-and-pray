@@ -421,18 +421,20 @@
           <div class="section-label">Interactive Exercise</div>
           {% if s.description %}<p style="font-size:0.875rem;margin-bottom:14px;">{{ s.description }}</p>{% endif %}
           <div class="code-panes">
-            <div class="code-pane">
+            <div class="code-pane"{% if not s.expected_output or s.expected_output|string|lower == 'none' %} style="grid-column: 1 / -1;"{% endif %}>
               <div class="code-pane-label">Your Code</div>
               <div class="editor-container" id="editor-{{ loop.index }}"
                    data-language="{{ s.language or 'javascript' }}"
                    data-starter="{{ s.starter_code | e }}"></div>
             </div>
+            {% if s.expected_output and s.expected_output|string|lower != 'none' %}
             <div class="code-pane">
               <div class="code-pane-label">Expected Output</div>
               <div class="output-container">
                 <pre class="text-output" style="margin:0;height:100%;">{{ s.expected_output }}</pre>
               </div>
             </div>
+            {% endif %}
           </div>
           <button class="show-solution-btn" id="solution-btn-{{ loop.index }}"
                   onclick="toggleSolution({{ loop.index }})">Show Solution</button>

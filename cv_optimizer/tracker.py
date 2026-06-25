@@ -36,14 +36,13 @@ def _build_app_dir(app_id: int, company: str, role: str) -> Path:
     safe_role = re.sub(r"[^\w\-]", "_", role.lower()).strip('_')
     return APPLICATIONS_DIR / f"{safe_company}_{safe_role}_{app_id}"
 
-import unicodedata
+from unidecode import unidecode
 
 def _build_cv_filename(name: str, role: str) -> str:
-    """Generates a clean filename like First_Last_Role_Title."""
-    clean_name = unicodedata.normalize('NFKD', name).encode('ascii', 'ignore').decode('utf-8')
-    clean_role = unicodedata.normalize('NFKD', role).encode('ascii', 'ignore').decode('utf-8')
+    """Generates a clean filename like First_Last_Role_Title with diacritics normalized."""
+    clean_name = unidecode(name)
+    clean_role = unidecode(role)
     combined = f"{clean_name} {clean_role}"
-    # Keep original case, replace non-alphanumeric with underscores
     return re.sub(r'[^\w]+', '_', combined).strip('_')
 
 def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job_url: str = None) -> int:

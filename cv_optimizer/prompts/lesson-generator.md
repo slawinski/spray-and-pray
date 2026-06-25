@@ -53,6 +53,10 @@ Each section is an object with `"heading"` (the H2 title) and one or more type-s
   "language": "javascript",
   "starter_code": "function handle(msg) {\n  // TODO\n}",
   "expected_output": "Processing: msg-1\nSkipping: msg-1",
+  
+  // When the exercise has no visible output (hooks, behaviors, infrastructure):
+  // set expected_output to an empty string "" and add an explanation field
+  // describing the expected behavior. Never set expected_output to "None".
   "solution_code": "const seen = new Set();\nfunction handle(msg) {\n  if (seen.has(msg.id)) return;\n  seen.add(msg.id);\n  console.log('Processing:', msg.id);\n}",
   "explanation": "The Set provides O(1) lookup..."
 }
