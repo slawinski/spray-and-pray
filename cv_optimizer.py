@@ -60,11 +60,10 @@ def cmd_optimize(args):
         job_description = PDFExtractor.extract_text(args.job_offer)
 
         optimizer = CVOptimizer(
-            base_url=settings.ollama_base_url,
-            api_key=settings.ollama_api_key,
+            base_url=settings.llm_base_url,
+            api_key=settings.llm_api_key,
             model_name=settings.model_name,
             temperature=settings.temperature,
-            num_ctx=settings.num_ctx
         )
         optimized_cv_md = optimizer.optimize(master_cv_data, job_description)
 

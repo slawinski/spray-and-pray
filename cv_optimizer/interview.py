@@ -8,6 +8,7 @@ from openai import OpenAI
 
 from cv_optimizer.config import settings
 from cv_optimizer import db
+from cv_optimizer.extractor import PDFExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +68,22 @@ def _parse_json_response(text: str) -> Any:
         raise ValueError(f"Could not parse JSON from LLM response: {cleaned[:200]}")
 
 
+def _read_jd_text(jd_path: str) -> str:
+    p = Path(jd_path)
+    if not p.exists():
+        raise FileNotFoundError(f"JD file not found: {jd_path}")
+    if p.suffix.lower() == ".pdf":
+        return PDFExtractor.extract_text(str(p))
+    return p.read_text()
+
+
 def _build_client() -> OpenAI:
-    return OpenAI(base_url=settings.ollama_base_url, api_key=settings.ollama_api_key)
+    return OpenAI(
+        base_url=settings.llm_base_url,
+        api_key=settings.llm_api_key,
+        timeout=settings.request_timeout,
+        max_retries=2,
+    )
 
 
 class InterviewGenerator:
@@ -85,7 +100,7 @@ class InterviewGenerator:
         if not jd_path or not Path(jd_path).exists():
             raise FileNotFoundError(f"JD file not found for application #{app_id} at {jd_path}")
 
-        jd_text = Path(jd_path).read_text()
+        jd_text = _read_jd_text(jd_path)
         master_cv = _load_master_cv()
         company_intel = _load_company_intel(company)
 
@@ -108,7 +123,7 @@ class InterviewGenerator:
                 {"role": "user", "content": user_content},
             ],
             temperature=0.1,
-            extra_body={"options": {"num_ctx": settings.num_ctx}},
+            max_tokens=settings.max_tokens,
         )
 
         raw = response.choices[0].message.content or ""
@@ -155,7 +170,7 @@ class InterviewEvaluator:
                 {"role": "user", "content": user_content},
             ],
             temperature=0.0,
-            extra_body={"options": {"num_ctx": settings.num_ctx}},
+            max_tokens=settings.max_tokens,
         )
 
         raw = response.choices[0].message.content or ""
@@ -196,7 +211,7 @@ def generate_lesson(
     if app_id:
         app = db.get_application(app_id)
         if app and app[3] and Path(app[3]).exists():
-            jd_text = Path(app[3]).read_text()
+            jd_text = _read_jd_text(app[3])
             user_parts.append(f"JOB DESCRIPTION (for technology context):\n{jd_text}")
 
     if not jd_text and session_id:
@@ -204,7 +219,7 @@ def generate_lesson(
         if sess:
             s_app = db.get_application(sess["application_id"])
             if s_app and s_app[3] and Path(s_app[3]).exists():
-                jd_text = Path(s_app[3]).read_text()
+                jd_text = _read_jd_text(s_app[3])
                 user_parts.append(f"JOB DESCRIPTION (for technology context):\n{jd_text}")
 
     user_content = "\n\n".join(user_parts)
@@ -217,7 +232,7 @@ def generate_lesson(
             {"role": "user", "content": user_content},
         ],
         temperature=0.1,
-        extra_body={"options": {"num_ctx": settings.num_ctx}},
+        max_tokens=settings.max_tokens,
     )
 
     raw = response.choices[0].message.content or ""

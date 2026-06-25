@@ -86,11 +86,10 @@ def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job
             master_cv_data = json.load(f)
 
         optimizer = CVOptimizer(
-            base_url=settings.ollama_base_url,
-            api_key=settings.ollama_api_key,
+            base_url=settings.llm_base_url,
+            api_key=settings.llm_api_key,
             model_name=settings.model_name,
             temperature=settings.temperature,
-            num_ctx=settings.num_ctx,
         )
         optimized_md = optimizer.optimize(master_cv_data, job_description)
 

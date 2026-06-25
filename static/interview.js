@@ -62,7 +62,7 @@
       var dl = document.getElementById("hint-concept-name");
       if (q.expected_concepts[0] && dl) {
         dl.textContent = q.expected_concepts[0];
-        deepDive.href = "/api/learn/generate?concept=" + encodeURIComponent(q.expected_concepts[0]);
+        deepDive.href = "/prepare-learn?concept=" + encodeURIComponent(q.expected_concepts[0]) + "&session_id=" + sessionId;
         deepDive.style.display = "inline-block";
       }
     }

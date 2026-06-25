@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 import subprocess
 import os
+import re
 import json as json_mod
 from pathlib import Path
 import logging
@@ -26,6 +27,7 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+templates.env.filters["regex_replace"] = lambda s, pattern, repl: re.sub(pattern, repl, s)
 
 class TrackRequest(BaseModel):
     company: str
@@ -125,11 +127,47 @@ class AnswerRequest(BaseModel):
     code: str = ""
 
 
+@app.get("/prepare-interview/{app_id}", response_class=HTMLResponse)
+async def prepare_interview_page(request: Request, app_id: int):
+    from cv_optimizer import db as db_mod
+
+    app_data = db_mod.get_application(app_id)
+    if not app_data:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    return templates.TemplateResponse(
+        request=request,
+        name="loading.html",
+        context={"params": {"action": "interview", "app_id": str(app_id)}},
+    )
+
+
+@app.get("/prepare-learn", response_class=HTMLResponse)
+async def prepare_learn_page(
+    request: Request,
+    concept: str = "",
+    context: str = "",
+    session_id: int | None = None,
+):
+    if not concept:
+        raise HTTPException(status_code=400, detail="concept query parameter is required")
+
+    return templates.TemplateResponse(
+        request=request,
+        name="loading.html",
+        context={"params": {
+            "action": "learn",
+            "concept": concept,
+            "context": context,
+            "session_id": str(session_id) if session_id else "",
+        }},
+    )
+
+
 @app.post("/api/interview/{app_id}/start")
 async def start_interview(app_id: int):
     from cv_optimizer import db as db_mod
     from cv_optimizer.interview import InterviewGenerator
-    import webbrowser
 
     app_data = db_mod.get_application(app_id)
     if not app_data:
@@ -138,7 +176,6 @@ async def start_interview(app_id: int):
     existing = db_mod.get_in_progress_session(app_id)
     if existing:
         url = f"http://localhost:8000/interview/{existing['id']}"
-        webbrowser.open(url)
         return {
             "session_id": existing["id"],
             "session_url": url,
@@ -149,7 +186,6 @@ async def start_interview(app_id: int):
     result = generator.generate(app_id)
     session_id = result["session_id"]
     url = f"http://localhost:8000/interview/{session_id}"
-    webbrowser.open(url)
 
     return {
         "session_id": session_id,
@@ -288,9 +324,12 @@ async def generate_lesson_endpoint(request: LearnRequest):
         request.session_id,
         request.app_id,
     )
+    url = f"http://localhost:8000/learn/{result['lesson_id']}"
+    if request.session_id:
+        url += f"?session_id={request.session_id}"
     return {
         "lesson_id": result["lesson_id"],
-        "url": f"http://localhost:8000/learn/{result['lesson_id']}",
+        "url": url,
     }
 
 
@@ -300,32 +339,36 @@ async def generate_lesson_from_query(
     context: str = "",
     session_id: int | None = None,
 ):
+    from fastapi.responses import RedirectResponse
     from cv_optimizer.interview import generate_lesson
 
     if not concept:
         raise HTTPException(status_code=400, detail="concept query parameter is required")
 
     result = generate_lesson(concept, context, session_id)
-    return {
-        "lesson_id": result["lesson_id"],
-        "url": f"http://localhost:8000/learn/{result['lesson_id']}",
-    }
+    redirect_url = f"/learn/{result['lesson_id']}"
+    if session_id:
+        redirect_url += f"?session_id={session_id}"
+    return RedirectResponse(url=redirect_url, status_code=302)
 
 
 @app.get("/learn/{lesson_id}", response_class=HTMLResponse)
-async def lesson_page(request: Request, lesson_id: int):
+async def lesson_page(request: Request, lesson_id: int, session_id: int | None = None):
     from cv_optimizer import db as db_mod
 
     lesson = db_mod.get_lesson(lesson_id)
     if not lesson:
         raise HTTPException(status_code=404, detail="Lesson not found")
 
+    lesson_sid = lesson["session_id"]
     content = json_mod.loads(lesson["content_json"])
     sections = content.get("sections", [])
     related = content.get("related_concepts", [])
     title = content.get("title", lesson["concept"])
     difficulty = content.get("difficulty", "intermediate")
     read_time = content.get("read_time_minutes", 5)
+
+    back_sid = session_id or lesson_sid
 
     return templates.TemplateResponse(
         request=request,
@@ -336,6 +379,7 @@ async def lesson_page(request: Request, lesson_id: int):
             "read_time_minutes": read_time,
             "sections": sections,
             "related_concepts": related,
+            "session_id": back_sid,
             "lesson_json": json_mod.dumps(content),
         },
     )

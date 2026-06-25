@@ -207,42 +207,12 @@ class CvDashboard(App):
             return
 
         self._notify(
-            f"[bold yellow]⟳[/] Generating interview questions for {app['company']}..."
+            f"[bold blue]⟳[/] Opening interview loading screen for {app['company']}..."
         )
-        self._start_interview(app)
-
-    @work(exclusive=True, thread=True)
-    def _start_interview(self, app: dict) -> None:
-        import requests
-        try:
-            resp = requests.post(
-                f"http://localhost:8000/api/interview/{app['id']}/start",
-                timeout=120,
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                url = data.get("session_url", "")
-                webbrowser.open(url)
-                self.call_from_thread(
-                    self._notify,
-                    "[bold green]✓[/] Interview session opened in browser",
-                )
-            elif resp.status_code == 404:
-                self.call_from_thread(
-                    self._notify,
-                    f"[red]✗[/] Application #{app['id']} not found on server",
-                )
-            else:
-                detail = resp.json().get("detail", str(resp.status_code))
-                self.call_from_thread(
-                    self._notify,
-                    f"[red]✗[/] {detail}",
-                )
-        except Exception as e:
-            self.call_from_thread(
-                self._notify,
-                f"[red]✗[/] Is the server running? (localhost:8000)",
-            )
+        webbrowser.open(
+            f"http://localhost:8000/prepare-interview/{app['id']}"
+        )
+        self._notify("[bold green]✓[/] Loading screen opened in browser")
 
     def action_change_status(self) -> None:
         table = self.query_one("#apps-table", DataTable)

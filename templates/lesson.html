@@ -236,6 +236,9 @@
 <body>
   <header>
     <a href="/learn">← Back to Library</a>
+    {% if session_id %}
+    <a href="/interview/{{ session_id }}" style="display:block;margin-top:4px;">← Back to Interview</a>
+    {% endif %}
     <div class="meta-top">
       <span class="badge">{{ difficulty }}</span>
       <span class="read-time">{{ read_time_minutes }} min read</span>
@@ -370,7 +373,7 @@
     <h3>Related Concepts</h3>
     <div class="related-tags">
       {% for rc in related_concepts %}
-        <a class="related-tag" href="/api/learn/generate?concept={{ rc | urlencode }}">{{ rc }}</a>
+        <a class="related-tag" href="/prepare-learn?concept={{ rc | urlencode }}{% if session_id %}&session_id={{ session_id }}{% endif %}">{{ rc }}</a>
       {% endfor %}
     </div>
   </div>

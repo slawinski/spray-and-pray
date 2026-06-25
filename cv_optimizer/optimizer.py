@@ -7,17 +7,18 @@ from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
+from cv_optimizer.config import settings
+
 PROMPT_FILE = "ats-engineer.md"
 # PROMPT_FILE = "ats-engineer-plus.md"
 # PROMPT_FILE = "recruiter-human-first.md"
 SYSTEM_PROMPT = (Path(__file__).parent / "prompts" / PROMPT_FILE).read_text()
 
 class CVOptimizer:
-    def __init__(self, base_url: str, api_key: str, model_name: str, temperature: float = 0.2, num_ctx: int = 32768):
+    def __init__(self, base_url: str, api_key: str, model_name: str, temperature: float = 0.2):
         self.client = OpenAI(base_url=base_url, api_key=api_key)
         self.model_name = model_name
         self.temperature = temperature
-        self.num_ctx = num_ctx
 
     def optimize(self, master_cv: Dict[str, Any], job_description: str) -> str:
         """Sends CV and job description to LLM for optimization."""
@@ -34,21 +35,8 @@ class CVOptimizer:
                     {"role": "user", "content": user_content}
                 ],
                 temperature=self.temperature,
-                # Ollama defaults to 4096 context window — far too small for
-                # our ~4k-token prompt + expected ~3k-token response.
-                extra_body={"options": {"num_ctx": self.num_ctx}}
+                max_tokens=settings.max_tokens,
             )
-
-            # Check if response was truncated due to context window limits
-            finish_reason = response.choices[0].finish_reason
-            if finish_reason == "length":
-                logger.error(
-                    f"LLM response truncated (finish_reason='length'). "
-                    f"Prompt used {response.usage.prompt_tokens} tokens of "
-                    f"{self.num_ctx} context window, leaving only "
-                    f"{self.num_ctx - response.usage.prompt_tokens} for the response. "
-                    f"Increase num_ctx in config."
-                )
 
             raw_content = response.choices[0].message.content or ""
 
