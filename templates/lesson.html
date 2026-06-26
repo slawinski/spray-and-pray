@@ -257,9 +257,106 @@
     .solution-block.visible { display: block; }
     .solution-block .editor-container { height: 180px; }
 
+    /* ── Run button ── */
+    .run-btn {
+      margin-top: 6px;
+      margin-left: 8px;
+      padding: 5px 14px;
+      border-radius: var(--radius);
+      border: 1px solid rgba(63, 185, 80, 0.35);
+      background: rgba(63, 185, 80, 0.1);
+      color: var(--green);
+      font-size: 0.8125rem;
+      cursor: pointer;
+      transition: background 150ms, border-color 150ms;
+    }
+    .run-btn:hover {
+      background: rgba(63, 185, 80, 0.18);
+      border-color: rgba(63, 185, 80, 0.5);
+    }
+    .run-btn.running {
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    /* ── Console pane ── */
+    .console-pane {
+      display: none;
+      margin-top: 10px;
+      background: #0a0e14;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .console-pane.visible { display: block; }
+    .console-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 12px;
+      background: var(--surface-alt);
+      border-bottom: 1px solid var(--border);
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-dim);
+    }
+    .console-output {
+      padding: 10px 14px;
+      max-height: 240px;
+      overflow-y: auto;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .console-output .log { color: var(--text); }
+    .console-output .warn { color: var(--yellow); }
+    .console-output .error { color: var(--red); }
+    .console-output .info { color: var(--accent); }
+    .console-output .exec-time { color: var(--text-dim); font-style: italic; }
+
+    /* ── Terminal-style output ── */
+    .terminal-output {
+      background: #0a0e14;
+      margin: 0;
+      padding: 12px 14px;
+      height: 100%;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      line-height: 1.6;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-all;
+      overflow-y: auto;
+    }
+    .terminal-output .output-lines {
+      counter-reset: line;
+      display: grid;
+      gap: 0;
+    }
+    .terminal-output .line {
+      display: block;
+      counter-increment: line;
+      padding-left: 0;
+    }
+    .terminal-output .line::before {
+      content: counter(line);
+      display: inline-block;
+      width: 24px;
+      margin-right: 12px;
+      color: var(--text-dim);
+      text-align: right;
+      font-size: 0.7rem;
+      user-select: none;
+      opacity: 0.5;
+    }
+
     /* ── Chart / Diagram ── */
     .interactive-box.chart-box { padding-bottom: 16px; }
-    .chart-box canvas { max-height: 300px; }
+    .chart-box canvas { max-height: 300px; width: 100% !important; }
     .interactive-box.diagram-box { text-align: center; padding-bottom: 16px; }
     .diagram-box svg { max-width: 100%; }
 
@@ -380,9 +477,11 @@
     }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.50.0/min/vs/loader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="/static/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
   <script>
+    window.__widgetsToInit = [];
+    window.__chartsToRender = [];
     mermaid.initialize({
       startOnLoad: true,
       theme: 'dark',
@@ -430,14 +529,25 @@
             {% if s.expected_output and s.expected_output|string|lower != 'none' %}
             <div class="code-pane">
               <div class="code-pane-label">Expected Output</div>
-              <div class="output-container">
-                <pre class="text-output" style="margin:0;height:100%;">{{ s.expected_output }}</pre>
+              <div class="output-container" style="padding:0;">
+                <pre class="terminal-output"><span class="output-lines">{% for line in s.expected_output.split('\n') %}<span class="line">{{ line }}</span>
+{% endfor %}</span></pre>
               </div>
             </div>
             {% endif %}
           </div>
           <button class="show-solution-btn" id="solution-btn-{{ loop.index }}"
                   onclick="toggleSolution({{ loop.index }})">Show Solution</button>
+          <button class="run-btn" id="run-btn-{{ loop.index }}"
+                  data-section="{{ loop.index }}"
+                  onclick="runCode({{ loop.index }})">▶ Run</button>
+          <div class="console-pane" id="console-{{ loop.index }}">
+            <div class="console-header">
+              <span>Console</span>
+              <span id="exec-time-{{ loop.index }}" class="exec-time"></span>
+            </div>
+            <div class="console-output" id="console-output-{{ loop.index }}"></div>
+          </div>
           <div class="solution-block" id="solution-{{ loop.index }}">
             <div class="code-pane" style="margin-bottom:8px;">
               <div class="code-pane-label">Solution</div>
@@ -502,7 +612,6 @@
           {% if s.insight %}<div class="widget-insight">{{ s.insight }}</div>{% endif %}
         </div>
         <script>
-          window.__widgetsToInit = window.__widgetsToInit || [];
           window.__widgetsToInit.push({
             id: {{ s.widget_id | tojson }},
             controls: {{ s.controls | tojson }},

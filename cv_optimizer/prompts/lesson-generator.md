@@ -51,16 +51,24 @@ Each section is an object with `"heading"` (the H2 title) and one or more type-s
   "type": "interactive",
   "description": "Modify the handler below...",
   "language": "javascript",
-  "starter_code": "function handle(msg) {\n  // TODO\n}",
-  "expected_output": "Processing: msg-1\nSkipping: msg-1",
-  
-  // When the exercise has no visible output (hooks, behaviors, infrastructure):
-  // set expected_output to an empty string "" and add an explanation field
-  // describing the expected behavior. Never set expected_output to "None".
-  "solution_code": "const seen = new Set();\nfunction handle(msg) {\n  if (seen.has(msg.id)) return;\n  seen.add(msg.id);\n  console.log('Processing:', msg.id);\n}",
+  "starter_code": "function handle(msg) {\n  // TODO: deduplicate messages by id\n}\n\n// Test the handler\nconsole.log(handle({id: 1, text: 'hello'}));\nconsole.log(handle({id: 1, text: 'hello'}));\n// Expected: Processing: hello  Skipping: hello",
+  "expected_output": "> Processing: hello\n> Skipping: hello",
+  "solution_code": "const seen = new Set();\nfunction handle(msg) {\n  if (seen.has(msg.id)) {\n    return {status: 'skipped', id: msg.id};\n  }\n  seen.add(msg.id);\n  return {status: 'processed', id: msg.id};\n}\n\nconsole.log(handle({id: 1, text: 'hello'}));\nconsole.log(handle({id: 1, text: 'hello'}));",
   "explanation": "The Set provides O(1) lookup..."
 }
 ```
+
+**RULES for interactive exercises:**
+
+1. **Must be self-contained.** Use only vanilla JavaScript — no framework imports. The sandbox provides mock stubs for `useRef`, `useState`, `useEffect`, `useCallback`, `useMemo`, `useReducer`, `useContext` — if your exercise uses React hooks, these stubs are available but won't produce real UI effects. Prefer pure JS exercises that demonstrate the algorithm or pattern.
+
+2. **Must print output.** Every exercise must include test calls at the bottom of both `starter_code` and `solution_code` that use `console.log()` to demonstrate the working solution. The Run button only shows console output — exercises with no `console.log` produce a confusing "Code ran with no output" message.
+
+3. **Starter shows the goal, solution shows the answer.** The starter code should compile and run (printing stubbed output like `undefined` or `TODO`). The solution code replaces the `// TODO` logic and prints the correct `expected_output`.
+
+4. **expected_output must match the solution's console output exactly.** Use `>` prefix for each line (matching the terminal UI). Multiple lines joined by `\n`. Leave `expected_output` as `""` only for exercises where no visible output makes sense (pure behavioral exercises like hooks with side effects).
+
+5. **Solution must be executable.** Test mentally: strip all `import`/`export` lines — does the remaining code run? If not, the user gets a `SyntaxError` when clicking Run.
 
 ## 3. `chart` — Data visualization with Chart.js
 
@@ -121,10 +129,10 @@ Use when the concept has tunable parameters where the candidate can experiment w
 
 # RULES
 
-1. **6-10 sections total.** Include at least one interactive element (code, chart, diagram, or widget). The LLM chooses which types best explain the concept. Common distributions:
+1. **6-10 sections total.** Include at least one interactive element (code, chart, diagram, or widget). Common distributions:
    - Algorithm/data-structure concept → 1 interactive code + 1 chart
    - Architecture/distributed-systems concept → 1 diagram + 1 widget + 1 chart
-   - Framework/API concept → 1 interactive code (possibly 2 code examples)
+   - Framework/API concept → prefer diagrams and widgets over interactive code (framework code can't run in the sandbox). If you must include code, use pure JS to demonstrate the core pattern rather than framework-specific imports.
    - Language feature concept → 1 interactive code
 
 2. **Blog tone.** Write like a senior engineer explaining to a peer. Technical but conversational. Use "you" and "your". Avoid academic language.
@@ -133,7 +141,11 @@ Use when the concept has tunable parameters where the candidate can experiment w
 
 4. **"## Common Pitfalls" section** (required). List 3-5 concrete mistakes candidates make with this concept.
 
-5. **"## Try It Yourself" section** — at least one hands-on element. Could be an interactive code, a chart, or a widget.
+5. **"## Try It Yourself" section** — at least one hands-on element. Could be an interactive code, a chart, or a widget. If you include an `interactive` code exercise:
+   - The starter code and solution code must be self-contained vanilla JavaScript (no imports, no framework-specific syntax). The sandbox strips `import`/`export` lines and provides React hook stubs — but hook-based exercises won't render UI. Prefer pure algorithmic JS.
+   - Both must include explicit `console.log()` test calls at the bottom so the Run button produces visible output.
+   - The expected_output field must match what the solution prints when run (use `>` prefix per line, `\n` for line breaks).
+   - The solution must compile and run correctly. Test mentally before outputting.
 
 6. **Related concepts.** List 3-5 related topics that build on or connect to this concept.
 

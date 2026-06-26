@@ -7,12 +7,10 @@
   <style>
     :root {
       --bg: #0d1117;
-      --surface: #161b22;
       --border: #30363d;
       --text: #c9d1d9;
       --text-dim: #8b949e;
       --accent: #58a6ff;
-      --accent-glow: rgba(88, 166, 255, 0.18);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -25,319 +23,214 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+      transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    /* --- Dot grid background --- */
-    .grid-bg {
-      position: fixed;
-      inset: 0;
-      background-image: radial-gradient(rgba(48, 54, 61, 0.5) 1px, transparent 1px);
-      background-size: 32px 32px;
-      animation: grid-drift 20s linear infinite;
-      opacity: 0.4;
-      z-index: 0;
-    }
-
-    @keyframes grid-drift {
-      0% { background-position: 0 0; }
-      100% { background-position: 32px 32px; }
-    }
-
-    /* --- Main loader container --- */
+    /* ── Loader ── */
     .loader {
-      position: relative;
-      z-index: 1;
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 32px;
     }
 
-    /* --- The Ring --- */
-    .ring-stage {
-      position: relative;
-      width: 160px;
-      height: 160px;
+    /* ── Spectrum — frequency analyzer bars ── */
+    .spectrum {
+      display: flex;
+      align-items: flex-end;
+      gap: 5px;
+      height: 40px;
     }
 
-    .ring {
-      position: absolute;
-      inset: 0;
-      border-radius: 50%;
-      border: 2px solid transparent;
-      opacity: 0;
-      animation: ring-enter 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards;
-    }
-
-    @keyframes ring-enter {
-      0% { opacity: 0; transform: scale(0.4); }
-      100% { opacity: 1; transform: scale(1); }
-    }
-
-    /* Ring background pulse */
-    .ring-pulse {
-      position: absolute;
-      inset: -8px;
-      border-radius: 50%;
-      background: transparent;
-      border: 1px solid rgba(88, 166, 255, 0.12);
-      animation: pulse-ring 2.4s ease-in-out infinite;
-    }
-
-    @keyframes pulse-ring {
-      0%, 100% { transform: scale(1); opacity: 0.3; }
-      50% { transform: scale(1.08); opacity: 0.7; }
-    }
-
-    /* Ring glow shadow */
-    .ring-glow {
-      position: absolute;
-      inset: -4px;
-      border-radius: 50%;
-      box-shadow:
-        0 0 20px var(--accent-glow),
-        0 0 60px rgba(88, 166, 255, 0.06),
-        inset 0 0 20px var(--accent-glow);
-      animation: glow-breathe 3s ease-in-out infinite;
-    }
-
-    @keyframes glow-breathe {
-      0%, 100% { opacity: 0.4; }
-      50% { opacity: 0.85; }
-    }
-
-    /* Scanning arc */
-    .scan-arc {
-      position: absolute;
-      inset: 0;
-      border-radius: 50%;
-      background: conic-gradient(
-        from 0deg,
-        transparent 0deg,
-        transparent 280deg,
-        rgba(88, 166, 255, 0.35) 320deg,
-        rgba(88, 166, 255, 0.9) 345deg,
-        transparent 360deg
-      );
-      animation: scan-rotate 2.2s linear infinite;
-      mask: radial-gradient(
-        circle,
-        transparent calc(50% - 4px),
-        #000 calc(50% - 3px),
-        #000 calc(50% + 3px),
-        transparent calc(50% + 4px)
-      );
-      -webkit-mask: radial-gradient(
-        circle,
-        transparent calc(50% - 4px),
-        #000 calc(50% - 3px),
-        #000 calc(50% + 3px),
-        transparent calc(50% + 4px)
-      );
-    }
-
-    @keyframes scan-rotate {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    /* Orbit dots */
-    .orbit-dot {
-      position: absolute;
+    .bar {
       width: 4px;
-      height: 4px;
-      border-radius: 50%;
-      background: var(--accent);
-      box-shadow: 0 0 6px var(--accent-glow);
-      animation: orbit 3.6s linear infinite;
-    }
-    .orbit-dot:nth-child(1) { animation-delay: 0s; }
-    .orbit-dot:nth-child(2) { animation-delay: -1.2s; }
-    .orbit-dot:nth-child(3) { animation-delay: -2.4s; }
-
-    @keyframes orbit {
-      0% {
-        transform: rotate(0deg) translateX(84px) rotate(0deg);
-        opacity: 0.7;
-      }
-      50% { opacity: 1; }
-      100% {
-        transform: rotate(360deg) translateX(84px) rotate(-360deg);
-        opacity: 0.7;
-      }
+      height: 100%;
+      background: var(--border);
+      border-radius: 2px;
+      position: relative;
+      overflow: hidden;
     }
 
-    /* Center dot */
-    .center-dot {
+    .processing .bar {
+      background: transparent;
+    }
+
+    .bar-signal {
       position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 8px;
-      height: 8px;
-      margin: -4px 0 0 -4px;
-      border-radius: 50%;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(
+        to top,
+        var(--accent) 0%,
+        rgba(88, 166, 255, 0.45) 60%,
+        rgba(88, 166, 255, 0.08) 100%
+      );
+      border-radius: 2px;
+      height: 100%;
+      animation: bar-breathe var(--dur, 2s) cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+      animation-delay: var(--delay, 0s);
+    }
+
+    .bar-glow {
+      position: absolute;
+      bottom: 0;
+      left: -3px;
+      right: -3px;
+      height: 100%;
       background: var(--accent);
-      box-shadow: 0 0 12px var(--accent-glow);
-      animation: center-breathe 2s ease-in-out infinite;
+      border-radius: 3px;
+      opacity: 0.1;
+      filter: blur(7px);
+      animation: bar-breathe var(--dur, 2s) cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+      animation-delay: var(--delay, 0s);
     }
 
-    @keyframes center-breathe {
-      0%, 100% { transform: scale(1); opacity: 0.8; }
-      50% { transform: scale(1.6); opacity: 1; }
+    @keyframes bar-breathe {
+      0%   { height: 15%; }
+      100% { height: 100%; }
     }
 
-    /* --- Status text --- */
+    /* ── Done state ── */
+    .done .bar-signal {
+      animation: bar-fill 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .done .bar-glow {
+      animation: bar-fill 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .done .bar:nth-child(1) .bar-signal,
+    .done .bar:nth-child(1) .bar-glow { animation-delay: 0.00s; }
+    .done .bar:nth-child(2) .bar-signal,
+    .done .bar:nth-child(2) .bar-glow { animation-delay: 0.06s; }
+    .done .bar:nth-child(3) .bar-signal,
+    .done .bar:nth-child(3) .bar-glow { animation-delay: 0.12s; }
+    .done .bar:nth-child(4) .bar-signal,
+    .done .bar:nth-child(4) .bar-glow { animation-delay: 0.18s; }
+    .done .bar:nth-child(5) .bar-signal,
+    .done .bar:nth-child(5) .bar-glow { animation-delay: 0.24s; }
+
+    @keyframes bar-fill {
+      0%   { background: var(--accent); opacity: 1; }
+      100% { background: #3fb950; opacity: 1; }
+    }
+
+    .done .bar {
+      background: rgba(63, 185, 80, 0.08);
+      transition: background 0.5s ease;
+    }
+
+    /* ── Error state ── */
+    .error .bar-signal {
+      animation: none;
+      height: 25%;
+      background: #f85149;
+    }
+
+    .error .bar-glow {
+      animation: none;
+      height: 25%;
+      background: #f85149;
+      opacity: 0.12;
+    }
+
+    .error .bar {
+      background: rgba(248, 81, 73, 0.06);
+    }
+
+    /* ── Status text ── */
     .status {
       text-align: center;
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      min-height: 60px;
+      gap: 8px;
+      min-height: 54px;
     }
 
     .status-label {
-      font-size: 0.75rem;
+      font-size: 0.6875rem;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.08em;
       color: var(--accent);
-      opacity: 0.9;
     }
 
     .status-phase {
-      font-size: 1.05rem;
+      font-size: 0.9375rem;
       font-weight: 400;
       color: var(--text);
-      animation: text-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      line-height: 1.45;
+      animation: text-in 0.35s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .status-sub {
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       color: var(--text-dim);
-      animation: text-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      line-height: 1.4;
+      animation: text-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    @keyframes text-enter {
-      0% { opacity: 0; transform: translateY(4px); }
+    @keyframes text-in {
+      0%   { opacity: 0; transform: translateY(3px); }
       100% { opacity: 1; transform: translateY(0); }
     }
 
-    /* --- Progress track (subtle) --- */
-    .progress-track {
-      width: 200px;
-      height: 2px;
-      background: var(--border);
-      border-radius: 1px;
-      overflow: hidden;
-      opacity: 0.6;
-    }
-
-    .progress-fill {
-      height: 100%;
-      background: var(--accent);
-      border-radius: 1px;
-      width: 0%;
-      transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    /* --- Done pulse --- */
-    .done .ring {
-      animation: ring-done 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-
-    .done .ring-glow {
-      animation: glow-done 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-
-    .done .scan-arc,
-    .done .orbit-dot,
-    .done .center-dot,
-    .done .ring-pulse {
+    /* ── Fade-out on redirect ── */
+    body.fade-out {
       opacity: 0;
     }
 
-    @keyframes ring-done {
-      0% { transform: scale(1); border-color: transparent; }
-      50% { transform: scale(1.15); border-color: rgba(88, 166, 255, 0.6); }
-      100% { transform: scale(1); border-color: rgba(88, 166, 255, 0.3); }
-    }
+    .error .status-label { color: #f85149; }
 
-    @keyframes glow-done {
-      0%, 50% { opacity: 1; }
-      100% { opacity: 0; }
-    }
-
-    /* --- Fade-out on redirect --- */
-    .fade-out {
-      animation: fade-out 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-
-    @keyframes fade-out {
-      0% { opacity: 1; }
-      100% { opacity: 0; }
-    }
-
-    /* Error state */
-    .status-error .status-label { color: #f85149; }
-    .status-error .ring { border-color: rgba(248, 81, 73, 0.3); }
-    .status-error .ring-glow {
-      box-shadow:
-        0 0 20px rgba(248, 81, 73, 0.2),
-        0 0 60px rgba(248, 81, 73, 0.04),
-        inset 0 0 20px rgba(248, 81, 73, 0.15);
-    }
-    .status-error .scan-arc {
-      background: conic-gradient(
-        from 0deg,
-        transparent 0deg,
-        transparent 280deg,
-        rgba(248, 81, 73, 0.35) 320deg,
-        rgba(248, 81, 73, 0.9) 345deg,
-        transparent 360deg
-      );
-    }
-    .status-error .orbit-dot { background: #f85149; }
-    .status-error .center-dot { background: #f85149; }
-    .status-error .progress-fill { background: #f85149; }
-
-    /* Reduced motion */
+    /* ── Reduced motion ── */
     @media (prefers-reduced-motion: reduce) {
-      .scan-arc { animation: none; }
-      .orbit-dot { animation: none; opacity: 0.5; }
-      .ring-pulse { animation: none; opacity: 0.5; }
-      .ring-glow { animation: none; opacity: 0.5; }
-      .center-dot { animation: none; }
-      .grid-bg { animation: none; }
-      .ring { animation: none; opacity: 1; transform: scale(1); border-color: rgba(88, 166, 255, 0.2); }
-      .status-phase, .status-sub { animation: none; }
-      .progress-fill { transition: none; }
+      .bar-signal {
+        animation: none;
+        height: 50%;
+      }
+      .bar-glow {
+        animation: none;
+        height: 50%;
+        opacity: 0.06;
+      }
+      .status-phase,
+      .status-sub {
+        animation: none;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="grid-bg"></div>
-
-  <div class="loader" id="loader">
-    <div class="ring-stage">
-      <div class="ring-pulse"></div>
-      <div class="ring-glow"></div>
-      <div class="ring"></div>
-      <div class="scan-arc"></div>
-      <div class="orbit-dot"></div>
-      <div class="orbit-dot"></div>
-      <div class="orbit-dot"></div>
-      <div class="center-dot"></div>
+  <div class="loader processing" id="loader">
+    <div class="spectrum">
+      <div class="bar">
+        <div class="bar-signal" style="--dur: 1.8s; --delay: 0.0s;"></div>
+        <div class="bar-glow"   style="--dur: 1.8s; --delay: 0.0s;"></div>
+      </div>
+      <div class="bar">
+        <div class="bar-signal" style="--dur: 1.5s; --delay: -0.3s;"></div>
+        <div class="bar-glow"   style="--dur: 1.5s; --delay: -0.3s;"></div>
+      </div>
+      <div class="bar">
+        <div class="bar-signal" style="--dur: 2.0s; --delay: -0.6s;"></div>
+        <div class="bar-glow"   style="--dur: 2.0s; --delay: -0.6s;"></div>
+      </div>
+      <div class="bar">
+        <div class="bar-signal" style="--dur: 1.6s; --delay: -0.9s;"></div>
+        <div class="bar-glow"   style="--dur: 1.6s; --delay: -0.9s;"></div>
+      </div>
+      <div class="bar">
+        <div class="bar-signal" style="--dur: 2.2s; --delay: -1.2s;"></div>
+        <div class="bar-glow"   style="--dur: 2.2s; --delay: -1.2s;"></div>
+      </div>
     </div>
 
     <div class="status" id="status">
       <div class="status-label" id="status-label">Initializing</div>
       <div class="status-phase" id="status-phase">Establishing connection...</div>
       <div class="status-sub" id="status-sub">DeepSeek API</div>
-    </div>
-
-    <div class="progress-track">
-      <div class="progress-fill" id="progress-fill"></div>
     </div>
   </div>
 
@@ -353,19 +246,16 @@
       var concept = params.concept || "";
       var context = params.context || "";
       var sessionId = params.session_id || null;
-      var label = action === "interview" ? "Interview" : "Learn";
 
       var loader = document.getElementById("loader");
       var statusLabel = document.getElementById("status-label");
       var statusPhase = document.getElementById("status-phase");
       var statusSub = document.getElementById("status-sub");
-      var progressFill = document.getElementById("progress-fill");
 
-      function setPhase(label, phase, sub, progress) {
+      function setPhase(label, phase, sub) {
         if (label) statusLabel.textContent = label;
         statusPhase.textContent = phase;
         if (sub) statusSub.textContent = sub;
-        if (progress !== undefined) progressFill.style.width = progress + "%";
         statusPhase.style.animation = "none";
         statusPhase.offsetHeight;
         statusPhase.style.animation = "";
@@ -377,25 +267,27 @@
       }
 
       function setError(msg) {
-        loader.classList.add("status-error");
-        setPhase("Error", msg, "Check the server logs or try again", 0);
+        loader.classList.remove("processing");
+        loader.classList.add("error");
+        setPhase("Error", msg, "Check the server logs or try again");
       }
 
       function doneAndRedirect(url) {
-        setPhase("Ready", "Redirecting...", url, 100);
+        setPhase("Ready", "Redirecting...", url);
+        loader.classList.remove("processing");
         loader.classList.add("done");
         document.body.classList.add("fade-out");
         setTimeout(function() {
           window.location.href = url;
-        }, 600);
+        }, 650);
       }
 
-      setPhase("Connecting", "Contacting DeepSeek API...",
-        action === "interview" ? "Preparing mock interview" : "Researching concept", 10);
+      setPhase("Connecting", "Contacting API...",
+        action === "interview" ? "Preparing mock interview" : "Researching concept");
 
       if (action === "interview" && appId) {
         setPhase("Generating", "Generating interview questions...",
-          "Analyzing job description & company intel", 20);
+          "Analyzing job description & company intel");
 
         fetch("/api/interview/" + appId + "/start", {
           method: "POST",
@@ -406,8 +298,7 @@
           return resp.json();
         })
         .then(function(data) {
-          setPhase("Processing", "Interview ready",
-            "Opening session...", 60);
+          setPhase("Processing", "Interview ready", "Opening session...");
           doneAndRedirect(data.session_url || "/interview/" + data.session_id);
         })
         .catch(function(err) {
@@ -416,7 +307,7 @@
 
       } else if (action === "learn" && concept) {
         setPhase("Generating", "Creating lesson: " + concept,
-          "Researching concept, building examples, charts & diagrams", 20);
+          "Researching concept, building examples, charts & diagrams");
 
         var payload = JSON.stringify({
           concept: concept,
@@ -435,7 +326,7 @@
         })
         .then(function(data) {
           setPhase("Processing", "Assembling lesson...",
-            "Preparing content & interactive elements", 60);
+            "Preparing content & interactive elements");
           var lessonUrl = data.url || "/learn/" + data.lesson_id;
           doneAndRedirect(lessonUrl);
         })
