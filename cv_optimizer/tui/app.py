@@ -83,6 +83,7 @@ class CvDashboard(App):
         Binding("n", "next_page", "Next"),
         Binding("S", "sankey", "Sankey"),
         Binding("p", "prev_page", "Prev"),
+        Binding("u", "open_url", "URL"),
         Binding("escape", "dismiss", "Dismiss"),
     ]
 
@@ -254,6 +255,19 @@ class CvDashboard(App):
                 subprocess.run(["open", str(app_dir)], check=False)
             else:
                 self._notify(f"CV path not found at {target}")
+
+    def action_open_url(self) -> None:
+        table = self.query_one("#apps-table", DataTable)
+        row = table.cursor_row
+        if row is None or row >= len(self.filtered):
+            return
+        app = self.filtered[row]
+        url = app.get("job_url")
+        if url:
+            webbrowser.open(url)
+            self._notify("[bold green]✓[/] Job posting opened in browser")
+        else:
+            self._notify("No job URL available for this application")
 
     def action_regenerate_cv(self) -> None:
         table = self.query_one("#apps-table", DataTable)
