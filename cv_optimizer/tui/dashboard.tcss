@@ -69,6 +69,11 @@ ModalScreen {
     margin-top: 1;
 }
 
+#status-select {
+    width: 100%;
+    margin-bottom: 1;
+}
+
 #status-modal Button {
     margin: 0 1;
 }

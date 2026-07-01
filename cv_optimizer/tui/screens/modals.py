@@ -1,9 +1,23 @@
+import re
 from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, ScrollableContainer, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Static
+from textual.widgets import Button, Input, Label, Select, Static
+
+from cv_optimizer import db
+
+BASE_STATUSES = ["applied", "ghosted", "rejected", "offer", "accepted"]
+
+
+def _next_interview(history: list[dict]) -> int:
+    nums = []
+    for h in history:
+        m = re.match(r"^interview (\d+)$", h["status"])
+        if m:
+            nums.append(int(m.group(1)))
+    return max(nums) + 1 if nums else 1
 
 
 class StatusModal(ModalScreen[str]):
@@ -13,9 +27,21 @@ class StatusModal(ModalScreen[str]):
         self.current_status = current_status
 
     def compose(self) -> ComposeResult:
+        app = db.get_application(self.app_id)
+        history = []
+        if app:
+            apps = db.list_applications_with_status()
+            for a in apps:
+                if a["id"] == self.app_id:
+                    history = a["history"]
+                    break
+
+        next_num = _next_interview(history)
+        options = [(s, s) for s in BASE_STATUSES] + [(f"interview {next_num}", f"interview {next_num}")]
+
         yield Vertical(
             Label(f"Change status for Application #{self.app_id}"),
-            Input(value=self.current_status, placeholder="Enter new status", id="status-input"),
+            Select(options, id="status-select", prompt="Select new status...", value=self.current_status),
             Horizontal(
                 Button("Confirm", id="confirm", variant="primary"),
                 Button("Cancel", id="cancel"),
@@ -25,13 +51,13 @@ class StatusModal(ModalScreen[str]):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "confirm":
-            status_input = self.query_one("#status-input", Input)
-            self.dismiss(status_input.value)
+            select = self.query_one("#status-select", Select)
+            self.dismiss(select.value)
         else:
             self.dismiss(None)
 
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        self.dismiss(event.value)
+    def on_select_changed(self, event: Select.Changed) -> None:
+        self.current_status = str(event.value) if event.value else self.current_status
 
 
 class SankeyScreen(ModalScreen[None]):
