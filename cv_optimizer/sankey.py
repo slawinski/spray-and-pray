@@ -29,33 +29,59 @@ def build_sankey_flows(
 
     for app_id, chain in apps.items():
         cleaned = _clean_ghosted(chain)
-        logger.debug("app %d chain %s -> %s", app_id, chain, cleaned)
-        for i in range(len(cleaned) - 1):
-            flows[(cleaned[i], cleaned[i + 1])] += 1
+        deduped = _deduplicate_consecutive(cleaned)
+        logger.debug("app %d chain %s -> %s -> %s", app_id, chain, cleaned, deduped)
+        for i in range(len(deduped) - 1):
+            flows[(deduped[i], deduped[i + 1])] += 1
 
     return dict(flows)
 
 
 def _clean_ghosted(chain: list[str]) -> list[str]:
-    """Remove ghosted entries when a non-ghosted status follows the first ghosted.
+    """Strip ghosted entries that are transient (followed by a non-ghosted status).
 
-    Rules:
-      - If ghosted is terminal (nothing non-ghosted after first ghosted): keep it.
-      - If any non-ghosted status appears after the first ghosted: strip ALL ghosted.
+    A ghosted entry represents employer silence. If the employer eventually
+    responds (interview, offer, rejection), that ghosted period was a transient
+    waiting state and should not clutter the funnel.
+
+    Rules (per entry, NOT first-ghosted-triggers-all):
+      - Ghosted followed by a non-ghosted → strip (it was transient).
+      - Ghosted terminal / only followed by more ghosted → keep (it's the resolution).
     """
-    try:
-        first_ghosted_idx = chain.index("ghosted")
-    except ValueError:
-        return chain  # no ghosted at all
+    if not chain:
+        return chain
 
-    has_non_ghosted_after = any(
-        s != "ghosted" for s in chain[first_ghosted_idx + 1 :]
-    )
+    result: list[str] = []
+    for i, status in enumerate(chain):
+        if status != "ghosted":
+            result.append(status)
+            continue
 
-    if has_non_ghosted_after:
-        return [s for s in chain if s != "ghosted"]
+        # Check what comes after this ghosted entry
+        after = chain[i + 1 :]
+        has_non_ghosted_after = any(s != "ghosted" for s in after)
+        if has_non_ghosted_after:
+            continue  # transient ghosted — skip it
+        else:
+            result.append(status)  # terminal ghosted — keep it
 
-    return chain
+    return result
+
+
+def _deduplicate_consecutive(chain: list[str]) -> list[str]:
+    """Collapse consecutive identical statuses into single occurrences.
+
+    Prevents self-loops in the Sankey diagram caused by back-and-forth
+    toggling between statuses (e.g. applied → ghosted → applied → ghosted
+    produces ["applied", "applied"] after ghosted cleaning).
+    """
+    if not chain:
+        return chain
+    result: list[str] = [chain[0]]
+    for status in chain[1:]:
+        if status != result[-1]:
+            result.append(status)
+    return result
 
 
 def render_sankey(flows: dict[tuple[str, str], int]) -> str:

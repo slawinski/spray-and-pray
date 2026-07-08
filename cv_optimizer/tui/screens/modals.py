@@ -39,6 +39,9 @@ class StatusModal(ModalScreen[str]):
         next_num = _next_interview(history)
         options = [(s, s) for s in BASE_STATUSES] + [(f"interview {next_num}", f"interview {next_num}")]
 
+        if self.current_status not in {opt[0] for opt in options}:
+            options.append((self.current_status, self.current_status))
+
         yield Vertical(
             Label(f"Change status for Application #{self.app_id}"),
             Select(options, id="status-select", prompt="Select new status...", value=self.current_status),

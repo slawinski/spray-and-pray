@@ -173,7 +173,11 @@ def reoptimize(app_id: int, master_cv_path: str = None) -> None:
 
 
 def update_status(application_id: int, status: str) -> None:
-    """Appends a new status transition for an existing application."""
+    """Appends a new status transition for an existing application.
+
+    Skips the update if the new status is identical to the current latest,
+    preventing redundant self-transitions that pollute the Sankey diagram.
+    """
     db.init_db()
 
     app = db.get_application(application_id)
@@ -181,6 +185,15 @@ def update_status(application_id: int, status: str) -> None:
         raise ValueError(f"Application #{application_id} not found.")
 
     validated = _validate_status(status)
+
+    current = db.get_latest_status(application_id)
+    if current == validated:
+        logger.info(
+            "Application #%d: skipping redundant %s (already current)",
+            application_id, validated,
+        )
+        return
+
     db.insert_status(application_id, validated)
     logger.info(f"Application #{application_id}: → {validated}")
 

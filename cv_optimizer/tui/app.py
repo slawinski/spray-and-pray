@@ -131,10 +131,10 @@ class CvDashboard(App):
         end = start + self.page_size
         page = self.filtered[start:end]
 
-        for app in page:
+        for idx, app in enumerate(page):
             created = app["created_at"][:10] if app["created_at"] else ""
             table.add_row(
-                str(app["id"]),
+                str(start + idx + 1),
                 _truncate(app["company"], 25),
                 _truncate(app["role"], 30),
                 _status_rich(app["latest_status"]),

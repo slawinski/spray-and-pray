@@ -5,7 +5,68 @@ from pathlib import Path
 # Ensure project root is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from cv_optimizer.sankey import build_sankey_flows, _clean_ghosted, render_sankey
+from cv_optimizer.sankey import build_sankey_flows, _clean_ghosted, _deduplicate_consecutive, render_sankey
+
+
+def test_ghosted_cleaning_idempotent():
+    """Per-entry ghosted cleaning: transient ghosted stripped, terminal ghosted kept."""
+    chain = ["applied", "ghosted", "applied", "ghosted"]
+    cleaned = _clean_ghosted(chain)
+    # First ghosted is transient (followed by "applied") → stripped.
+    # Last ghosted is terminal → kept.
+    assert cleaned == ["applied", "applied", "ghosted"]
+    # Deduplication collapses the consecutive "applied"s, leaves terminal ghosted
+    assert _deduplicate_consecutive(cleaned) == ["applied", "ghosted"]
+
+
+def test_deduplicate_consecutive_no_change():
+    """No consecutive duplicates → chain unchanged."""
+    chain = ["applied", "interview 1", "interview 2", "rejected"]
+    assert _deduplicate_consecutive(chain) == chain
+
+
+def test_deduplicate_consecutive_collapses():
+    """Consecutive identical statuses → collapsed."""
+    chain = ["applied", "applied", "applied", "ghosted"]
+    assert _deduplicate_consecutive(chain) == ["applied", "ghosted"]
+
+
+def test_deduplicate_consecutive_empty():
+    """Empty chain → empty."""
+    assert _deduplicate_consecutive([]) == []
+    assert _deduplicate_consecutive(["applied"]) == ["applied"]
+
+
+def test_circular_ghosted_applied_no_self_loop():
+    """Back-and-forth toggling should NOT produce a self-loop, but terminal ghosted IS shown."""
+    transitions = [
+        (1, "applied", "t1"),
+        (1, "ghosted", "t2"),
+        (1, "applied", "t3"),
+        (1, "ghosted", "t4"),
+    ]
+    flows = build_sankey_flows(transitions)
+    # After per-entry cleaning + dedup: ["applied", "ghosted"] → one edge
+    assert ("applied", "applied") not in flows
+    assert ("ghosted", "applied") not in flows
+    assert ("applied", "ghosted") in flows
+    assert flows[("applied", "ghosted")] == 1
+
+
+def test_circular_ghosted_applied_ends_ghosted():
+    """Ends with ghosted as terminal: applied → ghosted → applied → ghosted → shows applied→ghosted."""
+    transactions = [
+        (1, "applied", "t1"),
+        (1, "ghosted", "t2"),
+        (1, "applied", "t3"),
+        (1, "ghosted", "t4"),
+    ]
+    # Chain: ["applied", "ghosted", "applied", "ghosted"]
+    # Per-entry: first ghosted is transient (followed by "applied"), terminal ghosted kept
+    # After clean: ["applied", "applied", "ghosted"] → dedup: ["applied", "ghosted"]
+    flows = build_sankey_flows(transactions)
+    assert ("applied", "applied") not in flows
+    assert flows == {("applied", "ghosted"): 1}
 
 
 def test_ghosted_terminal():
@@ -21,9 +82,9 @@ def test_ghosted_with_subsequent():
 
 
 def test_ghosted_multiple_with_subsequent():
-    """Multiple ghosted entries, non-ghosted after first → all ghosted removed."""
+    """Multiple ghosted entries: transient first one stripped, terminal last one kept."""
     chain = ["applied", "ghosted", "interview 1", "ghosted"]
-    assert _clean_ghosted(chain) == ["applied", "interview 1"]
+    assert _clean_ghosted(chain) == ["applied", "interview 1", "ghosted"]
 
 
 def test_no_ghosted():
@@ -81,14 +142,38 @@ def test_render_sankey_output():
     assert "──[" in output
 
 
+def test_circular_ghosted_applied_resolves():
+    """Back-and-forth that eventually resolves: applied → ghosted → applied → ghosted → interview 1."""
+    transitions = [
+        (1, "applied", "t1"),
+        (1, "ghosted", "t2"),
+        (1, "applied", "t3"),
+        (1, "ghosted", "t4"),
+        (1, "interview 1", "t5"),
+    ]
+    flows = build_sankey_flows(transitions)
+    # After ghosted cleaning: ["applied", "applied", "interview 1"]
+    # After dedup: ["applied", "interview 1"]
+    assert flows == {("applied", "interview 1"): 1}
+    assert ("applied", "applied") not in flows
+    assert ("ghosted", "applied") not in flows
+
+
 if __name__ == "__main__":
     test_ghosted_terminal()
     test_ghosted_with_subsequent()
     test_ghosted_multiple_with_subsequent()
     test_no_ghosted()
+    test_ghosted_cleaning_idempotent()
+    test_deduplicate_consecutive_no_change()
+    test_deduplicate_consecutive_collapses()
+    test_deduplicate_consecutive_empty()
     test_build_flows_spec_example_1()
     test_build_flows_spec_example_2()
     test_build_flows_aggregation()
     test_render_sankey_empty()
     test_render_sankey_output()
-    print("✓ All 9 tests passed")
+    test_circular_ghosted_applied_no_self_loop()
+    test_circular_ghosted_applied_ends_ghosted()
+    test_circular_ghosted_applied_resolves()
+    print("✓ All 16 tests passed")

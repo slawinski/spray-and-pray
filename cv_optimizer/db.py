@@ -22,7 +22,7 @@ def init_db() -> None:
         conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS applications (
-                id         INTEGER PRIMARY KEY,
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 company    TEXT NOT NULL,
                 role       TEXT NOT NULL,
                 jd_path    TEXT,
@@ -68,7 +68,43 @@ def init_db() -> None:
         conn.execute("ALTER TABLE applications ADD COLUMN job_url TEXT")
     except Exception:
         pass
+    _migrate_autoincrement()
     logger.info("Database initialised at %s", DB_PATH)
+
+
+def _migrate_autoincrement() -> None:
+    """Migrate existing applications table to use AUTOINCREMENT if it doesn't already."""
+    with _connect() as conn:
+        table_info = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='applications'"
+        ).fetchone()
+    if not table_info:
+        return
+    if "AUTOINCREMENT" in table_info[0].upper():
+        return
+
+    logger.info("Migrating applications table to AUTOINCREMENT...")
+    with _connect() as conn:
+        conn.execute("PRAGMA foreign_keys=OFF")
+        conn.executescript(
+            """
+            CREATE TABLE applications_new (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                company    TEXT NOT NULL,
+                role       TEXT NOT NULL,
+                jd_path    TEXT,
+                cv_path    TEXT,
+                job_url    TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+            INSERT INTO applications_new (id, company, role, jd_path, cv_path, job_url, created_at)
+                SELECT id, company, role, jd_path, cv_path, job_url, created_at FROM applications;
+            DROP TABLE applications;
+            ALTER TABLE applications_new RENAME TO applications;
+            """
+        )
+        conn.execute("PRAGMA foreign_keys=ON")
+    logger.info("AUTOINCREMENT migration complete")
 
 
 def insert_application(
@@ -99,6 +135,19 @@ def insert_status(application_id: int, status: str) -> None:
             (application_id, status),
         )
     logger.info("Application %d → %s", application_id, status)
+
+
+def get_latest_status(application_id: int) -> str | None:
+    """Return the most recent status for an application, or None."""
+    init_db()
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT status FROM status_history "
+            "WHERE application_id = ? "
+            "ORDER BY transitioned_at DESC LIMIT 1",
+            (application_id,),
+        ).fetchone()
+    return row[0] if row else None
 
 
 def get_all_transitions() -> list[tuple[int, str, str]]:
