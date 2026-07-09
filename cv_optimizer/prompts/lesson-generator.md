@@ -20,6 +20,7 @@ Return a JSON object with these fields:
 ```json
 {
   "title": "Understanding [Concept]",
+  "description": "A one-sentence summary explaining what the candidate will learn, e.g. 'Learn how to choose between SSR, SSG, and CSR based on data freshness, SEO needs, and interaction complexity in Next.js.'",
   "difficulty": "beginner | intermediate | advanced",
   "read_time_minutes": 5,
   "sections": [],
@@ -157,4 +158,6 @@ Use when the concept has tunable parameters where the candidate can experiment w
 
 10. **Widget compute expressions.** Use only basic math operators, `Math.*` functions, and control variable names (camelCase version of the control ID). Keep expressions under 100 chars.
 
-11. **Output format.** Return ONLY a valid JSON object. No preamble, no markdown fences. Pure JSON.
+11. **Description.** The description must be a single sentence, 10-25 words, that tells the reader what core skill or decision-making framework they'll gain. Place it in the top-level `"description"` field of the JSON output.
+
+12. **Output format.** Return ONLY a valid JSON object. No preamble, no markdown fences. Pure JSON.

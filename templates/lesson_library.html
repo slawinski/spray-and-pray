@@ -64,24 +64,24 @@
     /* ── Lesson cards ── */
     .grid {
       display: grid;
-      gap: 12px;
+      gap: 10px;
     }
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 18px 22px;
-      transition: border-color 150ms, background 150ms;
+      transition: border-color 150ms ease-out;
     }
     .card:hover {
       border-color: var(--accent-border);
-      background: var(--surface-alt);
     }
     .card h2 {
       font-size: 1.05rem;
       font-weight: 600;
       line-height: 1.35;
-      margin-bottom: 4px;
+      margin: 0 0 4px;
+      text-wrap: balance;
     }
     .card h2 a {
       color: var(--accent);
@@ -94,10 +94,10 @@
       display: flex;
       gap: 10px;
       align-items: center;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
     .badge {
-      font-size: 0.625rem;
+      font-size: 0.6875rem;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.04em;
@@ -107,15 +107,19 @@
       color: var(--accent);
       border: 1px solid var(--accent-border);
     }
-    .card .concept {
+    .card .description {
       font-size: 0.8125rem;
       color: var(--text-dim);
-      margin-bottom: 8px;
+      margin-top: 2px;
+      line-height: 1.5;
+    }
+    .card .description + .tags {
+      margin-top: 10px;
     }
     .card .app-context {
       font-size: 0.75rem;
       color: var(--text-dim);
-      margin-bottom: 6px;
+      margin-bottom: 2px;
       font-style: italic;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -124,7 +128,7 @@
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
-      margin-top: 6px;
+      margin-top: 8px;
     }
     .tag {
       font-size: 0.6875rem;
@@ -179,10 +183,12 @@
         <span class="badge">{{ lesson.difficulty }}</span>
         <span>{{ lesson.read_time }} min read</span>
       </div>
-      <h2><a href="/learn/{{ lesson.id }}{% if session_id %}?session_id={{ session_id }}{% endif %}">{{ lesson.title }}</a></h2>
-      <div class="concept">{{ lesson.concept }}</div>
       {% if lesson.company and lesson.role %}
       <div class="app-context">{{ lesson.company }} · {{ lesson.role }}</div>
+      {% endif %}
+      <h2><a href="/learn/{{ lesson.id }}{% if session_id %}?session_id={{ session_id }}{% endif %}">{{ lesson.title }}</a></h2>
+      {% if lesson.description %}
+      <div class="description">{{ lesson.description }}</div>
       {% endif %}
       {% if lesson.tags %}
       <div class="tags">

@@ -8,6 +8,7 @@ import subprocess
 import os
 import json as json_mod
 import markdown
+import re
 from pathlib import Path
 import logging
 from cv_optimizer.config import settings
@@ -426,6 +427,12 @@ async def lesson_library(request: Request, session_id: int | None = None):
             if app is not None:
                 company = app[1]
                 role = app[2]
+        description = content.get("description") or ""
+        if not description and content.get("sections"):
+            first_body = content["sections"][0].get("body", "")
+            m = re.match(r"^([^.!?]+[.!?])", first_body)
+            if m:
+                description = m.group(1)
         lessons.append({
             "id": row["id"],
             "title": content.get("title", row["concept"]),
@@ -435,6 +442,7 @@ async def lesson_library(request: Request, session_id: int | None = None):
             "tags": content.get("related_concepts", [])[:4],
             "company": company,
             "role": role,
+            "description": description,
         })
 
     return templates.TemplateResponse(
