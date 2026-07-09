@@ -384,6 +384,14 @@ async def lesson_page(request: Request, lesson_id: int, session_id: int | None =
     difficulty = content.get("difficulty", "intermediate")
     read_time = content.get("read_time_minutes", 5)
 
+    company = None
+    role = None
+    if lesson["application_id"] is not None:
+        app = db_mod.get_application(lesson["application_id"])
+        if app is not None:
+            company = app[1]
+            role = app[2]
+
     back_sid = session_id or lesson_sid
 
     return templates.TemplateResponse(
@@ -397,6 +405,8 @@ async def lesson_page(request: Request, lesson_id: int, session_id: int | None =
             "related_concepts": related,
             "session_id": back_sid,
             "lesson_json": json_mod.dumps(content),
+            "company": company,
+            "role": role,
         },
     )
 
@@ -409,6 +419,13 @@ async def lesson_library(request: Request, session_id: int | None = None):
     lessons = []
     for row in rows:
         content = json_mod.loads(row["content_json"])
+        company = None
+        role = None
+        if row["application_id"] is not None:
+            app = db_mod.get_application(row["application_id"])
+            if app is not None:
+                company = app[1]
+                role = app[2]
         lessons.append({
             "id": row["id"],
             "title": content.get("title", row["concept"]),
@@ -416,6 +433,8 @@ async def lesson_library(request: Request, session_id: int | None = None):
             "difficulty": content.get("difficulty", "intermediate"),
             "read_time": content.get("read_time_minutes", 5),
             "tags": content.get("related_concepts", [])[:4],
+            "company": company,
+            "role": role,
         })
 
     return templates.TemplateResponse(

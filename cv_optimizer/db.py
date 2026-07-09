@@ -199,7 +199,7 @@ def list_applications_with_status() -> list[dict]:
     result = []
     with _connect() as conn:
         for app in apps:
-            app_id, company, role, jd_path, cv_path, created_at, job_url = app
+            app_id, company, role, jd_path, cv_path, job_url, created_at = app
             history_rows = conn.execute(
                 "SELECT status, transitioned_at FROM status_history "
                 "WHERE application_id = ? ORDER BY transitioned_at ASC",

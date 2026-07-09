@@ -55,6 +55,12 @@
       align-items: center;
       margin-bottom: 10px;
     }
+    header .app-context {
+      font-size: 0.8125rem;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+      font-style: italic;
+    }
     .badge {
       font-size: 0.6875rem;
       font-weight: 600;
@@ -476,8 +482,8 @@
       * { transition-duration: 0.01ms !important; }
     }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.50.0/min/vs/loader.js"></script>
   <script src="/static/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.50.0/min/vs/loader.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
   <script>
     window.__widgetsToInit = [];
@@ -507,6 +513,9 @@
       <span class="badge">{{ difficulty }}</span>
       <span class="read-time">{{ read_time_minutes }} min read</span>
     </div>
+    {% if company and role %}
+    <div class="app-context">{{ company }} · {{ role }}</div>
+    {% endif %}
     <h1>{{ title }}</h1>
   </header>
 

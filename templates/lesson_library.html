@@ -112,6 +112,14 @@
       color: var(--text-dim);
       margin-bottom: 8px;
     }
+    .card .app-context {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+      font-style: italic;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .tags {
       display: flex;
       flex-wrap: wrap;
@@ -173,6 +181,9 @@
       </div>
       <h2><a href="/learn/{{ lesson.id }}{% if session_id %}?session_id={{ session_id }}{% endif %}">{{ lesson.title }}</a></h2>
       <div class="concept">{{ lesson.concept }}</div>
+      {% if lesson.company and lesson.role %}
+      <div class="app-context">{{ lesson.company }} · {{ lesson.role }}</div>
+      {% endif %}
       {% if lesson.tags %}
       <div class="tags">
         {% for tag in lesson.tags %}
