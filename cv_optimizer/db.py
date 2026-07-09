@@ -144,10 +144,30 @@ def get_latest_status(application_id: int) -> str | None:
         row = conn.execute(
             "SELECT status FROM status_history "
             "WHERE application_id = ? "
-            "ORDER BY transitioned_at DESC LIMIT 1",
+            "ORDER BY transitioned_at DESC, id DESC LIMIT 1",
             (application_id,),
         ).fetchone()
     return row[0] if row else None
+
+
+def get_status_history_with_ids(application_id: int) -> list[tuple[int, str, str]]:
+    """Returns all (id, status, transitioned_at) for one application, ordered ASC."""
+    init_db()
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT id, status, transitioned_at FROM status_history "
+            "WHERE application_id = ? ORDER BY transitioned_at ASC, id ASC",
+            (application_id,),
+        ).fetchall()
+    return rows
+
+
+def delete_status_by_id(status_id: int) -> None:
+    """Deletes a single status_history row by its id."""
+    init_db()
+    with _connect() as conn:
+        conn.execute("DELETE FROM status_history WHERE id = ?", (status_id,))
+    logger.info("Deleted status_history row %d", status_id)
 
 
 def get_all_transitions() -> list[tuple[int, str, str]]:
@@ -157,7 +177,7 @@ def get_all_transitions() -> list[tuple[int, str, str]]:
         rows = conn.execute(
             "SELECT application_id, status, transitioned_at "
             "FROM status_history "
-            "ORDER BY application_id, transitioned_at ASC"
+            "ORDER BY application_id, transitioned_at ASC, id ASC"
         ).fetchall()
     return rows
 

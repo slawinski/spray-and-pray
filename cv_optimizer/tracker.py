@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 APPLICATIONS_DIR = Path("applications")
 
 VALID_STATUSES = {"applied", "ghosted", "rejected", "offer", "accepted"}
-INTERVIEW_PATTERN = re.compile(r"^interview \d+$")
+INTERVIEW_PATTERN = re.compile(r"^interview (\d+)$")
 
 
 def _validate_status(status: str) -> str:
@@ -28,6 +28,24 @@ def _validate_status(status: str) -> str:
         f"Invalid status '{status}'. "
         f"Valid: {', '.join(sorted(VALID_STATUSES))}, interview [N]"
     )
+
+
+def _status_rank(status: str) -> int:
+    """Returns a numeric rank for a status, used to detect backward transitions."""
+    if status == "applied":
+        return 0
+    if status == "ghosted":
+        return 1
+    m = INTERVIEW_PATTERN.match(status)
+    if m:
+        return 2 + int(m.group(1))
+    if status == "offer":
+        return 97
+    if status == "accepted":
+        return 98
+    if status == "rejected":
+        return 99
+    return 100  # unknown — always forward
 
 
 def _build_app_dir(app_id: int, company: str, role: str) -> Path:
@@ -173,10 +191,16 @@ def reoptimize(app_id: int, master_cv_path: str = None) -> None:
 
 
 def update_status(application_id: int, status: str) -> None:
-    """Appends a new status transition for an existing application.
+    """Records a status transition with flow constraints to prevent circular Sankey diagrams.
 
-    Skips the update if the new status is identical to the current latest,
-    preventing redundant self-transitions that pollute the Sankey diagram.
+    Rules:
+      1. No-op: same as current status → skip.
+      2. Ghosted replacement: if currently ghosted and moving to interview/offer/accepted,
+         delete the ghosted record first (it was a pessimistic default, not a real state).
+      3. Undo/backtrack: if the new status ranks lower than any existing transition,
+         delete all transitions at or above that rank (undo a mistake cleanly).
+      4. Otherwise: just append the new transition.
+      5. After backtracking, if the new status matches the remaining last status, skip insert.
     """
     db.init_db()
 
@@ -194,8 +218,44 @@ def update_status(application_id: int, status: str) -> None:
         )
         return
 
+    new_rank = _status_rank(validated)
+    history = db.get_status_history_with_ids(application_id)  # [(id, status, at), ...]
+
+    # Rule 2 — ghosted replacement: pessimistic default was wrong.
+    # Ghosted gets replaced by any real outcome (interview, offer, accepted, rejected).
+    if current == "ghosted" and new_rank >= _status_rank("interview 1"):
+        db.delete_status_by_id(history[-1][0])
+        logger.info(
+            "Application #%d: replaced ghosted with %s", application_id, validated,
+        )
+        db.insert_status(application_id, validated)
+        return
+
+    # Rule 3 — undo/backtrack: delete all transitions at or above the new rank
+    backtracked = False
+    for entry in history:
+        if _status_rank(entry[1]) >= new_rank:
+            db.delete_status_by_id(entry[0])
+            backtracked = True
+
+    if backtracked:
+        logger.info(
+            "Application #%d: backtracked to %s (removed %d transition(s))",
+            application_id, validated,
+            sum(1 for e in history if _status_rank(e[1]) >= new_rank),
+        )
+
+    # After backtracking, the last remaining status may now be identical → skip insert
+    remaining = db.get_latest_status(application_id)
+    if remaining == validated:
+        logger.info(
+            "Application #%d: backtrack complete — already at %s",
+            application_id, validated,
+        )
+        return
+
     db.insert_status(application_id, validated)
-    logger.info(f"Application #{application_id}: → {validated}")
+    logger.info("Application #%d: → %s", application_id, validated)
 
 
 def list_all() -> list[tuple]:

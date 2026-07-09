@@ -84,6 +84,25 @@ def _deduplicate_consecutive(chain: list[str]) -> list[str]:
     return result
 
 
+def _node_counts(flows: dict[tuple[str, str], int]) -> dict[str, int]:
+    """Compute per-status application counts from flow data.
+
+    Each node's count is max(incoming, outgoing) — the number of applications
+    that passed through that status.
+    """
+    incoming: dict[str, int] = defaultdict(int)
+    outgoing: dict[str, int] = defaultdict(int)
+    for (src, tgt), weight in flows.items():
+        outgoing[src] += weight
+        incoming[tgt] += weight
+
+    all_nodes = set(incoming) | set(outgoing)
+    counts: dict[str, int] = {}
+    for node in all_nodes:
+        counts[node] = max(incoming.get(node, 0), outgoing.get(node, 0))
+    return counts
+
+
 def render_sankey(flows: dict[tuple[str, str], int]) -> str:
     """Render flows as an ASCII Sankey table for the terminal.
 
@@ -120,8 +139,20 @@ def render_sankey(flows: dict[tuple[str, str], int]) -> str:
         padded_src = src.ljust(max_source_len)
         lines.append(f"{padded_src} ──[ {weight} ]──▶  {tgt}")
 
+    # Per-status application counts (node values), sorted canonically
+    node_counts = _node_counts(flows)
+    sorted_counts = sorted(node_counts.items(), key=lambda kv: (
+        0 if kv[0] == "applied" else
+        1 if kv[0].startswith("interview") else
+        2 if kv[0] == "offer" else
+        3 if kv[0] == "accepted" else
+        4 if kv[0] == "rejected" else 5,
+        kv[0],
+    ))
+    count_parts = ", ".join(f"{s}: {c}" for s, c in sorted_counts)
     lines.append(separator)
     lines.append(f"Total applications: {total_apps}")
+    lines.append(count_parts)
 
     return "\n".join(lines)
 
@@ -175,6 +206,9 @@ def generate_sankey_html() -> Path:
     ))
     node_index = {n: i for i, n in enumerate(nodes)}
 
+    node_counts = _node_counts(flows)
+    labels_json = str([f"{n} ({node_counts.get(n, 0)})" for n in nodes])
+    colors_json = str([_node_color(n) for n in nodes])
     source = []
     target = []
     value = []
@@ -183,8 +217,6 @@ def generate_sankey_html() -> Path:
         target.append(node_index[tgt])
         value.append(weight)
 
-    labels_json = str(nodes)
-    colors_json = str([_node_color(n) for n in nodes])
     source_json = str(source)
     target_json = str(target)
     value_json = str(value)
