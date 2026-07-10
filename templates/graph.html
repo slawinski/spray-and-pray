@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Knowledge Graph — SAP</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-dim: #8b949e;
+      --accent: #58a6ff;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── SVG canvas ── */
+    svg {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+    }
+    svg:active { cursor: grabbing; }
+
+    /* ── Link lines ── */
+    .link {
+      stroke: var(--border);
+      stroke-width: 1;
+      opacity: 0.6;
+      transition: opacity 200ms ease;
+    }
+    .link-parent {
+      stroke: var(--accent);
+      stroke-width: 1.5;
+      stroke-dasharray: 6 4;
+      opacity: 0.5;
+      transition: opacity 200ms ease;
+    }
+
+    /* ── Nodes ── */
+    .node-lesson circle {
+      fill: var(--accent);
+      stroke: none;
+      cursor: pointer;
+      transition: opacity 200ms ease;
+    }
+    .node-concept circle {
+      fill: none;
+      stroke: var(--text-dim);
+      stroke-width: 1.5;
+      transition: opacity 200ms ease;
+    }
+    .node-standalone circle {
+      fill: var(--text-dim);
+      stroke: var(--text-dim);
+      stroke-width: 1;
+      cursor: pointer;
+      transition: opacity 200ms ease;
+    }
+    .node-label {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      fill: var(--text-dim);
+      pointer-events: none;
+      text-anchor: start;
+      transition: opacity 200ms ease;
+    }
+
+    /* ── Hull paths ── */
+    .hull {
+      pointer-events: none;
+    }
+
+    /* ── Header overlay ── */
+    header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 10;
+      padding: 16px 24px;
+      background: rgba(22, 27, 34, 0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+      border-radius: 0 0 var(--radius) 0;
+    }
+    .nav-links {
+      display: flex;
+      gap: 16px;
+      font-size: 0.8125rem;
+    }
+    .nav-links a {
+      color: var(--accent);
+      text-decoration: none;
+      transition: color 150ms;
+    }
+    .nav-links a:hover { color: #79c0ff; }
+    .nav-links .sep {
+      color: var(--border);
+      user-select: none;
+    }
+    .nav-links .active {
+      color: var(--text-dim);
+      cursor: default;
+      pointer-events: none;
+    }
+    header h1 {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--text-dim);
+      margin-top: 4px;
+    }
+
+    /* ── Legend ── */
+    .legend {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      z-index: 10;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-width: 300px;
+      overflow-y: auto;
+      max-height: 40vh;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+    .legend-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+    .legend-swatch.dimmed {
+      opacity: 0.35;
+    }
+    .legend-item .count {
+      margin-left: auto;
+      color: var(--text-dim);
+      font-size: 0.6875rem;
+    }
+
+    /* ── Tooltip ── */
+    .tooltip {
+      position: fixed;
+      z-index: 20;
+      pointer-events: none;
+      opacity: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      font-size: 0.75rem;
+      line-height: 1.55;
+      max-width: 260px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+      transition: opacity 120ms ease;
+    }
+    .tooltip.visible {
+      opacity: 1;
+    }
+    .tooltip .tt-title {
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 0.8125rem;
+      margin-bottom: 3px;
+    }
+    .tooltip .tt-sub {
+      color: var(--text-dim);
+      font-size: 0.6875rem;
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 5;
+      pointer-events: none;
+    }
+    .empty-state .msg {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 36px;
+      text-align: center;
+      max-width: 360px;
+    }
+    .empty-state p {
+      color: var(--text-dim);
+      font-size: 0.875rem;
+      line-height: 1.6;
+    }
+
+    /* ── Reduced motion ── */
+    @media (prefers-reduced-motion: reduce) {
+      .link, .node-lesson circle, .node-standalone circle, .node-concept circle, .node-label {
+        transition: none;
+      }
+      .tooltip {
+        transition: none;
+      }
+    }
+
+    /* ── Mobile ── */
+    @media (max-width: 640px) {
+      header {
+        padding: 10px 14px;
+      }
+      .nav-links {
+        font-size: 0.75rem;
+        gap: 10px;
+      }
+      .nav-links a, .nav-links .active {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+      }
+      .legend {
+        bottom: 10px;
+        left: 10px;
+        padding: 8px 12px;
+        gap: 5px;
+        max-width: 240px;
+      }
+      .legend-item {
+        font-size: 0.6875rem;
+      }
+      .empty-state .msg {
+        margin: 0 16px;
+        padding: 20px 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══ Header overlay ═══ -->
+  <header>
+    <div class="nav-links">
+      <a href="/learn">Library</a>
+      <span class="sep">/</span>
+      <span class="active">Graph</span>
+    </div>
+    <h1 id="header-subtitle">knowledge graph</h1>
+  </header>
+
+  <!-- ═══ SVG canvas (created by D3) ═══ -->
+
+  <!-- ═══ Legend ═══ -->
+  <div class="legend" id="legend"></div>
+
+  <!-- ═══ Tooltip ═══ -->
+  <div class="tooltip" id="tooltip"></div>
+
+  <!-- ═══ Empty state (hidden by default) ═══ -->
+  <div class="empty-state" id="empty-state" style="display:none;">
+    <div class="msg">
+      <p>No lessons yet. Generate some from mock interviews.</p>
+    </div>
+  </div>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    (function() {
+      // ── Parse data from template ──
+      var nodes = {{ nodes_json | safe }};
+      var edges = {{ edges_json | safe }};
+      var hulls = {{ hulls_json | safe }};
+
+      // ── Empty state ──
+      if (!nodes || nodes.length === 0) {
+        document.getElementById("empty-state").style.display = "flex";
+        document.getElementById("header-subtitle").textContent = "0 lessons";
+        // Still render legend with hulls (which may be empty or have zero-lesson groups)
+        renderLegend(hulls || [], nodes);
+        return;
+      }
+
+      document.getElementById("header-subtitle").textContent =
+        nodes.length + " node" + (nodes.length !== 1 ? "s" : "");
+
+      // ── Dimensions ──
+      var width = window.innerWidth;
+      var height = window.innerHeight;
+
+      // ── Create SVG ──
+      var svg = d3.select("body")
+        .insert("svg", ":first-child")
+        .attr("width", width)
+        .attr("height", height);
+
+      // Zoom group
+      var g = svg.append("g");
+
+      // Zoom behavior
+      var zoom = d3.zoom()
+        .scaleExtent([0.3, 3])
+        .on("zoom", function(event) {
+          g.attr("transform", event.transform);
+        });
+      svg.call(zoom);
+
+      // ── Hull group (behind links) ──
+      var hullGroup = g.append("g").attr("class", "hulls");
+
+      // Create hull paths
+      var hullPath = hullGroup.selectAll("path")
+        .data(hulls)
+        .join("path")
+        .attr("class", "hull")
+        .attr("fill", function(d) { return d.color; })
+        .attr("stroke", function(d) {
+          return (d.color || "").replace(/0\.\d+\)$/, "0.25)");
+        })
+        .attr("stroke-width", 1)
+        .attr("stroke-dasharray", "4 3");
+
+      // ── Link group ──
+      var linkGroup = g.append("g").attr("class", "links");
+
+      var link = linkGroup.selectAll("line")
+        .data(edges)
+        .join("line")
+        .attr("class", function(d) { return d.style === "parent" ? "link-parent" : "link"; });
+
+      // ── Node group ──
+      var nodeGroup = g.append("g").attr("class", "nodes");
+
+      var node = nodeGroup.selectAll("g")
+        .data(nodes)
+        .join("g")
+        .attr("class", function(d) {
+          if (d.type === "lesson") return "node-lesson";
+          if (d.type === "concept") return "node-standalone";
+          return "node-concept";
+        })
+        .attr("data-id", function(d) { return d.id; });
+
+      // Circles
+      node.append("circle")
+        .attr("r", function(d) {
+          if (d.type === "lesson") return 10;
+          if (d.type === "concept") return 8;
+          return 5;
+        });
+
+      // Labels
+      var labels = node.append("text")
+        .attr("class", "node-label")
+        .attr("dx", function(d) {
+          if (d.type === "lesson") return 14;
+          if (d.type === "concept") return 12;
+          return 8;
+        })
+        .attr("dy", "0.35em")
+        .attr("font-size", function(d) {
+          if (d.type === "lesson") return "10px";
+          if (d.type === "concept") return "9px";
+          return "8px";
+        })
+        .text(function(d) {
+          var lbl = d.title || d.label || "";
+          return lbl.length > 20 ? lbl.substring(0, 19) + "..." : lbl;
+        });
+
+      // ── Tooltip element ──
+      var tooltip = d3.select("#tooltip");
+
+      // Precompute concept reference counts
+      var conceptRefCount = {};
+      edges.forEach(function(e) {
+        var sourceId = typeof e.source === "object" ? e.source.id : e.source;
+        var targetId = typeof e.target === "object" ? e.target.id : e.target;
+        var sourceNode = nodes.find(function(n) { return n.id === sourceId; });
+        if (sourceNode && sourceNode.type === "lesson") {
+          conceptRefCount[targetId] = (conceptRefCount[targetId] || 0) + 1;
+        }
+      });
+
+      // Build adjacency sets for hover highlighting
+      var adjacency = {};
+      nodes.forEach(function(n) { adjacency[n.id] = new Set(); });
+      edges.forEach(function(e) {
+        var s = typeof e.source === "object" ? e.source.id : e.source;
+        var t = typeof e.target === "object" ? e.target.id : e.target;
+        if (adjacency[s]) adjacency[s].add(t);
+        if (adjacency[t]) adjacency[t].add(s);
+      });
+
+      // ── Force simulation ──
+      var simulation = d3.forceSimulation(nodes)
+        .force("link", d3.forceLink(edges).id(function(d) { return d.id; }).distance(80))
+        .force("charge", d3.forceManyBody().strength(-150))
+        .force("center", d3.forceCenter(width / 2, height / 2))
+        .force("collide", d3.forceCollide().radius(function(d) {
+          if (d.type === "lesson") return 24;
+          if (d.type === "concept") return 20;
+          return 14;
+        }))
+        .force("lessonCluster", clusterLessons(0.04))
+        .alphaDecay(0.02);
+
+      // Custom force: pull lesson nodes toward their centroid
+      function clusterLessons(strength) {
+        var lessonNodes;
+        return function(alpha) {
+          if (!lessonNodes) lessonNodes = nodes.filter(function(d) { return d.type === "lesson" || d.type === "concept"; });
+          if (!lessonNodes.length) return;
+          var cx = 0, cy = 0;
+          lessonNodes.forEach(function(d) { cx += d.x; cy += d.y; });
+          cx /= lessonNodes.length;
+          cy /= lessonNodes.length;
+          lessonNodes.forEach(function(d) {
+            d.vx += (cx - d.x) * strength * alpha;
+            d.vy += (cy - d.y) * strength * alpha;
+          });
+        };
+      }
+
+      // ── Tick ──
+      simulation.on("tick", function() {
+        link
+          .attr("x1", function(d) { return d.source.x; })
+          .attr("y1", function(d) { return d.source.y; })
+          .attr("x2", function(d) { return d.target.x; })
+          .attr("y2", function(d) { return d.target.y; });
+
+        node.attr("transform", function(d) {
+          return "translate(" + d.x + "," + d.y + ")";
+        });
+
+        // Update hull paths
+        hullPath.attr("d", function(hull) {
+          var pts = hull.nodeIds
+            .map(function(id) { return nodes.find(function(n) { return n.id === id; }); })
+            .filter(function(n) { return n !== undefined; })
+            .map(function(n) { return [n.x, n.y]; });
+
+          if (pts.length < 3) return null;
+          var poly = d3.polygonHull(pts);
+          if (!poly) return null;
+          return "M" + poly.join("L") + "Z";
+        });
+      });
+
+      // ── Drag behavior ──
+      function drag(sim) {
+        function dragstarted(event, d) {
+          if (!event.active) sim.alphaTarget(0.3).restart();
+          d.fx = d.x;
+          d.fy = d.y;
+        }
+        function dragged(event, d) {
+          d.fx = event.x;
+          d.fy = event.y;
+        }
+        function dragended(event, d) {
+          if (!event.active) sim.alphaTarget(0);
+          d.fx = null;
+          d.fy = null;
+        }
+        return d3.drag()
+          .on("start", dragstarted)
+          .on("drag", dragged)
+          .on("end", dragended);
+      }
+
+      // ── Apply drag after simulation exists ──
+      node.call(drag(simulation));
+
+      // ── Click: navigate to lesson or concept page ──
+      node.on("click", function(event, d) {
+        if ((d.type === "lesson" || d.type === "concept") && d.url) {
+          window.location.href = d.url;
+        }
+      });
+
+      // ── Hover: highlight connected, show tooltip ──
+      node.on("mouseenter", function(event, d) {
+        var connected = adjacency[d.id];
+        if (!connected) connected = new Set();
+
+        // Dim non-connected
+        link.style("opacity", function(l) {
+          var s = typeof l.source === "object" ? l.source.id : l.source;
+          var t = typeof l.target === "object" ? l.target.id : l.target;
+          return (s === d.id || t === d.id) ? 1 : 0.07;
+        });
+
+        node.select("circle").style("opacity", function(n) {
+          return (n.id === d.id || connected.has(n.id)) ? 1 : 0.12;
+        });
+
+        labels.style("opacity", function(n) {
+          return (n.id === d.id || connected.has(n.id)) ? 1 : 0.12;
+        });
+
+        // Build tooltip content
+        var html = "";
+        if (d.type === "lesson" || d.type === "concept") {
+          var displayTitle = d.title || d.label || "";
+          html += '<div class="tt-title">' + escapeHtml(displayTitle) + "</div>";
+          if (d.group) {
+            html += '<div class="tt-sub">' + escapeHtml(d.group) + "</div>";
+          }
+          var extras = [];
+          if (d.difficulty) extras.push(escapeHtml(d.difficulty));
+          if (d.read_time != null) extras.push(escapeHtml(String(d.read_time)) + " min");
+          if (extras.length) {
+            html += '<div class="tt-sub">' + extras.join(" · ") + "</div>";
+          }
+        } else {
+          html += '<div class="tt-title">' + escapeHtml(d.label || "") + "</div>";
+          var refs = conceptRefCount[d.id] || 0;
+          html += '<div class="tt-sub">Referenced by ' + refs + " lesson" + (refs !== 1 ? "s" : "") + "</div>";
+        }
+        tooltip.html(html).classed("visible", true);
+      });
+
+      node.on("mousemove", function(event) {
+        var tx = event.clientX + 16;
+        var ty = event.clientY + 16;
+        // Keep tooltip within viewport
+        var tw = tooltip.node().offsetWidth;
+        var th = tooltip.node().offsetHeight;
+        if (tx + tw > window.innerWidth - 10) tx = event.clientX - tw - 16;
+        if (ty + th > window.innerHeight - 10) ty = event.clientY - th - 16;
+        tooltip.style("left", tx + "px").style("top", ty + "px");
+      });
+
+      node.on("mouseleave", function() {
+        // Restore
+        link.style("opacity", 0.6);
+        node.select("circle").style("opacity", 1);
+        labels.style("opacity", 1);
+        tooltip.classed("visible", false);
+      });
+
+      // ── Helper: escape HTML ──
+      function escapeHtml(str) {
+        var div = document.createElement("div");
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+      }
+
+      // ── Legend ──
+      function renderLegend(hullsData, nodesData) {
+        var legendEl = document.getElementById("legend");
+        if (!hullsData || hullsData.length === 0) {
+          legendEl.style.display = "none";
+          return;
+        }
+        var html = "";
+        hullsData.forEach(function(h) {
+          var count = (h.nodeIds || []).length;
+          var strokeColor = (h.color || "").replace(/0\.\d+\)$/, "0.25)");
+          var dimmedClass = count === 0 ? " dimmed" : "";
+          var countText = count === 0 ? " (0 lessons)" : "";
+          html +=
+            '<div class="legend-item">' +
+            '<span class="legend-swatch' + dimmedClass + '" style="background:' + escapeHtml(strokeColor) + '"></span>' +
+            '<span>' + escapeHtml(h.label || "") + countText + "</span>" +
+            '<span class="count">' + count + "</span>" +
+            "</div>";
+        });
+        legendEl.innerHTML = html;
+      }
+
+      renderLegend(hulls, nodes);
+
+      // ── Resize handler ──
+      window.addEventListener("resize", function() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        svg.attr("width", width).attr("height", height);
+        simulation.force("center", d3.forceCenter(width / 2, height / 2));
+        simulation.alpha(0.3).restart();
+      });
+
+    })();
+  </script>
+</body>
+</html>

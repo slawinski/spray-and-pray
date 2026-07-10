@@ -149,6 +149,7 @@ async def prepare_learn_page(
     concept: str = "",
     context: str = "",
     session_id: int | None = None,
+    parent_lesson_id: int | None = None,
 ):
     if not concept:
         raise HTTPException(status_code=400, detail="concept query parameter is required")
@@ -161,6 +162,7 @@ async def prepare_learn_page(
             "concept": concept,
             "context": context,
             "session_id": str(session_id) if session_id else "",
+            "parent_lesson_id": str(parent_lesson_id) if parent_lesson_id else "",
         }},
     )
 
@@ -326,6 +328,7 @@ class LearnRequest(BaseModel):
     context: str = ""
     session_id: int | None = None
     app_id: int | None = None
+    parent_lesson_id: int | None = None
 
 
 @app.post("/api/learn/generate")
@@ -340,6 +343,7 @@ async def generate_lesson_endpoint(request: LearnRequest):
         request.context,
         request.session_id,
         request.app_id,
+        request.parent_lesson_id,
     )
     url = f"http://localhost:8000/learn/{result['lesson_id']}"
     if request.session_id:
@@ -393,6 +397,14 @@ async def lesson_page(request: Request, lesson_id: int, session_id: int | None =
             company = app[1]
             role = app[2]
 
+    parent_title = None
+    parent_id = lesson.get("parent_lesson_id")
+    if parent_id:
+        parent = db_mod.get_parent_lesson(lesson["id"])
+        if parent:
+            parent_title = parent["title"]
+            parent_id = parent["id"]
+
     back_sid = session_id or lesson_sid
 
     return templates.TemplateResponse(
@@ -406,8 +418,12 @@ async def lesson_page(request: Request, lesson_id: int, session_id: int | None =
             "related_concepts": related,
             "session_id": back_sid,
             "lesson_json": json_mod.dumps(content),
+            "lesson_id": lesson["id"],
             "company": company,
             "role": role,
+            "app_id": lesson["application_id"],
+            "parent_title": parent_title,
+            "parent_id": parent_id,
         },
     )
 
@@ -427,6 +443,13 @@ async def lesson_library(request: Request, session_id: int | None = None):
             if app is not None:
                 company = app[1]
                 role = app[2]
+
+        parent_title = None
+        if row["application_id"] is None and row.get("parent_lesson_id"):
+            parent = db_mod.get_parent_lesson(row["id"])
+            if parent:
+                parent_title = parent["title"]
+
         description = content.get("description") or ""
         if not description and content.get("sections"):
             first_body = content["sections"][0].get("body", "")
@@ -443,6 +466,8 @@ async def lesson_library(request: Request, session_id: int | None = None):
             "company": company,
             "role": role,
             "description": description,
+            "parent_title": parent_title,
+            "type": "lesson" if row["application_id"] is not None else "concept",
         })
 
     return templates.TemplateResponse(
@@ -481,6 +506,143 @@ async def open_in_finder(app_id: int):
         """)
     else:
         raise HTTPException(status_code=404, detail="File does not exist on disk")
+
+@app.get("/graph", response_class=HTMLResponse)
+async def graph_page(request: Request):
+    from cv_optimizer import db as db_mod
+
+    lessons = db_mod.list_lessons()
+
+    # ── Build lesson & concept nodes ──
+    lesson_nodes = []
+    concept_set = {}  # lowercase_stripped → original (keep first seen)
+
+    for lesson in lessons:
+        content = json_mod.loads(lesson["content_json"])
+        title = content.get("title", lesson["concept"])
+        related_concepts = content.get("related_concepts", [])
+        difficulty = content.get("difficulty", "intermediate")
+        read_time = content.get("read_time_minutes", 5)
+
+        # Look up application context
+        company = None
+        role = None
+        app_id = lesson.get("application_id")
+        is_lesson = app_id is not None
+        if is_lesson:
+            app = db_mod.get_application(app_id)
+            if app is not None:
+                company = app[1]
+                role = app[2]
+
+        group = f"{company} — {role}" if company and role else ("Concepts" if not is_lesson else "Unlinked")
+
+        lesson_nodes.append({
+            "id": f"l:{lesson['id']}",
+            "type": "lesson" if is_lesson else "concept",
+            "label": title,
+            "group": group,
+            "url": f"/learn/{lesson['id']}",
+            "difficulty": difficulty,
+            "read_time_minutes": read_time,
+        })
+
+        for concept in related_concepts:
+            key = concept.strip().lower()
+            if key and key not in concept_set:
+                concept_set[key] = concept
+
+    # Build index of standalone concepts (lesson nodes of type "concept") by lowercase label
+    standalone_index = {}
+    for ln in lesson_nodes:
+        if ln["type"] == "concept":
+            standalone_index[ln["label"].strip().lower()] = ln["id"]
+
+    concept_nodes = [
+        {"id": f"c:{key}", "type": "related-concept", "label": original}
+        for key, original in concept_set.items()
+        if key not in standalone_index  # skip concepts that already exist as standalone nodes
+    ]
+
+    # ── Build edges ──
+    edges = []
+    for lesson in lessons:
+        lid = f"l:{lesson['id']}"
+        content = json_mod.loads(lesson["content_json"])
+        for concept in content.get("related_concepts", []):
+            key = concept.strip().lower()
+            if key:
+                # If this concept has a standalone node, point to it instead of a grey dot
+                target = standalone_index.get(key, f"c:{key}")
+                edges.append({"source": lid, "target": target})
+
+    # ── Parent → child concept edges ──
+    for lesson in lessons:
+        parent_id = lesson.get("parent_lesson_id")
+        if parent_id:
+            pid = f"l:{parent_id}"
+            lid = f"l:{lesson['id']}"
+            edges.append({"source": pid, "target": lid, "style": "parent"})
+
+    # ── Build hulls (groups) ──
+    db_mod.init_db()
+    import sqlite3
+    conn = sqlite3.connect(db_mod.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    group_rows = conn.execute(
+        "SELECT DISTINCT a.company, a.role FROM applications a "
+        "JOIN lessons l ON l.application_id = a.id"
+    ).fetchall()
+    conn.close()
+
+    # Color palette for hulls
+    PALETTE = [
+        "rgba(88, 166, 255, 0.12)",
+        "rgba(63, 185, 80, 0.12)",
+        "rgba(210, 153, 29, 0.12)",
+        "rgba(248, 81, 73, 0.12)",
+        "rgba(163, 113, 247, 0.12)",
+        "rgba(86, 211, 200, 0.12)",
+    ]
+
+    # Map lesson → group
+    lesson_group_map = {}
+    for ln in lesson_nodes:
+        g = ln["group"]
+        lesson_group_map.setdefault(g, []).append(ln["id"])
+
+    hulls = []
+    for i, row in enumerate(group_rows):
+        group_label = f"{row['company']} — {row['role']}"
+        node_ids = lesson_group_map.get(group_label, [])
+        hulls.append({
+            "label": group_label,
+            "nodeIds": node_ids,
+            "color": PALETTE[i % len(PALETTE)],
+        })
+
+    # Add hull for standalone concepts (no application linked)
+    concept_ids = lesson_group_map.get("Concepts", [])
+    if concept_ids:
+        hulls.append({
+            "label": "Concepts",
+            "nodeIds": concept_ids,
+            "color": "rgba(63, 185, 80, 0.10)",
+        })
+
+    return templates.TemplateResponse(
+        request=request,
+        name="graph.html",
+        context={
+            "nodes_json": json_mod.dumps(lesson_nodes + concept_nodes),
+            "edges_json": json_mod.dumps(edges),
+            "hulls_json": json_mod.dumps(hulls),
+            "node_count": len(lesson_nodes) + len(concept_nodes),
+            "edge_count": len(edges),
+            "hulls": hulls,
+        },
+    )
+
 
 # To run:
 # uvicorn server:app --host localhost --port 8000

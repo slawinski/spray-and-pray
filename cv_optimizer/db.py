@@ -59,15 +59,20 @@ def init_db() -> None:
                 concept         TEXT NOT NULL,
                 content_json    TEXT NOT NULL,
                 created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+                parent_lesson_id INTEGER,
                 FOREIGN KEY (session_id) REFERENCES interview_sessions(id),
                 FOREIGN KEY (application_id) REFERENCES applications(id)
             );
             """
         )
-    try:
-        conn.execute("ALTER TABLE applications ADD COLUMN job_url TEXT")
-    except Exception:
-        pass
+        try:
+            conn.execute("ALTER TABLE applications ADD COLUMN job_url TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE lessons ADD COLUMN parent_lesson_id INTEGER")
+        except Exception:
+            pass
     _migrate_autoincrement()
     logger.info("Database initialised at %s", DB_PATH)
 
@@ -362,12 +367,13 @@ def create_lesson(
     content_json: str,
     session_id: int | None = None,
     app_id: int | None = None,
+    parent_lesson_id: int | None = None,
 ) -> int:
     init_db()
     with _connect() as conn:
         cursor = conn.execute(
-            "INSERT INTO lessons (concept, content_json, session_id, application_id) VALUES (?, ?, ?, ?)",
-            (concept, content_json, session_id, app_id),
+            "INSERT INTO lessons (concept, content_json, session_id, application_id, parent_lesson_id) VALUES (?, ?, ?, ?, ?)",
+            (concept, content_json, session_id, app_id, parent_lesson_id),
         )
         return cursor.lastrowid
 
@@ -388,6 +394,25 @@ def get_lesson(lesson_id: int) -> dict | None:
         "concept": row[3],
         "content_json": row[4],
         "created_at": row[5],
+        "parent_lesson_id": row[6],
+    }
+
+
+def get_parent_lesson(lesson_id: int) -> dict | None:
+    """Return the parent lesson info (id, title) for a given lesson, or None."""
+    init_db()
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT p.id, p.concept, p.content_json FROM lessons c "
+            "JOIN lessons p ON c.parent_lesson_id = p.id "
+            "WHERE c.id = ?", (lesson_id,)
+        ).fetchone()
+    if not row:
+        return None
+    content = json.loads(row[2])
+    return {
+        "id": row[0],
+        "title": content.get("title", row[1]),
     }
 
 
@@ -405,6 +430,7 @@ def list_lessons() -> list[dict]:
             "concept": row[3],
             "content_json": row[4],
             "created_at": row[5],
+            "parent_lesson_id": row[6],
         }
         for row in rows
     ]
@@ -432,4 +458,5 @@ def find_lesson_by_concept(concept: str, app_id: int | None = None) -> dict | No
         "concept": row[3],
         "content_json": row[4],
         "created_at": row[5],
+        "parent_lesson_id": row[6],
     }

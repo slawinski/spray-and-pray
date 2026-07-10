@@ -195,6 +195,7 @@ def generate_lesson(
     context: str = "",
     session_id: int | None = None,
     app_id: int | None = None,
+    parent_lesson_id: int | None = None,
 ) -> dict:
     existing = db.find_lesson_by_concept(concept, app_id)
     if existing:
@@ -241,7 +242,7 @@ def generate_lesson(
     if not isinstance(lesson, dict):
         raise ValueError(f"Expected JSON object, got {type(lesson).__name__}")
 
-    lesson_id = db.create_lesson(concept, json.dumps(lesson), session_id, app_id)
+    lesson_id = db.create_lesson(concept, json.dumps(lesson), session_id, app_id, parent_lesson_id)
     logger.info("Created lesson #%d for concept '%s'", lesson_id, concept)
 
     return {"lesson_id": lesson_id, "lesson": lesson}

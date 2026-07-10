@@ -19,7 +19,7 @@ Return a JSON object with these fields:
 
 ```json
 {
-  "title": "Understanding [Concept]",
+  "title": "[Concept] (use the concept name exactly as given — do NOT add qualifiers, prefixes, or context. If the concept is 'Hydration', the title is 'Hydration', not 'Hydration in React' or 'Understanding Hydration'.)",
   "description": "A one-sentence summary explaining what the candidate will learn, e.g. 'Learn how to choose between SSR, SSG, and CSR based on data freshness, SEO needs, and interaction complexity in Next.js.'",
   "difficulty": "beginner | intermediate | advanced",
   "read_time_minutes": 5,
@@ -148,7 +148,25 @@ Use when the concept has tunable parameters where the candidate can experiment w
    - The expected_output field must match what the solution prints when run (use `>` prefix per line, `\n` for line breaks).
    - The solution must compile and run correctly. Test mentally before outputting.
 
-6. **Related concepts.** List 3-5 related topics that build on or connect to this concept.
+6. **Related concepts.** List 4-6 related programming concepts that connect this lesson to the knowledge graph. These concepts create links between lessons — when the same concept appears in multiple lessons, the graph visualizes the connection. Choose concepts with genuine cross-connection potential. Ask yourself: *"Could another lesson, on a different topic, also relate to this?"*
+
+   **Quality criteria:**
+   
+   a. **Reusable abstraction level.** Concepts must be broad enough to plausibly appear in other lessons across different job applications or technology stacks. 
+      - BAD: `"Redux Toolkit createEntityAdapter"` (hyper-specific, will never connect other lessons). 
+        GOOD: `"State Management"` or `"Redux Toolkit"` (can connect to lessons about Zustand, Context API, MobX).
+      - BAD: `"Next.js App Router loading.js"` (framework-specific file). 
+        GOOD: `"Route-Based Code Splitting"` or `"Progressive Rendering"`.
+      - BAD: `"Zustand Selectors"` (implementation detail). 
+        GOOD: `"Immutable State Patterns"`.
+   
+   b. **Intermediate-to-advanced scope.** Skip language primitives and basic syntax (`"loops"`, `"variables"`, `"objects"`). Concepts should carry meaningful programming depth: `"Concurrency Model"`, `"Event Loop"`, `"Memory Management"`, `"Type Systems"`, `"Lazy Evaluation"`, `"Event Sourcing"`.
+   
+   c. **Noun-phrase labels.** Short, precise, sentence-case. `"Reconciliation"` not `"What is reconciliation and how does it work"`. `"Event Sourcing"` not `"The Event Sourcing pattern for audit logs"`.
+   
+   d. **Avoid framework-specific implementation details** unless the concept itself IS the named framework/technology (e.g., `"React Server Components"` is a named concept; `"app/layout.tsx pattern"` is not).
+   
+   e. **No near-duplicates.** `"SSR"` and `"Server-Side Rendering"` in the same list is wrong — pick the canonical form and stick to it.
 
 7. **Personalization.** If context includes a specific interview question, reference it in the first body section. If the context includes the candidate's answer or evaluation feedback, address the specific gap — show what they could have said, not just generic theory. If strengths are listed, acknowledge them briefly before diving into the weakness.
 

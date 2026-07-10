@@ -246,6 +246,7 @@
       var concept = params.concept || "";
       var context = params.context || "";
       var sessionId = params.session_id || null;
+      var parentLessonId = params.parent_lesson_id || null;
 
       var loader = document.getElementById("loader");
       var statusLabel = document.getElementById("status-label");
@@ -283,11 +284,31 @@
       }
 
       setPhase("Connecting", "Contacting API...",
-        action === "interview" ? "Preparing mock interview" : "Researching concept");
+        action === "interview" ? "Preparing mock interview" : "Preparing lesson generation");
 
       if (action === "interview" && appId) {
-        setPhase("Generating", "Generating interview questions...",
-          "Analyzing job description & company intel");
+        var interviewPhases = [
+          { phase: "Analyzing job description", sub: "Extracting key requirements" },
+          { phase: "Creating interview",        sub: "Generating role-specific questions" },
+          { phase: "Researching company",       sub: "Checking company intel database" },
+        ];
+        var iPhaseIndex = 0;
+
+        function cycleInterviewPhase() {
+          if (iPhaseIndex >= interviewPhases.length) return;
+          var p = interviewPhases[iPhaseIndex];
+          setPhase("Generating", p.phase, p.sub);
+          iPhaseIndex++;
+        }
+
+        cycleInterviewPhase();
+        var iCycleTimer = setInterval(function() {
+          if (iPhaseIndex >= interviewPhases.length) {
+            clearInterval(iCycleTimer);
+            return;
+          }
+          cycleInterviewPhase();
+        }, 3000);
 
         fetch("/api/interview/" + appId + "/start", {
           method: "POST",
@@ -298,21 +319,48 @@
           return resp.json();
         })
         .then(function(data) {
+          clearInterval(iCycleTimer);
           setPhase("Processing", "Interview ready", "Opening session...");
           doneAndRedirect(data.session_url || "/interview/" + data.session_id);
         })
         .catch(function(err) {
+          clearInterval(iCycleTimer);
           setError(err.message);
         });
 
       } else if (action === "learn" && concept) {
-        setPhase("Generating", "Creating lesson: " + concept,
-          "Researching concept, building examples, charts & diagrams");
+        var phases = [
+          { phase: "Researching concept", sub: concept },
+          { phase: "Creating lesson",     sub: "Structuring sections & examples" },
+          { phase: "Creating concepts",   sub: "Generating related topics" },
+          { phase: "Building diagrams",   sub: "Charts & visual explanations" },
+          { phase: "Polishing content",   sub: "Reviewing & formatting" },
+          { phase: "Assembling lesson",   sub: "Preparing interactive elements" },
+        ];
+        var phaseIndex = 0;
+
+        function cyclePhase() {
+          if (phaseIndex >= phases.length) return;
+          var p = phases[phaseIndex];
+          setPhase("Generating", p.phase, p.sub);
+          phaseIndex++;
+        }
+
+        cyclePhase();
+        var cycleTimer = setInterval(function() {
+          if (phaseIndex >= phases.length) {
+            clearInterval(cycleTimer);
+            return;
+          }
+          cyclePhase();
+        }, 3000);
 
         var payload = JSON.stringify({
           concept: concept,
           context: context,
-          session_id: sessionId ? parseInt(sessionId, 10) : null
+          session_id: sessionId ? parseInt(sessionId, 10) : null,
+          app_id: appId ? parseInt(appId, 10) : null,
+          parent_lesson_id: parentLessonId ? parseInt(parentLessonId, 10) : null
         });
 
         fetch("/api/learn/generate", {
@@ -325,12 +373,13 @@
           return resp.json();
         })
         .then(function(data) {
-          setPhase("Processing", "Assembling lesson...",
-            "Preparing content & interactive elements");
+          clearInterval(cycleTimer);
+          setPhase("Processing", "Lesson ready", "Opening...");
           var lessonUrl = data.url || "/learn/" + data.lesson_id;
           doneAndRedirect(lessonUrl);
         })
         .catch(function(err) {
+          clearInterval(cycleTimer);
           setError(err.message);
         });
 

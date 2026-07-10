@@ -61,6 +61,15 @@
       margin-bottom: 8px;
       font-style: italic;
     }
+    header .parent-context {
+      font-size: 0.8125rem;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+    }
+    header .parent-context a {
+      color: var(--accent);
+      text-decoration: none;
+    }
     .badge {
       font-size: 0.6875rem;
       font-weight: 600;
@@ -508,6 +517,8 @@
       <span class="sep">/</span>
       <a href="/interview/{{ session_id }}">Interview</a>
       {% endif %}
+      <span class="sep">/</span>
+      <a href="/graph">Graph</a>
     </div>
     <div class="meta-row">
       <span class="badge">{{ difficulty }}</span>
@@ -515,6 +526,9 @@
     </div>
     {% if company and role %}
     <div class="app-context">{{ company }} · {{ role }}</div>
+    {% endif %}
+    {% if parent_title %}
+    <div class="parent-context">Part of: <a href="/learn/{{ parent_id }}">{{ parent_title }}</a></div>
     {% endif %}
     <h1>{{ title }}</h1>
   </header>
@@ -642,7 +656,7 @@
     <h3>Related Concepts</h3>
     <div class="related-tags">
       {% for rc in related_concepts %}
-        <a class="related-tag" href="/prepare-learn?concept={{ rc | urlencode }}{% if session_id %}&session_id={{ session_id }}{% endif %}">{{ rc }}</a>
+        <a class="related-tag" href="/prepare-learn?concept={{ rc | urlencode }}{% if session_id %}&session_id={{ session_id }}{% endif %}&parent_lesson_id={{ lesson_id }}">{{ rc }}</a>
       {% endfor %}
     </div>
   </div>
