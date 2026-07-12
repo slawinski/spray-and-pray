@@ -211,6 +211,56 @@
         jd: descParts.join("\n\n"),
       };
     },
+    "greenhouse.io": () => {
+      const jsonld = extractFromJsonLd();
+      if (jsonld && jsonld.role && jsonld.company && jsonld.jd) {
+        return jsonld;
+      }
+
+      const titleEl =
+        document.querySelector("h1.section-header--large") ||
+        document.querySelector(".job__title h1");
+
+      let company = "";
+      const companyMatch = document.title.match(/at\s+(.+)$/);
+      if (companyMatch) {
+        company = companyMatch[1].trim();
+      } else {
+        const logoAlt = document.querySelector(".logo")?.alt || "";
+        company = logoAlt.replace(/\s*Logo\s*$/i, "").trim();
+      }
+      if (!company) {
+        const pathParts = window.location.pathname.split("/").filter(Boolean);
+        if (pathParts.length > 0) {
+          company = pathParts[0]
+            .split("-")
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(" ");
+        }
+      }
+
+      const descEl = document.querySelector(".job__description");
+      const locationEl = document.querySelector(".job__location div");
+
+      let jd = descEl ? descEl.innerText.trim() : "";
+      if (locationEl && locationEl.innerText.trim()) {
+        jd = "Location: " + locationEl.innerText.trim() + "\n\n" + jd;
+      }
+
+      if (!titleEl || !company || !jd) {
+        const missing = [];
+        if (!titleEl) missing.push("Role");
+        if (!company) missing.push("Company");
+        if (!jd) missing.push("Job Description");
+        return { error: `Could not find fields: ${missing.join(", ")}` };
+      }
+
+      return {
+        role: titleEl.innerText.trim(),
+        company: company,
+        jd: jd,
+      };
+    },
   };
 
   const hostname = window.location.hostname;
