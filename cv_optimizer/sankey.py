@@ -142,6 +142,7 @@ def render_sankey(flows: dict[tuple[str, str], int]) -> str:
     # Per-status application counts (node values), sorted canonically
     node_counts = _node_counts(flows)
     sorted_counts = sorted(node_counts.items(), key=lambda kv: (
+        -1 if kv[0] == "draft" else
         0 if kv[0] == "applied" else
         1 if kv[0].startswith("interview") else
         2 if kv[0] == "offer" else
@@ -169,6 +170,7 @@ def generate_sankey() -> str:
 
 
 STATUS_COLORS_SANKEY = {
+    "draft": "rgba(255, 235, 59, 0.7)",
     "applied": "rgba(0, 188, 212, 0.8)",
     "interview 1": "rgba(76, 175, 80, 0.8)",
     "interview 2": "rgba(139, 195, 74, 0.8)",
@@ -197,6 +199,7 @@ def generate_sankey_html() -> Path:
         nodes_set.add(src)
         nodes_set.add(tgt)
     nodes = sorted(nodes_set, key=lambda s: (
+        -1 if s == "draft" else
         0 if s == "applied" else
         1 if s.startswith("interview") else
         2 if s == "offer" else

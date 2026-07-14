@@ -63,5 +63,8 @@ class CVOptimizer:
         
         for pattern in fluff_patterns:
             text = re.sub(pattern, '', text, flags=re.MULTILINE | re.DOTALL)
+
+        # Strip em dashes (U+2014) - LLMs love them, humans don't use them in CVs
+        text = text.replace('\u2014', ' - ')
             
         return text.strip()

@@ -2,6 +2,7 @@ import json
 import logging
 import shutil
 import re
+import html
 from pathlib import Path
 from typing import Optional
 
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 APPLICATIONS_DIR = Path("applications")
 
-VALID_STATUSES = {"applied", "ghosted", "rejected", "offer", "accepted"}
+VALID_STATUSES = {"draft", "applied", "ghosted", "rejected", "offer", "accepted"}
 INTERVIEW_PATTERN = re.compile(r"^interview (\d+)$")
 
 
@@ -32,6 +33,8 @@ def _validate_status(status: str) -> str:
 
 def _status_rank(status: str) -> int:
     """Returns a numeric rank for a status, used to detect backward transitions."""
+    if status == "draft":
+        return -1
     if status == "applied":
         return 0
     if status == "ghosted":
@@ -70,9 +73,13 @@ def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job
     2. Generates application directory
     3. Copies JD into the directory
     4. Generates optimized CV inside the directory
-    5. Inserts 'applied' then 'ghosted' status (pessimistic default)
+    5. Sets initial status to 'draft' (pre-application prep; applied+ghosted come later)
     """
     db.init_db()
+
+    # Sanitize inputs: decode any HTML entities (e.g. &amp; → &)
+    company = html.unescape(company)
+    role = html.unescape(role)
 
     jd_source = Path(jd_path)
     if not jd_source.exists():
@@ -137,11 +144,10 @@ def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job
     # 5. Update DB with file paths
     db.update_application(app_id, jd_path=str(jd_dest), cv_path=cv_path_str)
 
-    # 6. Insert pessimistic default statuses
-    db.insert_status(app_id, "applied")
-    db.insert_status(app_id, "ghosted")
+    # 6. Set initial status to draft (pre-application prep)
+    db.insert_status(app_id, "draft")
 
-    logger.info(f"Application #{app_id} tracked: applied → ghosted")
+    logger.info(f"Application #{app_id} tracked: draft")
     return app_id
 
 
@@ -195,12 +201,14 @@ def update_status(application_id: int, status: str) -> None:
 
     Rules:
       1. No-op: same as current status → skip.
-      2. Ghosted replacement: if currently ghosted and moving to interview/offer/accepted,
+      2. Draft activation: when moving from draft to applied, also insert ghosted
+         (the normal pessimistic default kicks in once you actually apply).
+      3. Ghosted replacement: if currently ghosted and moving to interview/offer/accepted/rejected,
          delete the ghosted record first (it was a pessimistic default, not a real state).
-      3. Undo/backtrack: if the new status ranks lower than any existing transition,
+      4. Undo/backtrack: if the new status ranks lower than any existing transition,
          delete all transitions at or above that rank (undo a mistake cleanly).
-      4. Otherwise: just append the new transition.
-      5. After backtracking, if the new status matches the remaining last status, skip insert.
+      5. Otherwise: just append the new transition.
+      6. After backtracking, if the new status matches the remaining last status, skip insert.
     """
     db.init_db()
 
@@ -221,7 +229,17 @@ def update_status(application_id: int, status: str) -> None:
     new_rank = _status_rank(validated)
     history = db.get_status_history_with_ids(application_id)  # [(id, status, at), ...]
 
-    # Rule 2 — ghosted replacement: pessimistic default was wrong.
+    # Rule 2 — Draft activation: moving from draft → applied kicks in
+    # the normal pessimistic ghosted default.
+    if current == "draft" and validated == "applied":
+        db.insert_status(application_id, "applied")
+        db.insert_status(application_id, "ghosted")
+        logger.info(
+            "Application #%d: activated from draft → applied → ghosted", application_id,
+        )
+        return
+
+    # Rule 3 — ghosted replacement: pessimistic default was wrong.
     # Ghosted gets replaced by any real outcome (interview, offer, accepted, rejected).
     if current == "ghosted" and new_rank >= _status_rank("interview 1"):
         db.delete_status_by_id(history[-1][0])
@@ -231,7 +249,7 @@ def update_status(application_id: int, status: str) -> None:
         db.insert_status(application_id, validated)
         return
 
-    # Rule 3 — undo/backtrack: delete all transitions at or above the new rank
+    # Rule 4 — undo/backtrack: delete all transitions at or above the new rank
     backtracked = False
     for entry in history:
         if _status_rank(entry[1]) >= new_rank:

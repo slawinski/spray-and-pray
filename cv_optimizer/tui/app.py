@@ -19,6 +19,7 @@ from cv_optimizer.tracker import _build_app_dir, track, reoptimize, update_statu
 logger = logging.getLogger(__name__)
 
 STATUS_COLORS = {
+    "draft": "yellow",
     "applied": "cyan",
     "interview": "green",
     "offer": "bright_green",
