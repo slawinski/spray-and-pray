@@ -5,6 +5,8 @@ import webbrowser
 from datetime import datetime
 from pathlib import Path
 
+from urllib.parse import urlparse
+
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
@@ -29,11 +31,12 @@ STATUS_COLORS = {
 }
 
 COLUMNS = [
-    ("#", 5),
-    ("Company", 25),
-    ("Role", 30),
+    ("#", 4),
+    ("Company", 22),
+    ("Role", 28),
     ("Status", 14),
     ("Readiness", 10),
+    ("Source", 16),
     ("Created", 10),
     ("JD", 3),
     ("CV", 3),
@@ -53,6 +56,22 @@ def _checkmark(path: str | None, regenerating: bool = False) -> str:
         return "[yellow]⟳[/]"
     return "[green]✓[/]" if path else "[dim]—[/]"
 
+
+def _source_name(url: str | None) -> str:
+    if not url:
+        return "[dim]—[/]"
+    try:
+        hostname = urlparse(url).hostname or ""
+        # Strip leading "www." and known prefixes for cleaner display
+        hostname = hostname.removeprefix("www.")
+        # Map known long hostnames to shorter labels
+        known = {
+            "job-boards.greenhouse.io": "greenhouse.io",
+            "boards.greenhouse.io": "greenhouse.io",
+        }
+        return known.get(hostname, hostname)
+    except Exception:
+        return "[dim]—[/]"
 
 def _truncate(text: str, max_len: int) -> str:
     return text if len(text) <= max_len else text[:max_len - 1] + "…"
@@ -136,10 +155,11 @@ class CvDashboard(App):
             created = app["created_at"][:10] if app["created_at"] else ""
             table.add_row(
                 str(start + idx + 1),
-                _truncate(app["company"], 25),
-                _truncate(app["role"], 30),
+                _truncate(app["company"], 22),
+                _truncate(app["role"], 28),
                 _status_rich(app["latest_status"]),
                 _readiness_bar(db.get_latest_readiness(app["id"])),
+                _source_name(app.get("job_url")),
                 created,
                 _checkmark(app["jd_path"]),
                 _checkmark(app["cv_path"], app["id"] in self.regenerating_ids),

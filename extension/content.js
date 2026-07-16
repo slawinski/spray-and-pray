@@ -205,8 +205,17 @@
         return { error: `Could not find fields: ${missing.join(", ")}` };
       }
 
+      // TheProtocol.it h1 titles include a category breadcrumb prefix, e.g.:
+      // "Praca w IT – JavaScript, frontend, Senior Frontend Developer"
+      // or with a location tag: "Praca w IT – JavaScript, frontend, Warszawa, ..."
+      let role = titleEl.innerText.trim();
+      role = role.replace(
+        /^Praca w IT\s*[-–]\s*JavaScript,\s*frontend,\s*(?:Warszawa,\s*)?/,
+        "",
+      );
+
       return {
-        role: titleEl.innerText.trim(),
+        role: role,
         company: companyEl.innerText.trim().replace(/^Company\s*:\s*/, ""),
         jd: descParts.join("\n\n"),
       };

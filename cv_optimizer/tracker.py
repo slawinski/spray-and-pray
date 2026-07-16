@@ -179,7 +179,8 @@ def reoptimize(app_id: int, master_cv_path: str = None) -> None:
     )
     optimized_md = optimizer.optimize(master_cv_data, job_description)
 
-    app_dir = _build_app_dir(app_id, company, role)
+    # Use the directory that already contains the JD — immune to role-name changes
+    app_dir = Path(jd_path).parent
     app_dir.mkdir(parents=True, exist_ok=True)
 
     candidate_name = master_cv_data.get("personal_info", {}).get("name", "Candidate")
