@@ -70,6 +70,10 @@ def init_db() -> None:
         except Exception:
             pass
         try:
+            conn.execute("ALTER TABLE applications ADD COLUMN source TEXT")
+        except Exception:
+            pass
+        try:
             conn.execute("ALTER TABLE lessons ADD COLUMN parent_lesson_id INTEGER")
         except Exception:
             pass
@@ -224,7 +228,7 @@ def list_applications_with_status() -> list[dict]:
     result = []
     with _connect() as conn:
         for app in apps:
-            app_id, company, role, jd_path, cv_path, job_url, created_at = app
+            app_id, company, role, jd_path, cv_path, job_url, created_at, source = app
             history_rows = conn.execute(
                 "SELECT status, transitioned_at FROM status_history "
                 "WHERE application_id = ? ORDER BY transitioned_at ASC",
@@ -239,6 +243,7 @@ def list_applications_with_status() -> list[dict]:
                 "jd_path": jd_path,
                 "cv_path": cv_path,
                 "job_url": job_url,
+                "source": source,
                 "created_at": created_at,
                 "latest_status": latest_status,
                 "history": history,
@@ -273,6 +278,17 @@ def update_application(
             tuple(values),
         )
     logger.info("Updated application %d", application_id)
+
+
+def set_source(application_id: int, source: str | None) -> None:
+    """Sets or clears the source override for an application."""
+    init_db()
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE applications SET source = ? WHERE id = ?",
+            (source, application_id),
+        )
+    logger.info("Set source for app %d to %s", application_id, source)
 
 
 def create_interview_session(application_id: int, questions: list[dict]) -> int:

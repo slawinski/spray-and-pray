@@ -173,11 +173,21 @@
       };
     },
     "theprotocol.it": () => {
-      const titleEl = document.querySelector("h1");
+      const roleEl = document.querySelector('[data-test="text-offerTitle"]');
 
       const companyEl = document.querySelector(
         '[data-test="text-offerEmployer"]',
       );
+      // Company name is inside the <a>, after the "Firma: " <span> — grab it cleanly.
+      const company = (() => {
+        if (!companyEl) return null;
+        const link = companyEl.querySelector("a");
+        if (!link) return companyEl.innerText.trim();
+        const clone = link.cloneNode(true);
+        const label = clone.querySelector("span");
+        if (label) label.remove();
+        return clone.innerText.trim();
+      })();
 
       const sectionSelectors = [
         '[data-test="section-about-project"]',
@@ -197,26 +207,19 @@
         }
       }
 
-      if (!titleEl || !companyEl || descParts.length === 0) {
+      if (!roleEl || !company || descParts.length === 0) {
         const missing = [];
-        if (!titleEl) missing.push("Role");
-        if (!companyEl) missing.push("Company");
+        if (!roleEl) missing.push("Role");
+        if (!company) missing.push("Company");
         if (descParts.length === 0) missing.push("Job Description");
         return { error: `Could not find fields: ${missing.join(", ")}` };
       }
 
-      // TheProtocol.it h1 titles include a category breadcrumb prefix, e.g.:
-      // "Praca w IT – JavaScript, frontend, Senior Frontend Developer"
-      // or with a location tag: "Praca w IT – JavaScript, frontend, Warszawa, ..."
-      let role = titleEl.innerText.trim();
-      role = role.replace(
-        /^Praca w IT\s*[-–]\s*JavaScript,\s*frontend,\s*(?:Warszawa,\s*)?/,
-        "",
-      );
+      const role = roleEl.innerText.trim();
 
       return {
         role: role,
-        company: companyEl.innerText.trim().replace(/^Company\s*:\s*/, ""),
+        company: company,
         jd: descParts.join("\n\n"),
       };
     },

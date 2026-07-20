@@ -17,6 +17,7 @@ from textual.worker import Worker, WorkerState
 
 from cv_optimizer import db
 from cv_optimizer.tracker import _build_app_dir, track, reoptimize, update_status, _validate_status
+from cv_optimizer.tui.screens.modals import ConfirmModal, SourceModal, StatusModal
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,9 @@ def _checkmark(path: str | None, regenerating: bool = False) -> str:
     return "[green]✓[/]" if path else "[dim]—[/]"
 
 
-def _source_name(url: str | None) -> str:
+def _source_name(url: str | None, source: str | None = None) -> str:
+    if source:
+        return f"[bold yellow]{source}[/]"
     if not url:
         return "[dim]—[/]"
     try:
@@ -103,6 +106,7 @@ class CvDashboard(App):
         Binding("n", "next_page", "Next"),
         Binding("S", "sankey", "Sankey"),
         Binding("p", "prev_page", "Prev"),
+        Binding("T", "set_source", "Source"),
         Binding("u", "open_url", "URL"),
         Binding("escape", "dismiss", "Dismiss"),
     ]
@@ -159,7 +163,7 @@ class CvDashboard(App):
                 _truncate(app["role"], 28),
                 _status_rich(app["latest_status"]),
                 _readiness_bar(db.get_latest_readiness(app["id"])),
-                _source_name(app.get("job_url")),
+                _source_name(app.get("job_url"), app.get("source")),
                 created,
                 _checkmark(app["jd_path"]),
                 _checkmark(app["cv_path"], app["id"] in self.regenerating_ids),
@@ -238,6 +242,26 @@ class CvDashboard(App):
             f"http://localhost:8000/prepare-interview/{app['id']}"
         )
         self._notify("[bold green]✓[/] Loading screen opened in browser")
+
+    def action_set_source(self) -> None:
+        table = self.query_one("#apps-table", DataTable)
+        row = table.cursor_row
+        if row is None or row >= len(self.filtered):
+            return
+        app = self.filtered[row]
+
+        def on_source(result: str | None) -> None:
+            if result == app.get("source"):
+                return  # no change
+            db.set_source(app["id"], result)
+            self.refresh_apps()
+            label = result or "auto-detect"
+            self._notify(f"[bold green]✓[/] Source set to {label}")
+
+        self.push_screen(
+            SourceModal(app["id"], app["company"], app.get("source")),
+            on_source,
+        )
 
     def action_change_status(self) -> None:
         table = self.query_one("#apps-table", DataTable)

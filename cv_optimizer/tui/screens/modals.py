@@ -99,3 +99,39 @@ class ConfirmModal(ModalScreen[bool]):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.dismiss(event.button.id == "yes")
+
+
+class SourceModal(ModalScreen[str]):
+    """Lets the user override the JD source for an application."""
+
+    def __init__(self, app_id: int, company: str, current_source: str | None) -> None:
+        super().__init__()
+        self.app_id = app_id
+        self.company = company
+        self.current_source = current_source
+
+    def compose(self) -> ComposeResult:
+        current_label = f"Current: {self.current_source}" if self.current_source else "Current: auto-detect"
+        yield Vertical(
+            Label(f"Set source for {self.company} (App #{self.app_id})"),
+            Label(current_label, id="current-source"),
+            Horizontal(
+                Button("Referral", id="referral", variant="primary"),
+                Button("Recruiter", id="recruiter", variant="primary"),
+            ),
+            Horizontal(
+                Button("Clear (auto-detect)", id="clear"),
+                Button("Cancel", id="cancel"),
+            ),
+            id="confirm-modal",
+        )
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "referral":
+            self.dismiss("referral")
+        elif event.button.id == "recruiter":
+            self.dismiss("recruiter")
+        elif event.button.id == "clear":
+            self.dismiss(None)
+        else:
+            self.dismiss(self.current_source)  # cancel — keep current
