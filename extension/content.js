@@ -1,11 +1,41 @@
 (function () {
+  function sanitizeJsonLd(raw) {
+    // Escape literal control chars inside JSON strings (some sites emit unescaped newlines)
+    let result = '';
+    let inString = false;
+    let escaped = false;
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw[i];
+      if (escaped) {
+        result += ch;
+        escaped = false;
+        continue;
+      }
+      if (ch === '\\') {
+        result += ch;
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        result += ch;
+        continue;
+      }
+      if (inString && ch === '\n') { result += '\\n'; continue; }
+      if (inString && ch === '\r') { result += '\\r'; continue; }
+      if (inString && ch === '\t') { result += '\\t'; continue; }
+      result += ch;
+    }
+    return result;
+  }
+
   function extractFromJsonLd() {
     const scripts = document.querySelectorAll(
       'script[type="application/ld+json"]',
     );
     for (const script of scripts) {
       try {
-        const data = JSON.parse(script.textContent);
+        const data = JSON.parse(sanitizeJsonLd(script.textContent));
         const items = data["@graph"] || [data];
         for (const item of items) {
           if (item["@type"] === "JobPosting" || item.title) {
@@ -13,7 +43,14 @@
             const company =
               item.hiringOrganization?.name ||
               item.hiringOrganization?.legalName;
-            const jd = item.description || item.jd;
+            const rawJd = item.description || item.jd;
+            // Strip HTML tags and decode entities from JSON-LD descriptions
+            let jd = rawJd;
+            if (jd) {
+              const temp = document.createElement('div');
+              temp.innerHTML = jd;
+              jd = temp.textContent || temp.innerText || '';
+            }
             if (role && company && jd) {
               return { role, company, jd };
             }

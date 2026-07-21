@@ -159,7 +159,7 @@ def reoptimize(app_id: int, master_cv_path: str = None) -> None:
     if app is None:
         raise ValueError(f"Application #{app_id} not found.")
 
-    _id, company, role, jd_path, _cv_path, _job_url, _created_at = app
+    _id, company, role, jd_path, _cv_path, _job_url, _created_at, _source = app
 
     if not jd_path or not Path(jd_path).exists():
         raise FileNotFoundError(f"JD file not found: {jd_path}")
