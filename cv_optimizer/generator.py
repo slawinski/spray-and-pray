@@ -53,8 +53,6 @@ body {
     margin-top: 20px;
     margin-bottom: 10px;
     font-weight: bold;
-    display: flex;
-    align-items: center;
 }
 .main-column h3 {
     font-size: 11pt;

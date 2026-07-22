@@ -310,6 +310,36 @@
         jd: jd,
       };
     },
+    "workingnomads.com": () => {
+      // Primary: extract from meta description (survives Angular SPA rewrites)
+      // Format: "Apply for {Role} at {Company} and..."
+      const metaDesc = document.querySelector('meta[name="description"]')?.content || "";
+      const metaMatch = metaDesc.match(/Apply for (.+?) at (.+?)\s+and/);
+      let role = metaMatch ? metaMatch[1].trim() : "";
+      let company = metaMatch ? metaMatch[2].trim() : "";
+
+      // Fallback: try JSON-LD if meta extraction failed (but page is Angular and may strip it)
+      if (!role || !company) {
+        const jsonld = extractFromJsonLd();
+        if (jsonld && jsonld.role && jsonld.company) {
+          role = jsonld.role;
+          company = jsonld.company;
+        }
+      }
+
+      const descEl = document.querySelector(".jd-description");
+      const jd = descEl ? descEl.innerText.trim() : "";
+
+      if (!role || !company || !jd) {
+        const missing = [];
+        if (!role) missing.push("Role");
+        if (!company) missing.push("Company");
+        if (!jd) missing.push("Job Description");
+        return { error: `Could not find fields: ${missing.join(", ")}` };
+      }
+
+      return { role, company, jd };
+    },
   };
 
   const hostname = window.location.hostname;

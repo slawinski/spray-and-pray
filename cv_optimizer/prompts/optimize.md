@@ -71,7 +71,7 @@ Examples:
 **Action verbs proportional to role level.** Use verbs that match the candidate's actual seniority and responsibilities as described in the Master CV:
 
 - Individual contributor roles → `Built`, `Developed`, `Implemented`, `Created`, `Improved`, etc.
-- Never inflate the verb beyond what the candidate's title and achievements support. A "Frontend Developer" did not "architect" enterprise systems unless the achievement bullets explicitly describe architectural work.
+- Never inflate the verb beyond what the candidate's title and achievements support. A "Frontend Developer" did not "architect" or "led" enterprise systems unless the achievement bullets explicitly describe architectural work.
 
 **Weighting:**
 
