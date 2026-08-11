@@ -251,6 +251,18 @@ def list_applications_with_status() -> list[dict]:
     return result
 
 
+def delete_application(application_id: int) -> None:
+    """Deletes an application and all related records (status_history, interview_sessions, lessons)."""
+    init_db()
+    with _connect() as conn:
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute("DELETE FROM lessons WHERE application_id = ?", (application_id,))
+        conn.execute("DELETE FROM interview_sessions WHERE application_id = ?", (application_id,))
+        conn.execute("DELETE FROM status_history WHERE application_id = ?", (application_id,))
+        conn.execute("DELETE FROM applications WHERE id = ?", (application_id,))
+    logger.info("Deleted application %d and all related records", application_id)
+
+
 def update_application(
     application_id: int,
     jd_path: str = None,

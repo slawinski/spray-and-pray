@@ -16,7 +16,7 @@ from textual import work
 from textual.worker import Worker, WorkerState
 
 from cv_optimizer import db
-from cv_optimizer.tracker import _build_app_dir, track, reoptimize, update_status, _validate_status
+from cv_optimizer.tracker import _build_app_dir, track, reoptimize, update_status, _validate_status, remove_application
 from cv_optimizer.tui.screens.modals import ConfirmModal, SourceModal, StatusModal
 
 logger = logging.getLogger(__name__)
@@ -108,6 +108,7 @@ class CvDashboard(App):
         Binding("p", "prev_page", "Prev"),
         Binding("T", "set_source", "Source"),
         Binding("u", "open_url", "URL"),
+        Binding("D", "delete_application", "Delete"),
         Binding("escape", "dismiss", "Dismiss"),
     ]
 
@@ -179,6 +180,31 @@ class CvDashboard(App):
 
     def _notify(self, message: str) -> None:
         self.query_one("#status-bar", Static).update(f"[yellow]{message}[/]")
+
+    def action_delete_application(self) -> None:
+        table = self.query_one("#apps-table", DataTable)
+        row = table.cursor_row
+        if row is None or row >= len(self.filtered):
+            return
+        app = self.filtered[row]
+
+        def on_confirm(result: bool | None) -> None:
+            if not result:
+                return
+            try:
+                remove_application(app["id"])
+                self.refresh_apps()
+                self._notify(f"[bold green]✓[/] Deleted {app['company']} — {app['role']}")
+            except Exception as e:
+                self._notify(f"[red]✗[/] {e}")
+
+        self.push_screen(
+            ConfirmModal(
+                "Delete Application",
+                f"Permanently delete {app['company']} — {app['role']}?\n\nThis removes all files and database records. This cannot be undone.",
+            ),
+            on_confirm,
+        )
 
     def action_sankey(self) -> None:
         from cv_optimizer.sankey import generate_sankey_html

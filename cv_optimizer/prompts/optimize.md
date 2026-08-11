@@ -68,10 +68,9 @@ Examples:
 - `Built a real-time notification pipeline handling 2M+ events/day using Kafka, WebSockets, and Postgres.`
 - `Reduced CI pipeline from 18min to 4min by restructuring the build graph and introducing caching layers.`
 
-**Action verbs proportional to role level.** Use verbs that match the candidate's actual seniority and responsibilities as described in the Master CV:
+**FORBIDDEN action verbs — never use these under any circumstances:** `Led`, `Architected`, `Spearheaded`, `Owned`, `Drove`, `Directed`, `Orchestrated`, `Managed`, `Oversaw`, `Headed`, `Championed`. These imply leadership, architecture, or design authority that individual contributors do not have. Even if the Master CV's achievement bullets seem to describe strategic or cross-team work, rephrase using permitted verbs only.
 
-- Individual contributor roles → `Built`, `Developed`, `Implemented`, `Created`, `Improved`, etc.
-- Never inflate the verb beyond what the candidate's title and achievements support. A "Frontend Developer" did not "architect" or "led" enterprise systems unless the achievement bullets explicitly describe architectural work.
+**Permitted action verbs (individual-contributor level only):** `Built`, `Developed`, `Implemented`, `Created`, `Improved`, `Designed`, `Worked on`, `Maintained`, `Migrated`, `Integrated`, `Optimized`, `Delivered`, `Contributed to`, `Collaborated on`, `Supported`. Use exact past tense. Choose the verb that most accurately describes the contribution level described in the Master CV.
 
 **Weighting:**
 
@@ -80,7 +79,7 @@ Examples:
 - Older or less relevant roles → 1-2 bullets
 - The only valid reason to omit a role is if the Master CV has zero achievements for it (empty array).
 
-**Ordering:** List roles in reverse chronological order by default (most recent first). Exception: if a prior role's tech stack, domain, and responsibilities overlap with the JD - to a degree far exceeding the most recent role - hoist that role to the top. Only apply this exception when the match is obvious and significant, not for partial overlaps.
+**Ordering:** List roles in reverse chronological order (most recent first). Never reorder roles for any reason.
 
 ### `## Personal Info`
 
@@ -164,6 +163,7 @@ Before finalizing, verify:
 - [ ] Are the top-3 JD keywords present in the Summary and first Experience bullets?
 - [ ] Is every bullet concrete (action + context + result/stack)?
 - [ ] Are all action verbs proportional to the candidate's role level?
+- [ ] Are any FORBIDDEN verbs (Led, Architected, etc.) present? If yes, rewrite those bullets.
 - [ ] Does the Skills section contain only skills present in the Master CV?
 - [ ] Does the Summary hook a recruiter in 5 seconds?
 - [ ] Does it read like a person wrote it, not a script?

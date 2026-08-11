@@ -197,6 +197,28 @@ def reoptimize(app_id: int, master_cv_path: str = None) -> None:
     logger.info(f"CV regenerated for application #{app_id}")
 
 
+def remove_application(app_id: int) -> None:
+    """Deletes an application entirely — database records and filesystem directory."""
+    db.init_db()
+
+    app = db.get_application(app_id)
+    if app is None:
+        raise ValueError(f"Application #{app_id} not found.")
+
+    _id, company, role, _jd_path, _cv_path, _job_url, _created_at, _source = app
+
+    # 1. Remove filesystem directory
+    app_dir = _build_app_dir(app_id, company, role)
+    if app_dir.exists():
+        shutil.rmtree(app_dir)
+        logger.info("Removed directory: %s", app_dir)
+
+    # 2. Remove database records (cascades to status_history, interview_sessions, lessons)
+    db.delete_application(app_id)
+
+    logger.info("Application #%d (%s — %s) fully removed", app_id, company, role)
+
+
 def update_status(application_id: int, status: str) -> None:
     """Records a status transition with flow constraints to prevent circular Sankey diagrams.
 
