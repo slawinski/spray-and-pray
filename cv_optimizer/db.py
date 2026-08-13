@@ -77,6 +77,10 @@ def init_db() -> None:
             conn.execute("ALTER TABLE lessons ADD COLUMN parent_lesson_id INTEGER")
         except Exception:
             pass
+        try:
+            conn.execute("ALTER TABLE applications ADD COLUMN cover_letter_path TEXT")
+        except Exception:
+            pass
     _migrate_autoincrement()
     logger.info("Database initialised at %s", DB_PATH)
 
@@ -104,10 +108,12 @@ def _migrate_autoincrement() -> None:
                 jd_path    TEXT,
                 cv_path    TEXT,
                 job_url    TEXT,
+                source     TEXT,
+                cover_letter_path TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
-            INSERT INTO applications_new (id, company, role, jd_path, cv_path, job_url, created_at)
-                SELECT id, company, role, jd_path, cv_path, job_url, created_at FROM applications;
+            INSERT INTO applications_new (id, company, role, jd_path, cv_path, job_url, source, cover_letter_path, created_at)
+                SELECT id, company, role, jd_path, cv_path, job_url, source, cover_letter_path, created_at FROM applications;
             DROP TABLE applications;
             ALTER TABLE applications_new RENAME TO applications;
             """
@@ -228,7 +234,7 @@ def list_applications_with_status() -> list[dict]:
     result = []
     with _connect() as conn:
         for app in apps:
-            app_id, company, role, jd_path, cv_path, job_url, created_at, source = app
+            app_id, company, role, jd_path, cv_path, job_url, created_at, source, cover_letter_path = app
             history_rows = conn.execute(
                 "SELECT status, transitioned_at FROM status_history "
                 "WHERE application_id = ? ORDER BY transitioned_at ASC",
@@ -242,6 +248,7 @@ def list_applications_with_status() -> list[dict]:
                 "role": role,
                 "jd_path": jd_path,
                 "cv_path": cv_path,
+                "cover_letter_path": cover_letter_path,
                 "job_url": job_url,
                 "source": source,
                 "created_at": created_at,
@@ -267,8 +274,9 @@ def update_application(
     application_id: int,
     jd_path: str = None,
     cv_path: str = None,
+    cover_letter_path: str = None,
 ) -> None:
-    """Updates jd_path and/or cv_path on an existing application."""
+    """Updates jd_path, cv_path, and/or cover_letter_path on an existing application."""
     init_db()
     fields: list[str] = []
     values: list[str] = []
@@ -279,6 +287,9 @@ def update_application(
     if cv_path is not None:
         fields.append("cv_path = ?")
         values.append(cv_path)
+    if cover_letter_path is not None:
+        fields.append("cover_letter_path = ?")
+        values.append(cover_letter_path)
 
     if not fields:
         return

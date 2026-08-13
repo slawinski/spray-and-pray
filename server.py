@@ -75,17 +75,17 @@ def run_cv_optimizer(company: str, role: str, jd_text: str, job_url: str = None)
     try:
         logger.info(f"Triggering tracking pipeline for {company} - {role}")
         from cv_optimizer.tracker import track
-        app_id = track(company, role, str(temp_jd_path), job_url=job_url)
+        app_id = track(company, role, str(temp_jd_path), job_url=job_url, with_cover_letter=True)
         
         logger.info(f"Optimization success for app #{app_id}")
-        os.system(f"""osascript -e 'display notification "Optimization complete for {role} at {company}!" with title "✅ CV Optimizer"'""")
+        os.system(f"""osascript -e 'display notification "CV + Cover Letter ready for {role} at {company}!" with title "✅ CV Optimizer"'""")
         
-        discord_desc = f"Successfully generated tailored CV for **{role}** at **{company}**.\nReady in `applications/`."
+        discord_desc = f"Successfully generated tailored CV + Cover Letter for **{role}** at **{company}**.\nReady in `applications/`."
         if job_url:
             discord_desc += f"\n\n🔗 [View Job Posting]({job_url})"
         
         send_discord_notification(
-            title="✅ CV Generated (Click to open Finder)",
+            title="✅ CV + Cover Letter Generated (Click to open Finder)",
             description=discord_desc,
             color=0x00FF00,
             url=job_url or f"http://localhost:8000/api/open/{app_id}"
@@ -506,6 +506,85 @@ async def open_in_finder(app_id: int):
         """)
     else:
         raise HTTPException(status_code=404, detail="File does not exist on disk")
+
+@app.post("/api/cover-letter/{app_id}")
+async def generate_cover_letter_endpoint(app_id: int, background_tasks: BackgroundTasks):
+    """Generate an ATS-optimized cover letter for an application."""
+    from cv_optimizer import db as db_mod
+    from cv_optimizer.tracker import generate_cover_letter
+
+    app_data = db_mod.get_application(app_id)
+    if not app_data:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    # Check if JD exists
+    jd_path = app_data[3]
+    if not jd_path or not Path(jd_path).exists():
+        raise HTTPException(status_code=400, detail="No job description found for this application")
+
+    background_tasks.add_task(_run_cover_letter_generation, app_id)
+    return {"status": "success", "message": f"Cover letter generation started for application #{app_id}"}
+
+
+def _run_cover_letter_generation(app_id: int):
+    """Background task wrapper for cover letter generation."""
+    from cv_optimizer.tracker import generate_cover_letter
+    from cv_optimizer import db as db_mod
+
+    try:
+        logger.info(f"Generating cover letter for application #{app_id}")
+        cl_path = generate_cover_letter(app_id)
+        logger.info(f"Cover letter generated: {cl_path}")
+        os.system(f"""osascript -e 'display notification "Cover letter generated for application #{app_id}!" with title "✅ Cover Letter Ready"'""")
+
+        app_data = db_mod.get_application(app_id)
+        company = str(app_data[1]) if app_data else "Unknown"
+        role = str(app_data[2]) if app_data else "Unknown"
+
+        send_discord_notification(
+            title="✅ Cover Letter Generated",
+            description=f"Tailored cover letter ready for **{role}** at **{company}**.\n\n🔗 [Open in Finder](http://localhost:8000/api/open-cover-letter/{app_id})",
+            color=0x3498db,
+        )
+    except Exception as e:
+        logger.error(f"Cover letter generation failed: {e}")
+        os.system(f"""osascript -e 'display notification "Cover letter generation failed for application #{app_id}" with title "❌ Cover Letter Failed"'""")
+        send_discord_notification(
+            title="❌ Cover Letter Generation Failed",
+            description=f"Failed to generate cover letter for application #{app_id}.\nError: `{str(e)}`",
+            color=0xFF0000,
+        )
+
+
+@app.get("/api/open-cover-letter/{app_id}", response_class=HTMLResponse)
+async def open_cover_letter_in_finder(app_id: int):
+    """Opens the cover letter PDF in macOS Finder."""
+    from cv_optimizer import db as db_mod
+    db_mod.init_db()
+    app_data = db_mod.get_application(app_id)
+    if not app_data or not app_data[8]:
+        raise HTTPException(status_code=404, detail="Application or cover letter not found")
+
+    cl_path = app_data[8]
+    abs_path = os.path.abspath(cl_path)
+
+    if os.path.exists(abs_path):
+        subprocess.run(["open", "-R", abs_path])
+        return HTMLResponse("""
+        <html>
+            <head><title>Opened!</title></head>
+            <body style="font-family: sans-serif; text-align: center; margin-top: 50px;">
+                <h2>✅ Cover Letter Opened in Finder!</h2>
+                <p>You can safely close this tab now.</p>
+                <script>
+                    setTimeout(function() { window.close(); }, 1500);
+                </script>
+            </body>
+        </html>
+        """)
+    else:
+        raise HTTPException(status_code=404, detail="Cover letter file does not exist on disk")
+
 
 @app.get("/graph", response_class=HTMLResponse)
 async def graph_page(request: Request):

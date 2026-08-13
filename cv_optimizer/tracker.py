@@ -11,6 +11,7 @@ from cv_optimizer.config import settings
 from cv_optimizer.extractor import PDFExtractor
 from cv_optimizer.optimizer import CVOptimizer
 from cv_optimizer.generator import PDFGenerator
+from cv_optimizer.cover_letter import CoverLetterOptimizer, CoverLetterPDFGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ def _build_cv_filename(name: str, role: str) -> str:
     combined = f"{clean_name} {clean_role}"
     return re.sub(r'[^\w]+', '_', combined).strip('_')
 
-def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job_url: str = None) -> int:
+def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job_url: str = None, with_cover_letter: bool = False) -> int:
     """
     Initializes a new application:
     1. Creates DB record
@@ -144,7 +145,15 @@ def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job
     # 5. Update DB with file paths
     db.update_application(app_id, jd_path=str(jd_dest), cv_path=cv_path_str)
 
-    # 6. Set initial status to draft (pre-application prep)
+    # 6. Optionally generate cover letter
+    if with_cover_letter and cv_path_str:
+        try:
+            _cl_path = generate_cover_letter(app_id, master_cv_path)
+            logger.info(f"Generated cover letter at {_cl_path}")
+        except Exception as e:
+            logger.warning(f"Cover letter generation failed (CV still tracked): {e}")
+
+    # 7. Set initial status to draft (pre-application prep)
     db.insert_status(app_id, "draft")
 
     logger.info(f"Application #{app_id} tracked: draft")
@@ -159,7 +168,7 @@ def reoptimize(app_id: int, master_cv_path: str = None) -> None:
     if app is None:
         raise ValueError(f"Application #{app_id} not found.")
 
-    _id, company, role, jd_path, _cv_path, _job_url, _created_at, _source = app
+    _id, company, role, jd_path, _cv_path, _job_url, _created_at, _source, _cover_letter_path = app
 
     if not jd_path or not Path(jd_path).exists():
         raise FileNotFoundError(f"JD file not found: {jd_path}")
@@ -197,6 +206,53 @@ def reoptimize(app_id: int, master_cv_path: str = None) -> None:
     logger.info(f"CV regenerated for application #{app_id}")
 
 
+def generate_cover_letter(app_id: int, master_cv_path: str = None) -> str:
+    """Generates a tailored, ATS-optimized cover letter for an existing application."""
+    db.init_db()
+
+    app = db.get_application(app_id)
+    if app is None:
+        raise ValueError(f"Application #{app_id} not found.")
+
+    _id, company, role, jd_path, _cv_path, _job_url, _created_at, _source, _cover_letter_path = app
+
+    if not jd_path or not Path(jd_path).exists():
+        raise FileNotFoundError(f"JD file not found: {jd_path}")
+
+    actual_cv = master_cv_path or settings.master_cv_path
+    with open(actual_cv, "r", encoding="utf-8") as f:
+        master_cv_data = json.load(f)
+
+    jd_source = Path(jd_path)
+    job_description = PDFExtractor.extract_text(str(jd_source))
+
+    cover_optimizer = CoverLetterOptimizer(
+        base_url=settings.llm_base_url,
+        api_key=settings.llm_api_key,
+        model_name=settings.model_name,
+        temperature=settings.temperature,
+    )
+    cover_letter_md = cover_optimizer.generate(master_cv_data, job_description)
+
+    # Use the directory that already contains the JD and CV
+    app_dir = Path(jd_path).parent
+    app_dir.mkdir(parents=True, exist_ok=True)
+
+    candidate_name = master_cv_data.get("personal_info", {}).get("name", "Candidate")
+    cl_base_name = _build_cv_filename(candidate_name, role) + "_Cover_Letter"
+
+    cl_md_path = app_dir / f"{cl_base_name}.md"
+    cl_pdf_path = app_dir / f"{cl_base_name}.pdf"
+
+    cl_md_path.write_text(cover_letter_md, encoding="utf-8")
+    CoverLetterPDFGenerator().generate(cover_letter_md, str(cl_pdf_path))
+
+    db.update_application(app_id, cover_letter_path=str(cl_pdf_path))
+
+    logger.info(f"Cover letter generated for application #{app_id}")
+    return str(cl_pdf_path)
+
+
 def remove_application(app_id: int) -> None:
     """Deletes an application entirely — database records and filesystem directory."""
     db.init_db()
@@ -205,7 +261,7 @@ def remove_application(app_id: int) -> None:
     if app is None:
         raise ValueError(f"Application #{app_id} not found.")
 
-    _id, company, role, _jd_path, _cv_path, _job_url, _created_at, _source = app
+    _id, company, role, _jd_path, _cv_path, _job_url, _created_at, _source, _cover_letter_path = app
 
     # 1. Remove filesystem directory
     app_dir = _build_app_dir(app_id, company, role)

@@ -16,7 +16,7 @@ from textual import work
 from textual.worker import Worker, WorkerState
 
 from cv_optimizer import db
-from cv_optimizer.tracker import _build_app_dir, track, reoptimize, update_status, _validate_status, remove_application
+from cv_optimizer.tracker import _build_app_dir, track, reoptimize, update_status, _validate_status, remove_application, generate_cover_letter
 from cv_optimizer.tui.screens.modals import ConfirmModal, SourceModal, StatusModal
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,7 @@ COLUMNS = [
     ("Created", 10),
     ("JD", 3),
     ("CV", 3),
+    ("CL", 3),
 ]
 
 
@@ -100,7 +101,8 @@ class CvDashboard(App):
         Binding("enter", "toggle_detail", "Detail"),
         Binding("s", "change_status", "Status"),
         Binding("o", "open_folder", "Open"),
-        Binding("ctrl+r", "regenerate_cv", "Regen"),
+        Binding("ctrl+r", "regenerate_cv", "Gen CV"),
+        Binding("ctrl+g", "generate_cl", "Gen CL"),
         Binding("P", "prepare", "Prepare"),
         Binding("L", "lessons", "Lessons"),
         Binding("n", "next_page", "Next"),
@@ -121,6 +123,7 @@ class CvDashboard(App):
         self.applications: list[dict] = []
         self.filtered: list[dict] = []
         self.regenerating_ids: set[int] = set()
+        self.generating_cl_ids: set[int] = set()
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -168,6 +171,7 @@ class CvDashboard(App):
                 created,
                 _checkmark(app["jd_path"]),
                 _checkmark(app["cv_path"], app["id"] in self.regenerating_ids),
+                _checkmark(app.get("cover_letter_path"), app["id"] in self.generating_cl_ids),
             )
 
         total = len(self.filtered)
@@ -246,6 +250,7 @@ class CvDashboard(App):
                     f"URL: {app['job_url'] or 'N/A'}\n"
                     f"JD: {app['jd_path'] or 'N/A'}\n"
                     f"CV: {app['cv_path'] or 'N/A'}\n"
+                    f"CL: {app.get('cover_letter_path') or 'N/A'}\n"
                     f"Status History: {history_str}"
                 )
                 panel.add_class("visible")
@@ -361,6 +366,32 @@ class CvDashboard(App):
             on_confirm,
         )
 
+    def action_generate_cl(self) -> None:
+        table = self.query_one("#apps-table", DataTable)
+        row = table.cursor_row
+        if row is None or row >= len(self.filtered):
+            return
+        app = self.filtered[row]
+
+        if not app["jd_path"] or not Path(app["jd_path"]).exists():
+            self._notify(f"No JD file found for application #{app['id']}")
+            return
+
+        from cv_optimizer.tui.screens.modals import ConfirmModal
+
+        def on_confirm(result: bool | None) -> None:
+            if result:
+                self._generate_cover_letter(app)
+
+        self.push_screen(
+            ConfirmModal(
+                "Generate Cover Letter",
+                f"Generate ATS-optimized cover letter for {app['company']} — {app['role']}?",
+            ),
+            on_confirm,
+        )
+
+
     @work(exclusive=True, thread=True)
     def _regenerate(self, app: dict) -> None:
         try:
@@ -377,6 +408,20 @@ class CvDashboard(App):
             self.regenerating_ids.discard(app["id"])
             self.call_from_thread(self.render_table)
             self.call_from_thread(self._notify, f"[red]✗[/] CV regeneration failed: {e}")
+
+    @work(exclusive=True, thread=True)
+    def _generate_cover_letter(self, app: dict) -> None:
+        try:
+            self.generating_cl_ids.add(app["id"])
+            self.call_from_thread(self.render_table)
+            cl_path = generate_cover_letter(app["id"])
+            self.generating_cl_ids.discard(app["id"])
+            self.call_from_thread(self.refresh_apps)
+            self.call_from_thread(self._notify, f"[bold green]✓[/] Cover letter generated for {app['company']} — {app['role']}")
+        except Exception as e:
+            self.generating_cl_ids.discard(app["id"])
+            self.call_from_thread(self.render_table)
+            self.call_from_thread(self._notify, f"[red]✗[/] Cover letter generation failed: {e}")
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
         if event.state == WorkerState.RUNNING:

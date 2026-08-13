@@ -45,7 +45,7 @@ document.getElementById('extract-btn').addEventListener('click', async () => {
             throw new Error(body.detail || `Server returned ${response.status}`);
         }
         
-        statusEl.textContent = '✅ Success! CV is generating.';
+        statusEl.textContent = '✅ Success! CV + Cover Letter generating.';
         statusEl.className = 'success';
         
     } catch (error) {

@@ -95,7 +95,7 @@ class InterviewGenerator:
         if not application:
             raise ValueError(f"Application #{app_id} not found")
 
-        _id, company, role, jd_path, _cv_path, _job_url, _created_at = application
+        _id, company, role, jd_path, _cv_path, _job_url, _created_at, _source, _cover_letter_path = application
 
         if not jd_path or not Path(jd_path).exists():
             raise FileNotFoundError(f"JD file not found for application #{app_id} at {jd_path}")
