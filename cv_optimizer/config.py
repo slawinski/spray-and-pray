@@ -13,6 +13,7 @@ class Settings(BaseModel):
     request_timeout: int = Field(default=120)
 
     master_cv_path: str = Field(default="master_cv.json")
+    candidate_photo_path: str = Field(default="candidate.jpeg")
     job_description_path: str = Field(default="job_offer.pdf")
     output_md_path: str = Field(default="optimized_cv.md")
     output_pdf_path: str = Field(default="optimized_cv.pdf")

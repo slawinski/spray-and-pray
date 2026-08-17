@@ -20,9 +20,11 @@ Before writing, analyze internally (do not output this):
 
 Use this exact header order. Do not rename, omit, or reorder. If a section has no data in the Master CV, skip it - never output empty sections.
 
+**Placeholder convention:** every `{{token}}` in a template below is a placeholder. Replace it with the actual content from the Master CV. Never output the curly braces, and never wrap names, titles, companies, universities, organizations, or roles in square brackets.
+
 ```
-# [Full Name]
-### [Professional Title]
+# {{Full Name}}
+### {{Professional Title}}
 ## Summary
 ## Experience
 ## Personal Info
@@ -38,11 +40,11 @@ Use this exact header order. Do not rename, omit, or reorder. If a section has n
 
 # SECTION INSTRUCTIONS
 
-### `# [Name]`
+### `# {{Name}}`
 
 Exact name from Master CV - every character, every diacritic, every letter. Do not normalize, do not ASCII-fold, do not strip accents. If the Master CV says "Piotr Sławiński", output "Piotr Sławiński".
 
-### `### [Professional Title]`
+### `### {{Professional Title}}`
 
 Use the candidate's actual, current title exactly as it appears in the Master CV. The Professional Title is the candidate's OWN role - NOT the JD's target title. You may optionally append a secondary designation (separated by `|`) if the candidate's achievements genuinely support it, e.g., `Senior Software Engineer | AI Developer`. The secondary designation must be a single, non-compound role or domain - never join multiple roles with `&`, `/`, or `and` (e.g., never `| Frontend & Full Stack Engineer`). CRITICAL: never replace the candidate's title with the JD title. Never promote - "Software Engineer" is not "Lead", "Senior", or "Principal" unless the Master CV explicitly states that exact title.
 
@@ -55,13 +57,13 @@ Use the candidate's actual, current title exactly as it appears in the Master CV
 Per role, use this exact layout (empty line before bullets):
 
 ```
-### [Job Title]
-**[Company]**, *[Location]*, *[Dates]*
+### {{Job Title}}
+**{{Company}}**, *{{Location}}*, *{{Dates}}*
 
-- [Bullet]
+- {{Bullet}}
 ```
 
-**Bullet formula:** `[Past-tense action verb] [Context / what was built] [Result, metric, and tech stack].`
+**Bullet formula:** `{{Past-tense action verb}} {{Context / what was built}} {{Result, metric, and tech stack}}.`
 
 Examples:
 
@@ -90,9 +92,9 @@ Bulleted list. Clean social links (e.g., `linkedin.com/in/user`). Include email,
 Format exactly:
 
 ```
-**[University]**
-[Empty line]
-[Degree]
+**{{University}}**
+<empty line>
+{{Degree}}
 ```
 
 University first (bold), Degree is on the next line, no bullet. Omit attendance dates. Populate from Master CV only - never fabricate.
@@ -115,11 +117,11 @@ Bulleted list grouped by category. Order by JD relevance - JD-requested skills f
 Format exactly as follows (each line is a separate paragraph - do not merge):
 
 ```
-**[Organization]** - **[Role]**
-[Empty line]
-[One-sentence summary] of activities, emphasizing subjects most relevant to the JD. Do not list talk titles.
-[Empty line]
-[URL]
+**{{Organization}}** - **{{Role}}**
+<empty line>
+{{One-sentence summary}} of activities, emphasizing subjects most relevant to the JD. Do not list talk titles.
+<empty line>
+{{URL}}
 ```
 
 Do NOT join the organization, summary, and URL into a single paragraph or line. Each of the three elements must be on its own line with an empty line between them for proper paragraph separation.
@@ -145,6 +147,8 @@ Populate directly from Master CV. Never fabricate.
 6. **No em dashes** - never use the em dash character (U+2014) in the CV output. Use hyphens (-), commas, or colons instead. Em dashes are a telltale sign of LLM-generated text; no real human uses them in a CV.
 
 7. **No preamble** - output only the CV. No "Here is your optimized CV", no notes, no disclaimers outside the GDPR section.
+
+8. **No square brackets in output** - the final CV must never contain square brackets `[` or `]`. Company names, universities, organizations, and roles appear as plain text, never wrapped in brackets.
 
 ---
 

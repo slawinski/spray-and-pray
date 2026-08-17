@@ -177,3 +177,6 @@ applications.db-wal
 applications.db-shm
 applications/
 master_cv.json
+
+# Candidate photo (personal data)
+candidate.jpeg

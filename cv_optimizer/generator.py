@@ -2,7 +2,10 @@ import logging
 import fitz
 import markdown
 import re
+from pathlib import Path
 from typing import Dict, List
+
+from cv_optimizer.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +102,7 @@ body {
 """
 
 class PDFGenerator:
-    def generate(self, markdown_text: str, output_path: str) -> None:
+    def generate(self, markdown_text: str, output_path: str, photo_path: str | None = None) -> None:
         """Converts Markdown to a two-column PDF matching example.pdf."""
         logger.info(f"Generating two-column PDF to {output_path}...")
         
@@ -158,14 +161,37 @@ class PDFGenerator:
             doc = fitz.open(tmp_path)
             page = doc[0]
             
-            # Header
-            header_rect = fitz.Rect(margin, margin, page_width - margin, margin + header_height)
+            # Header (with optional candidate photo, top-left)
+            name = sections.get('[Name]', 'Name')
+            title = sections.get('[Professional Title]', '')
             header_html = f"""
             <div class="header">
-                <h1>{sections.get('[Name]', 'Name')}</h1>
-                <p>{sections.get('[Professional Title]', '')}</p>
+                <h1>{name}</h1>
+                <p>{title}</p>
             </div>
             """
+
+            header_text_x1 = margin
+            resolved_photo = photo_path if photo_path is not None else settings.candidate_photo_path
+            if resolved_photo and Path(resolved_photo).exists():
+                try:
+                    # Photo height = natural height of the name + title block.
+                    # Neutralize the .header container's bottom margin so the measured
+                    # height reflects just the two text elements, not trailing whitespace.
+                    measure_css = CV_CSS + "\n.header { margin-bottom: 0; }\n"
+                    full_rect = fitz.Rect(margin, margin, page_width - margin, margin + header_height)
+                    text_height = self._measure_html_height(header_html, measure_css, full_rect, page_width, page_height)
+                    photo_w, photo_h = self._image_size(resolved_photo)
+                    if photo_h > 0:
+                        photo_gap = 12
+                        photo_width = text_height * (photo_w / photo_h)
+                        photo_rect = fitz.Rect(margin, margin, margin + photo_width, margin + text_height)
+                        page.insert_image(photo_rect, filename=resolved_photo, keep_proportion=True)
+                        header_text_x1 = margin + photo_width + photo_gap
+                except Exception as e:
+                    logger.warning("Failed to insert candidate photo: %s", e)
+
+            header_rect = fitz.Rect(header_text_x1, margin, page_width - margin, margin + header_height)
             page.insert_htmlbox(header_rect, header_html, css=CV_CSS)
             
             # Sidebar
@@ -189,6 +215,27 @@ class PDFGenerator:
         except Exception as e:
             logger.error(f"Failed to generate PDF: {e}")
             raise
+
+    @staticmethod
+    def _image_size(path: str) -> tuple[float, float]:
+        """Returns (width, height) of an image in points."""
+        doc = fitz.open(path)
+        rect = doc[0].rect
+        doc.close()
+        return rect.width, rect.height
+
+    @staticmethod
+    def _measure_html_height(
+        html: str, css: str, rect: fitz.Rect, page_width: float, page_height: float
+    ) -> float:
+        """Renders HTML off-screen and returns the height actually used (in points)."""
+        doc = fitz.open()
+        page = doc.new_page(width=page_width, height=page_height)
+        result = page.insert_htmlbox(rect, html, css=css)
+        # PyMuPDF >= 1.26 returns (unused_height, scale); older returns a float
+        remaining = result[0] if isinstance(result, tuple) else result
+        doc.close()
+        return rect.height - remaining
 
     def _parse_to_html_sections(self, text: str) -> Dict[str, str]:
         sections = {}

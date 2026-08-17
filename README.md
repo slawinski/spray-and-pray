@@ -48,6 +48,7 @@ Everything runs locally. There is no backend service, no account, and no data le
   - **Front-loaded keywords** in the Summary and first Experience bullets.
   - **Human readability first** — ATS passes get you screened, but a recruiter gets you hired.
 - Renders a styled two-column PDF (header, sidebar with skills/contact, main column with experience/education).
+- Optionally embeds a candidate photo (`candidate.jpeg`) top-left in the header, sized to match the name + title block.
 
 ### 2. ATS-Optimized Cover Letters
 - Generates a tailored cover letter alongside the CV (`cv_optimizer/prompts/cover_letter.md`).
@@ -270,6 +271,7 @@ cp master_cv.example.json master_cv.json
 | `max_tokens` | `16384` | Max output tokens |
 | `request_timeout` | `120` | API timeout (seconds) |
 | `master_cv_path` | `master_cv.json` | Master CV location |
+| `candidate_photo_path` | `candidate.jpeg` | Candidate photo placed top-left in the CV header (optional — skipped if missing) |
 
 ---
 
