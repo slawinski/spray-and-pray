@@ -218,11 +218,28 @@ def list_applications() -> list[tuple]:
     return rows
 
 
-def find_application(company: str, role: str) -> dict | None:
-    """Return the first application matching company+role (case-insensitive), or None."""
+def _normalize_source(source: str | None) -> str:
+    """Canonicalizes a source channel; empty/None means 'direct'."""
+    s = (source or "").strip().lower()
+    return s or "direct"
+
+
+def find_application(company: str, role: str, source: str | None = None) -> dict | None:
+    """Return the first application matching company+role (case-insensitive) AND
+    source channel, or None.
+
+    Two applications for the same company+role are only duplicates when they
+    also share the same source channel (e.g. 'recruiter' vs 'direct'). This
+    lets you track the same role through a recruiter and again directly.
+    """
     init_db()
+    target_source = _normalize_source(source)
     for app in list_applications_with_status():
-        if app["company"].lower() == company.lower() and app["role"].lower() == role.lower():
+        if (
+            app["company"].lower() == company.lower()
+            and app["role"].lower() == role.lower()
+            and _normalize_source(app.get("source")) == target_source
+        ):
             return app
     return None
 

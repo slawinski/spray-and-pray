@@ -152,6 +152,8 @@ class CoverLetterOptimizer:
 class CoverLetterPDFGenerator:
     """Converts a cover letter Markdown to a clean, professional single-column PDF."""
 
+    MAX_BODY_CHARS = 1000
+
     def generate(self, markdown_text: str, output_path: str) -> None:
         """Generates a professional cover letter PDF from Markdown."""
         logger.info(f"Generating cover letter PDF to {output_path}...")
@@ -195,23 +197,28 @@ class CoverLetterPDFGenerator:
                     html_parts.append(f"<p>{self._escape_html(re_info)}</p>")
                 html_parts.append("</div>")
 
+            # Salutation + body + sign-off share the 1000-char budget
+            salutation = sections.get("salutation", "")
+            closing = sections.get("closing", [])
+            overhead = len(salutation) + sum(len(line) for line in closing)
+
             # Salutation
             if "salutation" in sections:
                 html_parts.append('<div class="salutation">')
-                html_parts.append(f"<p>{self._escape_html(sections['salutation'])}</p>")
+                html_parts.append(f"<p>{self._escape_html(salutation)}</p>")
                 html_parts.append("</div>")
 
             # Body paragraphs
             if "body" in sections:
                 html_parts.append('<div class="body-text">')
-                for para in sections["body"]:
+                for para in self._trim_body(sections["body"], overhead):
                     html_parts.append(f"<p>{self._escape_html(para)}</p>")
                 html_parts.append("</div>")
 
             # Closing
             if "closing" in sections:
                 html_parts.append('<div class="closing">')
-                for line in sections["closing"]:
+                for line in closing:
                     html_parts.append(
                         f"<p>{self._escape_html(line)}</p>"
                     )
@@ -239,6 +246,35 @@ class CoverLetterPDFGenerator:
         except Exception as e:
             logger.error(f"Failed to generate cover letter PDF: {e}")
             raise
+
+    def _trim_body(self, paragraphs: list[str], overhead: int = 0) -> list[str]:
+        """Trims body paragraphs so that the salutation, body, and sign-off
+        together never exceed MAX_BODY_CHARS.
+
+        ``overhead`` is the combined length of the salutation and closing lines,
+        which are always preserved. Drops trailing paragraphs that do not fit
+        and truncates the first overflowing paragraph at a word boundary.
+        """
+        budget = self.MAX_BODY_CHARS - overhead
+        trimmed: list[str] = []
+        used = 0
+        for para in paragraphs:
+            remaining = budget - used
+            if remaining <= 0:
+                break
+            if len(para) <= remaining:
+                trimmed.append(para)
+                used += len(para)
+                continue
+            cut = para[:remaining]
+            boundary = cut.rfind(" ")
+            if boundary != -1:
+                cut = cut[:boundary]
+            cut = cut.rstrip(".,;: -")
+            if cut:
+                trimmed.append(cut)
+            break
+        return trimmed
 
     def _parse_sections(self, text: str) -> Dict[str, Any]:
         """Parses the cover letter markdown into structured sections."""

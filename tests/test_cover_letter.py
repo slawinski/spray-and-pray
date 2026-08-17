@@ -359,6 +359,61 @@ Test User"""
 
 
 # ═══════════════════════════════════════════════════════════════
+# Tests for CoverLetterPDFGenerator._trim_body
+# ═══════════════════════════════════════════════════════════════
+
+def test_trim_body_under_limit_untouched():
+    gen = CoverLetterPDFGenerator()
+    paras = ["Short paragraph."]
+    assert gen._trim_body(paras) == paras
+
+
+def test_trim_body_truncates_overflow_at_word_boundary():
+    gen = CoverLetterPDFGenerator()
+    words = "word " * 500  # 2500 chars, well over 1000
+    paras = [words.strip()]
+    result = gen._trim_body(paras)
+    assert len(result) == 1
+    assert len(result[0]) <= gen.MAX_BODY_CHARS
+    # Should end on a whole word, not a partial one
+    assert result[0].endswith("word")
+
+
+def test_trim_body_drops_trailing_paragraphs():
+    gen = CoverLetterPDFGenerator()
+    long = "word " * 250  # ~1250 chars
+    paras = [long.strip(), "This paragraph should be dropped."]
+    result = gen._trim_body(paras)
+    assert len(result) == 1
+    assert "dropped" not in " ".join(result)
+
+
+def test_trim_body_total_never_exceeds_limit():
+    gen = CoverLetterPDFGenerator()
+    paras = ["a" * 400, "b" * 400, "c" * 400]
+    result = gen._trim_body(paras)
+    assert sum(len(p) for p in result) <= gen.MAX_BODY_CHARS
+
+
+def test_trim_body_accounts_for_salutation_and_closing():
+    gen = CoverLetterPDFGenerator()
+    salutation = "Dear Hiring Manager,"
+    closing = ["Sincerely,", "John Doe"]
+    overhead = len(salutation) + sum(len(l) for l in closing)
+    paras = ["x" * 300, "y" * 300, "z" * 300, "w" * 300]
+    result = gen._trim_body(paras, overhead)
+    total = overhead + sum(len(p) for p in result)
+    assert total <= gen.MAX_BODY_CHARS
+
+
+def test_trim_body_zero_budget_when_overhead_exhausts_limit():
+    gen = CoverLetterPDFGenerator()
+    overhead = gen.MAX_BODY_CHARS
+    paras = ["should be dropped"]
+    assert gen._trim_body(paras, overhead) == []
+
+
+# ═══════════════════════════════════════════════════════════════
 # DB tests
 # ═══════════════════════════════════════════════════════════════
 
@@ -460,6 +515,13 @@ if __name__ == "__main__":
         test_convert_links_allows_safe_schemes,
         test_safe_contact_html,
         test_safe_contact_html_preserves_safe_links,
+        # Trim body tests
+        test_trim_body_under_limit_untouched,
+        test_trim_body_truncates_overflow_at_word_boundary,
+        test_trim_body_drops_trailing_paragraphs,
+        test_trim_body_total_never_exceeds_limit,
+        test_trim_body_accounts_for_salutation_and_closing,
+        test_trim_body_zero_budget_when_overhead_exhausts_limit,
         # DB tests
         test_db_cover_letter_column,
         # Prompt tests

@@ -35,6 +35,7 @@ class TrackRequest(BaseModel):
     role: str
     jd: str
     url: str = None
+    source: str = None
 
 def send_discord_notification(title: str, description: str, color: int, url: str = None):
     webhook_url = settings.discord_webhook_url
@@ -65,7 +66,7 @@ def send_discord_notification(title: str, description: str, color: int, url: str
     except Exception as e:
         logger.warning(f"Failed to send Discord notification: {e}")
 
-def run_cv_optimizer(company: str, role: str, jd_text: str, job_url: str = None):
+def run_cv_optimizer(company: str, role: str, jd_text: str, job_url: str = None, source: str = None):
     import tempfile
     temp_jd = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
     temp_jd.write(jd_text)
@@ -75,7 +76,7 @@ def run_cv_optimizer(company: str, role: str, jd_text: str, job_url: str = None)
     try:
         logger.info(f"Triggering tracking pipeline for {company} - {role}")
         from cv_optimizer.tracker import track
-        app_id = track(company, role, str(temp_jd_path), job_url=job_url, with_cover_letter=True)
+        app_id = track(company, role, str(temp_jd_path), job_url=job_url, with_cover_letter=True, source=source)
         
         logger.info(f"Optimization success for app #{app_id}")
         os.system(f"""osascript -e 'display notification "CV + Cover Letter ready for {role} at {company}!" with title "✅ CV Optimizer"'""")
@@ -109,7 +110,7 @@ async def track_application(request: TrackRequest, background_tasks: BackgroundT
         raise HTTPException(status_code=400, detail="Missing required fields")
 
     from cv_optimizer import db
-    existing = db.find_application(request.company, request.role)
+    existing = db.find_application(request.company, request.role, source=request.source)
     if existing:
         raise HTTPException(
             status_code=409,
@@ -117,7 +118,7 @@ async def track_application(request: TrackRequest, background_tasks: BackgroundT
         )
 
     # We run the optimization in the background so the extension UI returns immediately
-    background_tasks.add_task(run_cv_optimizer, request.company, request.role, request.jd, request.url)
+    background_tasks.add_task(run_cv_optimizer, request.company, request.role, request.jd, request.url, request.source)
     
     return {"status": "success", "message": f"Tracking initiated for {request.company} - {request.role}"}
 

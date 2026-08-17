@@ -88,5 +88,37 @@ def test_full_pipeline():
     shutil.rmtree(tmpdir)
 
 
+def test_find_application_source_aware():
+    """Same company+role with different source channels are distinct records."""
+    import cv_optimizer.db as db
+    import tempfile
+    from pathlib import Path
+
+    orig = db.DB_PATH
+    tmp_db = Path(tempfile.mkdtemp()) / "test.db"
+    try:
+        db.DB_PATH = tmp_db
+        db.init_db()
+
+        # Recruiter-sourced application
+        app_id = db.insert_application("Shelf", "Senior Frontend React Developer")
+        db.set_source(app_id, "recruiter")
+
+        # Direct application (source=None -> 'direct') should NOT collide
+        assert db.find_application("Shelf", "Senior Frontend React Developer", source=None) is None
+        # Recruiter source should still collide
+        assert db.find_application("Shelf", "Senior Frontend React Developer", source="recruiter") is not None
+
+        # Two direct applications of the same role SHOULD collide
+        db.insert_application("Acme", "Frontend")
+        assert db.find_application("Acme", "Frontend", source=None) is not None
+    finally:
+        db.DB_PATH = orig
+        import shutil
+        shutil.rmtree(str(tmp_db.parent), ignore_errors=True)
+
+
 if __name__ == "__main__":
     test_full_pipeline()
+    test_find_application_source_aware()
+    print("✓ All integration tests passed")

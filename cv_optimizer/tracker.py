@@ -67,7 +67,7 @@ def _build_cv_filename(name: str, role: str) -> str:
     combined = f"{clean_name} {clean_role}"
     return re.sub(r'[^\w]+', '_', combined).strip('_')
 
-def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job_url: str = None, with_cover_letter: bool = False) -> int:
+def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job_url: str = None, with_cover_letter: bool = False, source: str = None) -> int:
     """
     Initializes a new application:
     1. Creates DB record
@@ -86,7 +86,7 @@ def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job
     if not jd_source.exists():
         raise FileNotFoundError(f"Job description file not found: {jd_path}")
 
-    existing = db.find_application(company, role)
+    existing = db.find_application(company, role, source=source)
     if existing:
         raise ValueError(
             f"Application already tracked — #{existing['id']}: {existing['company']} — {existing['role']}"
