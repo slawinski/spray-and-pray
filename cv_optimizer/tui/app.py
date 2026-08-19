@@ -33,10 +33,10 @@ STATUS_COLORS = {
 
 COLUMNS = [
     ("#", 4),
-    ("Company", 22),
+    ("Company", 15),
     ("Role", 28),
     ("Status", 14),
-    ("Readiness", 10),
+    ("Readiness", 5),
     ("Source", 16),
     ("Created", 10),
     ("JD", 3),
@@ -88,6 +88,14 @@ def _readiness_bar(score: int | None) -> str:
     empty = 10 - filled
     color = "green" if score >= 70 else ("yellow" if score >= 40 else "red")
     return f"[{color}]{'█' * filled}{'░' * empty}[/] {score:3d}"
+
+
+def _readiness_compact(score: int | None) -> str:
+    """Compact readiness display for narrow columns (score only, colored)."""
+    if score is None:
+        return "[dim]—[/]"
+    color = "green" if score >= 70 else ("yellow" if score >= 40 else "red")
+    return f"[{color}]{score:3d}[/]"
 
 
 class CvDashboard(App):
@@ -142,16 +150,16 @@ class CvDashboard(App):
         self.query_one("#status-bar", Static).update("Loading...")
         self.refresh_apps()
 
-    def refresh_apps(self) -> None:
+    def refresh_apps(self, select_id: int | None = None) -> None:
         try:
             self.applications = db.list_applications_with_status()
             self.filtered = list(self.applications)
             self.current_page = 0
-            self.render_table()
+            self.render_table(select_id=select_id)
         except Exception as e:
             self._notify(f"DB error: {e}")
 
-    def render_table(self) -> None:
+    def render_table(self, select_id: int | None = None) -> None:
         table = self.query_one("#apps-table", DataTable)
         table.clear()
 
@@ -163,10 +171,10 @@ class CvDashboard(App):
             created = app["created_at"][:10] if app["created_at"] else ""
             table.add_row(
                 str(start + idx + 1),
-                _truncate(app["company"], 22),
+                _truncate(app["company"], 15),
                 _truncate(app["role"], 28),
                 _status_rich(app["latest_status"]),
-                _readiness_bar(db.get_latest_readiness(app["id"])),
+                _readiness_compact(db.get_latest_readiness(app["id"])),
                 _source_name(app.get("job_url"), app.get("source")),
                 created,
                 _checkmark(app["jd_path"]),
@@ -178,6 +186,12 @@ class CvDashboard(App):
         pages = max(1, (total + self.page_size - 1) // self.page_size)
         shown = f"{start + 1}–{min(end, total)}" if total else "0"
         self._status(f"Page {self.current_page + 1}/{pages} — Showing {shown} of {total} applications")
+
+        if select_id is not None:
+            for idx, app in enumerate(page):
+                if app["id"] == select_id:
+                    table.move_cursor(row=idx)
+                    break
 
     def _status(self, message: str) -> None:
         self.query_one("#status-bar", Static).update(message)
@@ -399,28 +413,28 @@ class CvDashboard(App):
                 self.call_from_thread(self._notify, f"No JD file found for application #{app['id']}")
                 return
             self.regenerating_ids.add(app["id"])
-            self.call_from_thread(self.render_table)
+            self.call_from_thread(self.render_table, app["id"])
             reoptimize(app["id"])
             self.regenerating_ids.discard(app["id"])
-            self.call_from_thread(self.refresh_apps)
+            self.call_from_thread(self.refresh_apps, app["id"])
             self.call_from_thread(self._notify, f"[bold green]✓[/] CV regenerated for {app['company']} — {app['role']}")
         except Exception as e:
             self.regenerating_ids.discard(app["id"])
-            self.call_from_thread(self.render_table)
+            self.call_from_thread(self.render_table, app["id"])
             self.call_from_thread(self._notify, f"[red]✗[/] CV regeneration failed: {e}")
 
     @work(exclusive=True, thread=True)
     def _generate_cover_letter(self, app: dict) -> None:
         try:
             self.generating_cl_ids.add(app["id"])
-            self.call_from_thread(self.render_table)
+            self.call_from_thread(self.render_table, app["id"])
             cl_path = generate_cover_letter(app["id"])
             self.generating_cl_ids.discard(app["id"])
-            self.call_from_thread(self.refresh_apps)
+            self.call_from_thread(self.refresh_apps, app["id"])
             self.call_from_thread(self._notify, f"[bold green]✓[/] Cover letter generated for {app['company']} — {app['role']}")
         except Exception as e:
             self.generating_cl_ids.discard(app["id"])
-            self.call_from_thread(self.render_table)
+            self.call_from_thread(self.render_table, app["id"])
             self.call_from_thread(self._notify, f"[red]✗[/] Cover letter generation failed: {e}")
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:

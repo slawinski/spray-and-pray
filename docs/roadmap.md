@@ -4,6 +4,14 @@
 
 ---
 
+## 📝 To-Do / Ideas
+
+- [ ] Ship as a paid product
+- [ ] Auto-scrape job descriptions and feed them into the pipeline
+- [ ] Mention in deliverables that the CV was optimized by bespoke software
+
+---
+
 ## ✅ Milestone 0: Core CV Optimizer CLI (Completed)
 **Objective:** A foundational command-line tool that takes a master CV and a job description, uses an LLM to tailor the CV to the specific role, and generates a formatted PDF.
 

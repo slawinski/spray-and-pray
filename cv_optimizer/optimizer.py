@@ -8,6 +8,7 @@ from openai import OpenAI
 logger = logging.getLogger(__name__)
 
 from cv_optimizer.config import settings
+from cv_optimizer.language import build_language_instruction, build_cv_heading_instruction
 
 PROMPT_FILE = "optimize.md"
 SYSTEM_PROMPT = (Path(__file__).parent / "prompts" / PROMPT_FILE).read_text()
@@ -18,34 +19,66 @@ class CVOptimizer:
         self.model_name = model_name
         self.temperature = temperature
 
-    def optimize(self, master_cv: Dict[str, Any], job_description: str) -> str:
+    def optimize(self, master_cv: Dict[str, Any], job_description: str, language: str = "en") -> str:
         """Sends CV and job description to LLM for optimization."""
-        logger.info("Optimizing CV via LLM...")
+        logger.info("Optimizing CV via LLM (%s)...", language)
         try:
-            user_content = (
-                f"MASTER CV DATA:\n{json.dumps(master_cv, indent=2)}\n\n"
-                f"JOB DESCRIPTION:\n{job_description}"
-            )
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_content}
-                ],
-                temperature=self.temperature,
-                max_tokens=settings.max_tokens,
-            )
+            cleaned = self._optimize_once(master_cv, job_description, language, settings.max_tokens)
 
-            raw_content = response.choices[0].message.content or ""
+            # Reasoning models can exhaust max_tokens during chain-of-thought
+            # and return empty content. Retry once with a larger budget so we
+            # never write a blank CV.
+            if not cleaned.strip():
+                logger.warning(
+                    "LLM returned empty CV; retrying with doubled max_tokens"
+                )
+                cleaned = self._optimize_once(
+                    master_cv, job_description, language, settings.max_tokens * 2
+                )
 
-            # Strip <think>...</think> blocks that Qwen3 thinking models may emit
-            raw_content = re.sub(r'<think>.*?</think>', '', raw_content, flags=re.DOTALL).strip()
+            if not cleaned.strip():
+                raise ValueError(
+                    "LLM returned empty CV content "
+                    "(reasoning likely exhausted max_tokens)"
+                )
 
-            cleaned = self._clean_output(raw_content)
             return cleaned
         except Exception as e:
             logger.error(f"LLM optimization failed: {e}")
             raise
+
+    def _optimize_once(
+        self,
+        master_cv: Dict[str, Any],
+        job_description: str,
+        language: str,
+        max_tokens: int,
+    ) -> str:
+        """Performs a single LLM completion and cleans the raw output."""
+        system_prompt = SYSTEM_PROMPT + "\n\n" + build_language_instruction(language)
+        heading_instruction = build_cv_heading_instruction(language)
+        if heading_instruction:
+            system_prompt += "\n\n" + heading_instruction
+        user_content = (
+            f"MASTER CV DATA:\n{json.dumps(master_cv, indent=2)}\n\n"
+            f"JOB DESCRIPTION:\n{job_description}"
+        )
+        response = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content}
+            ],
+            temperature=self.temperature,
+            max_tokens=max_tokens,
+        )
+
+        raw_content = response.choices[0].message.content or ""
+
+        # Strip <think>...</think> blocks that Qwen3 thinking models may emit
+        raw_content = re.sub(r'<think>.*?</think>', '', raw_content, flags=re.DOTALL).strip()
+
+        return self._clean_output(raw_content)
 
     def _clean_output(self, text: str) -> str:
         """Strips common LLM wrapper text."""

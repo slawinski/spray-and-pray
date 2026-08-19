@@ -335,6 +335,44 @@ Alex Johnson"""
     assert len(sections["body"]) == 1
 
 
+def test_parse_sections_polish_salutation_and_closing():
+    """Polish salutation and sign-off should be recognized like the English ones."""
+    gen = CoverLetterPDFGenerator()
+    text = """## Piotr Sławiński
+### Contact
+piotr@example.com
+
+**Data:** 17 sierpnia 2026
+
+**Re: Senior Frontend Developer w Shelf**
+
+Szanowni Państwo,
+
+Piszę w sprawie stanowiska Senior Frontend Developera w Państwa firmie.
+
+Z poważaniem,
+
+Piotr Sławiński"""
+    sections = gen._parse_sections(text)
+
+    assert sections["name"] == "Piotr Sławiński"
+    assert sections["date"] == "Data: 17 sierpnia 2026"
+    assert sections["re"] == "Re: Senior Frontend Developer w Shelf"
+    assert sections["salutation"] == "Szanowni Państwo,"
+    assert len(sections["body"]) == 1
+    assert sections["closing"][0] == "Z poważaniem,"
+    assert sections["closing"][1] == "Piotr Sławiński"
+
+
+def test_is_closing_polish():
+    gen = CoverLetterPDFGenerator()
+    assert gen._is_closing("Z poważaniem,")
+    assert gen._is_closing("Z poważaniem")
+    assert gen._is_closing("z wyrazami szacunku")
+    assert gen._is_closing("Sincerely,")
+    assert not gen._is_closing("Pozdrawiam serdecznie")
+
+
 def test_parse_sections_removes_markdown_bold_in_date_re():
     gen = CoverLetterPDFGenerator()
     text = """## Test User
@@ -506,6 +544,8 @@ if __name__ == "__main__":
         test_parse_sections_complete_letter,
         test_parse_sections_minimal_letter,
         test_parse_sections_no_date,
+        test_parse_sections_polish_salutation_and_closing,
+        test_is_closing_polish,
         test_parse_sections_removes_markdown_bold_in_date_re,
         # Utility tests
         test_strip_markdown_bold,

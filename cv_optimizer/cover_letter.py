@@ -9,6 +9,7 @@ import fitz
 logger = logging.getLogger(__name__)
 
 from cv_optimizer.config import settings
+from cv_optimizer.language import build_language_instruction
 
 PROMPT_FILE = "cover_letter.md"
 SYSTEM_PROMPT = (Path(__file__).parent / "prompts" / PROMPT_FILE).read_text()
@@ -94,37 +95,78 @@ class CoverLetterOptimizer:
         self.model_name = model_name or settings.model_name
         self.temperature = temperature if temperature is not None else settings.temperature
 
-    def generate(self, master_cv: Dict[str, Any], job_description: str) -> str:
+    def generate(self, master_cv: Dict[str, Any], job_description: str, language: str = "en") -> str:
         """Generates a tailored cover letter from master CV and job description."""
-        logger.info("Generating cover letter via LLM...")
+        logger.info("Generating cover letter via LLM (%s)...", language)
         try:
-            user_content = (
-                f"MASTER CV DATA:\n{json.dumps(master_cv, indent=2)}\n\n"
-                f"JOB DESCRIPTION:\n{job_description}"
-            )
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_content},
-                ],
-                temperature=self.temperature,
-                max_tokens=settings.max_tokens,
-            )
+            cleaned = self._generate_once(master_cv, job_description, language, settings.max_tokens)
 
-            raw_content = response.choices[0].message.content or ""
+            # Reasoning models (deepseek-v4-pro) can exhaust max_tokens during
+            # chain-of-thought and return empty content. Retry once with a larger
+            # budget before giving up, so we never write a blank cover letter.
+            if not cleaned.strip():
+                logger.warning(
+                    "LLM returned empty cover letter; retrying with doubled max_tokens"
+                )
+                cleaned = self._generate_once(
+                    master_cv, job_description, language, settings.max_tokens * 2
+                )
 
-            # Strip <think>...</think> blocks that reasoning models may emit
-            raw_content = re.sub(
-                r"<think>.*?</think>", "", raw_content, flags=re.DOTALL
-            ).strip()
+            if not cleaned.strip():
+                raise ValueError(
+                    "LLM returned empty cover letter content "
+                    "(reasoning likely exhausted max_tokens)"
+                )
 
-            cleaned = self._clean_output(raw_content)
             return cleaned
 
         except Exception as e:
             logger.error(f"LLM cover letter generation failed: {e}")
             raise
+
+    def _generate_once(
+        self,
+        master_cv: Dict[str, Any],
+        job_description: str,
+        language: str,
+        max_tokens: int,
+    ) -> str:
+        """Performs a single LLM completion and cleans the raw output."""
+        system_prompt = SYSTEM_PROMPT + "\n\n" + self._language_instruction(language)
+        user_content = (
+            f"MASTER CV DATA:\n{json.dumps(master_cv, indent=2)}\n\n"
+            f"JOB DESCRIPTION:\n{job_description}"
+        )
+        response = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+            temperature=self.temperature,
+            max_tokens=max_tokens,
+        )
+
+        raw_content = response.choices[0].message.content or ""
+
+        # Strip <think>...</think> blocks that reasoning models may emit
+        raw_content = re.sub(
+            r"<think>.*?</think>", "", raw_content, flags=re.DOTALL
+        ).strip()
+
+        return self._clean_output(raw_content)
+
+    def _language_instruction(self, language: str) -> str:
+        """Builds the language instruction for the cover letter, including
+        Polish salutation/sign-off guidance so the PDF parser can structure it."""
+        instruction = build_language_instruction(language)
+        if language == "pl":
+            instruction += (
+                "\n\nKeep the structure markers unchanged: `## [Name]`, `### Contact`, "
+                "`**Data:**`, and `**Re:**`. Use \"Szanowni Państwo,\" as the salutation "
+                "and \"Z poważaniem,\" as the sign-off (followed by the full name)."
+            )
+        return instruction
 
     def _clean_output(self, text: str) -> str:
         """Strips common LLM wrapper text and normalizes output."""
@@ -314,8 +356,8 @@ class CoverLetterPDFGenerator:
                     continue
                 continue  # skip empty lines in contact state
 
-            # Date line (bold in markdown: **Date:** ...)
-            if stripped.startswith("**Date:") or stripped.lower().startswith("**date:"):
+            # Date line (bold in markdown: **Date:** ... or Polish **Data:** ...)
+            if stripped.lower().startswith(("**date:", "**data:")):
                 sections["date"] = self._strip_markdown_bold(stripped)
                 state = "pre_body"
                 continue
@@ -326,14 +368,14 @@ class CoverLetterPDFGenerator:
                 state = "pre_body"
                 continue
 
-            # Salutation
-            if stripped.lower().startswith("dear"):
+            # Salutation (English or Polish)
+            if stripped.lower().startswith(("dear", "szanown", "drogi", "droga")):
                 sections["salutation"] = stripped
                 state = "body"
                 continue
 
-            # Closing sign-off
-            if stripped.lower() in ("sincerely,", "best regards,", "yours faithfully,", "kind regards,"):
+            # Closing sign-off (English or Polish)
+            if self._is_closing(stripped):
                 # Flush any in-progress paragraph to body
                 if current_para:
                     body_paragraphs.append(" ".join(current_para))
@@ -376,6 +418,17 @@ class CoverLetterPDFGenerator:
     def _strip_markdown_bold(text: str) -> str:
         """Removes all markdown bold markers from text: **foo** → foo."""
         return text.replace("**", "").strip()
+
+    _CLOSING_PHRASES = {
+        "sincerely", "best regards", "yours faithfully", "kind regards",
+        "z poważaniem", "z wyrazami szacunku", "pozdrawiam",
+    }
+
+    @classmethod
+    def _is_closing(cls, text: str) -> bool:
+        """Returns True if a line is a closing sign-off (English or Polish)."""
+        normalized = text.strip().lower().rstrip(".,")
+        return normalized in cls._CLOSING_PHRASES
 
     @staticmethod
     def _escape_html(text: str) -> str:

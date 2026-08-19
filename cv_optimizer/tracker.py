@@ -12,6 +12,7 @@ from cv_optimizer.extractor import PDFExtractor
 from cv_optimizer.optimizer import CVOptimizer
 from cv_optimizer.generator import PDFGenerator
 from cv_optimizer.cover_letter import CoverLetterOptimizer, CoverLetterPDFGenerator
+from cv_optimizer.language import detect_job_description_language
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +113,11 @@ def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job
     try:
         job_description = PDFExtractor.extract_text(str(jd_source))
 
+        language = detect_job_description_language(job_description).language
+        logger.info(
+            "Detected JD language: %s", language,
+        )
+
         actual_master_cv = master_cv_path if master_cv_path else settings.master_cv_path
         with open(actual_master_cv, "r", encoding="utf-8") as f:
             master_cv_data = json.load(f)
@@ -122,7 +128,7 @@ def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job
             model_name=settings.model_name,
             temperature=settings.temperature,
         )
-        optimized_md = optimizer.optimize(master_cv_data, job_description)
+        optimized_md = optimizer.optimize(master_cv_data, job_description, language=language)
 
         candidate_name = master_cv_data.get("personal_info", {}).get("name", "Candidate")
         cv_base_name = _build_cv_filename(candidate_name, role)
@@ -180,13 +186,16 @@ def reoptimize(app_id: int, master_cv_path: str = None) -> None:
     jd_source = Path(jd_path)
     job_description = PDFExtractor.extract_text(str(jd_source))
 
+    language = detect_job_description_language(job_description).language
+    logger.info("Detected JD language: %s", language)
+
     optimizer = CVOptimizer(
         base_url=settings.llm_base_url,
         api_key=settings.llm_api_key,
         model_name=settings.model_name,
         temperature=settings.temperature,
     )
-    optimized_md = optimizer.optimize(master_cv_data, job_description)
+    optimized_md = optimizer.optimize(master_cv_data, job_description, language=language)
 
     # Use the directory that already contains the JD — immune to role-name changes
     app_dir = Path(jd_path).parent
@@ -226,13 +235,16 @@ def generate_cover_letter(app_id: int, master_cv_path: str = None) -> str:
     jd_source = Path(jd_path)
     job_description = PDFExtractor.extract_text(str(jd_source))
 
+    language = detect_job_description_language(job_description).language
+    logger.info("Detected JD language: %s", language)
+
     cover_optimizer = CoverLetterOptimizer(
         base_url=settings.llm_base_url,
         api_key=settings.llm_api_key,
         model_name=settings.model_name,
         temperature=settings.temperature,
     )
-    cover_letter_md = cover_optimizer.generate(master_cv_data, job_description)
+    cover_letter_md = cover_optimizer.generate(master_cv_data, job_description, language=language)
 
     # Use the directory that already contains the JD and CV
     app_dir = Path(jd_path).parent

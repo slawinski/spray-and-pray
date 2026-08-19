@@ -1,3 +1,4 @@
+import html
 import logging
 import fitz
 import markdown
@@ -107,7 +108,7 @@ class PDFGenerator:
         logger.info(f"Generating two-column PDF to {output_path}...")
         
         try:
-            sections = self._parse_to_html_sections(markdown_text)
+            sections, headings = self._parse_to_html_sections(markdown_text)
             
             # Layout Configuration
             margin = 40
@@ -126,10 +127,10 @@ class PDFGenerator:
             main_html_parts = []
             for key in main_keys:
                 if key in sections:
-                    main_html_parts.append(f'<h2>{key}</h2>{sections[key]}')
+                    main_html_parts.append(f'<h2>{self._heading(headings, key)}</h2>{sections[key]}')
             
             if "GDPR Disclaimer" in sections:
-                main_html_parts.append(f'<div class="disclaimer"><h2>GDPR Disclaimer</h2>{sections["GDPR Disclaimer"]}</div>')
+                main_html_parts.append(f'<div class="disclaimer"><h2>{self._heading(headings, "GDPR Disclaimer")}</h2>{sections["GDPR Disclaimer"]}</div>')
             
             main_html = f'<div class="main-column">{"".join(main_html_parts)}</div>'
             
@@ -201,7 +202,7 @@ class PDFGenerator:
             sidebar_html_parts = []
             for key in sidebar_keys:
                 if key in sections:
-                    sidebar_html_parts.append(f'<h2>{key}</h2>{sections[key]}')
+                    sidebar_html_parts.append(f'<h2>{self._heading(headings, key)}</h2>{sections[key]}')
             sidebar_html = f'<div class="sidebar-column">{"".join(sidebar_html_parts)}</div>'
             page.insert_htmlbox(sidebar_rect, sidebar_html, css=CV_CSS)
             
@@ -237,11 +238,17 @@ class PDFGenerator:
         doc.close()
         return rect.height - remaining
 
-    def _parse_to_html_sections(self, text: str) -> Dict[str, str]:
-        sections = {}
-        # Remove any Markdown link syntax [text](url) -> <a href="url">text</a> for sidebar links
-        # But for main column, we might want just text. Let's keep it simple first.
-        
+    def _parse_to_html_sections(self, text: str) -> tuple[Dict[str, str], Dict[str, str]]:
+        """Parses markdown into canonical sections plus a heading map.
+
+        Returns (sections, headings) where sections maps a canonical key
+        (e.g. "Experience") to HTML content, and headings maps that same
+        canonical key to the original section heading text (which may be
+        Polish, e.g. "Doświadczenie").
+        """
+        sections: Dict[str, str] = {}
+        headings: Dict[str, str] = {}
+
         lines = text.split("\n")
         current_section = "Header"
         section_lines = []
@@ -257,14 +264,17 @@ class PDFGenerator:
             if line.startswith("## "):
                 if section_lines:
                     sections[current_section] = self._md_to_html("\n".join(section_lines), current_section)
-                current_section = self._normalize_key(line[3:].strip())
+                raw_heading = line[3:].strip()
+                current_section = self._normalize_key(raw_heading)
+                headings[current_section] = raw_heading
                 section_lines = []
                 continue
             
             section_lines.append(line)
-            
-            if section_lines:
-                sections[current_section] = self._md_to_html("\n".join(section_lines), current_section)
+
+        # Flush the final section
+        if section_lines:
+            sections[current_section] = self._md_to_html("\n".join(section_lines), current_section)
 
         # Warn if common sections are missing from parsed output
         for expected in ["Summary", "Experience", "Skills", "Community", "GDPR Disclaimer"]:
@@ -273,7 +283,12 @@ class PDFGenerator:
             elif not sections[expected].strip():
                 logger.warning("PDF: section '%s' is empty after parsing", expected)
 
-        return sections
+        return sections, headings
+
+    @staticmethod
+    def _heading(headings: Dict[str, str], key: str) -> str:
+        """Returns the (possibly translated) heading text for a canonical key."""
+        return html.escape(headings.get(key, key))
 
     def _md_to_html(self, md_text: str, section_name: str) -> str:
         """Custom MD to HTML conversion to handle specific layout needs."""
@@ -302,4 +317,14 @@ class PDFGenerator:
         if "disclaimer" in lowered or "gdpr" in lowered or "consent" in lowered: return "GDPR Disclaimer"
         if "hobby" in lowered or "hobbies" in lowered or "interest" in lowered: return "Hobbies"
         if "language" in lowered: return "Languages"
+        # Polish section headings
+        if "doświadcz" in lowered or "zatrudnien" in lowered: return "Experience"
+        if "podsumow" in lowered or "profil" in lowered or "o mnie" in lowered: return "Summary"
+        if "kontakt" in lowered or "dane osobowe" in lowered: return "Personal Info"
+        if "umiejętnoś" in lowered or "kompetencj" in lowered or "technologi" in lowered: return "Skills"
+        if "wykształ" in lowered: return "Education"
+        if "społecz" in lowered or "wolontari" in lowered or "wystąpien" in lowered or "działalnoś" in lowered: return "Community"
+        if "rodo" in lowered or "klauzul" in lowered or "zgoda" in lowered: return "GDPR Disclaimer"
+        if "zainteresowan" in lowered or "pasj" in lowered: return "Hobbies"
+        if "język" in lowered: return "Languages"
         return key

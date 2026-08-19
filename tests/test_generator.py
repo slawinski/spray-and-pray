@@ -107,12 +107,72 @@ def test_measure_html_height():
     assert 0 < h < 90, f"Used height should be between 0 and 90, got {h}"
 
 
+POLISH_MD = """# Piotr Sławiński
+### Senior Software Engineer
+## Podsumowanie
+Inżynier frontend z 7-letnim doświadczeniem.
+## Doświadczenie
+### Senior Software Engineer
+**Haptiq**, *Warszawa*, *09/2025 - 06/2026*
+
+- Budowa aplikacji React.
+## Dane kontaktowe
+- Email: piotr@example.com
+## Edukacja
+**Politechnika Gdańska**
+
+Magister inżynier
+## Umiejętności
+- **Języki:** TypeScript, JavaScript
+## Społeczność
+**WarsawJS** - **Volunteer, Mentor & Speaker**
+
+Wystąpienia.
+## Języki
+- Polski: ojczysty
+## Zainteresowania
+- Wypiek chleba
+## Klauzula RODO
+Wyrażam zgodę.
+"""
+
+
+def test_polish_section_headings_map_to_canonical_keys():
+    gen = PDFGenerator()
+    sections, headings = gen._parse_to_html_sections(POLISH_MD)
+    assert sections["Summary"]
+    assert sections["Experience"]
+    assert sections["Personal Info"]
+    assert sections["Education"]
+    assert sections["Skills"]
+    assert sections["Community"]
+    assert sections["Languages"]
+    assert sections["Hobbies"]
+    assert sections["GDPR Disclaimer"]
+    # Original Polish headings are preserved for rendering
+    assert headings["Experience"] == "Doświadczenie"
+    assert headings["Summary"] == "Podsumowanie"
+    assert headings["GDPR Disclaimer"] == "Klauzula RODO"
+
+
+def test_polish_headings_render_in_pdf():
+    tmp = tempfile.mkdtemp()
+    out = str(Path(tmp) / "cv.pdf")
+    PDFGenerator().generate(POLISH_MD, out, photo_path=None)
+    text = fitz.open(out)[0].get_text()
+    for heading in ["Podsumowanie", "Doświadczenie", "Dane kontaktowe", "Edukacja",
+                    "Umiejętności", "Społeczność", "Języki", "Zainteresowania", "Klauzula RODO"]:
+        assert heading in text, f"Missing Polish heading in PDF: {heading}"
+
+
 if __name__ == "__main__":
     tests = [
         test_generate_with_photo,
         test_generate_without_photo,
         test_image_size,
         test_measure_html_height,
+        test_polish_section_headings_map_to_canonical_keys,
+        test_polish_headings_render_in_pdf,
     ]
     passed = 0
     failed = 0
