@@ -31,20 +31,17 @@ STATUS_COLORS = {
     "ghosted": "grey37",
 }
 
-# (label, base_width, flex_weight) — flex_weight 0 = fixed width;
-# flex_weight > 0 = expands to absorb extra horizontal space when the
-# terminal is wider than the sum of the base widths.
 COLUMNS = [
-    ("#", 4, 0),
-    ("Company", 15, 2),
-    ("Role", 28, 3),
-    ("Status", 14, 0),
-    ("Readiness", 5, 0),
-    ("Source", 16, 0),
-    ("Created", 10, 0),
-    ("JD", 3, 0),
-    ("CV", 3, 0),
-    ("CL", 3, 0),
+    ("#", 4),
+    ("Company", 15),
+    ("Role", 28),
+    ("Status", 14),
+    ("Readiness", 5),
+    ("Source", 16),
+    ("Created", 10),
+    ("JD", 3),
+    ("CV", 3),
+    ("CL", 3),
 ]
 
 
@@ -135,7 +132,6 @@ class CvDashboard(App):
         self.filtered: list[dict] = []
         self.regenerating_ids: set[int] = set()
         self.generating_cl_ids: set[int] = set()
-        self._column_keys: dict[str, object] = {}
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -150,37 +146,9 @@ class CvDashboard(App):
         table = self.query_one("#apps-table", DataTable)
         table.cursor_type = "row"
         table.zebra_stripes = True
-        for label, base_width, _flex in COLUMNS:
-            self._column_keys[label] = table.add_column(label, width=base_width)
+        table.add_columns(*[c[0] for c in COLUMNS])
         self.query_one("#status-bar", Static).update("Loading...")
-        self._apply_column_widths()
         self.refresh_apps()
-
-    def on_resize(self, event) -> None:
-        self._apply_column_widths()
-
-    def _apply_column_widths(self) -> None:
-        """Grows flexible columns to fill the available terminal width."""
-        table = self.query_one("#apps-table", DataTable)
-        available = self.size.width
-        if available <= 0 or not self._column_keys:
-            return
-
-        padding = 2 * len(COLUMNS)
-        fixed_total = sum(w for _, w, f in COLUMNS if f == 0)
-        flex_cols = [c for c in COLUMNS if c[2] > 0]
-        flex_base_total = sum(w for _, w, _ in flex_cols)
-        flex_weight = sum(f for _, _, f in flex_cols) or 1
-
-        extra = available - padding - fixed_total - flex_base_total
-        if extra <= 0:
-            return
-
-        for label, base, flex in flex_cols:
-            column = table.columns[self._column_keys[label]]
-            column.width = base + int(extra * flex / flex_weight)
-            column.auto_width = False
-        table.refresh()
 
     def refresh_apps(self, select_id: int | None = None) -> None:
         try:
