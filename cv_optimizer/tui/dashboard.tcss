@@ -19,6 +19,7 @@ Header {
 
 DataTable {
     height: 1fr;
+    width: 100%;
 }
 
 #detail-panel {
@@ -26,6 +27,7 @@ DataTable {
     display: none;
     border-top: solid $primary;
     padding: 1 2;
+    width: 100%;
 }
 
 #detail-panel.visible {
@@ -39,6 +41,7 @@ DataTable {
     color: $text;
     padding: 0 1;
     content-align: left middle;
+    width: 100%;
 }
 
 Footer {
