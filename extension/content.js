@@ -63,6 +63,72 @@
     return null;
   }
 
+  function textOf(el) {
+    return el ? (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim() : '';
+  }
+
+  function extractDescriptionText() {
+    // Strongly-preferred description containers first.
+    const strong = [
+      document.querySelector('article'),
+      document.querySelector('main'),
+      document.querySelector('[class*="description" i]'),
+      document.querySelector('[class*="job-description" i]'),
+      document.querySelector('[data-testid*="description" i]'),
+    ];
+    let best = '';
+    for (const el of strong) {
+      const t = textOf(el);
+      if (t.length > best.length) best = t;
+    }
+    if (best.length >= 120) return best;
+
+    // Fallback: the container with the most paragraph text (skips nav/footer
+    // lists, which have few <p> elements).
+    let largest = '';
+    for (const el of document.querySelectorAll('article, main, section, div')) {
+      if (el.querySelectorAll('p').length < 2) continue;
+      const t = textOf(el);
+      if (t.length > largest.length && t.length < 60000) largest = t;
+    }
+    return largest.length > best.length ? largest : best;
+  }
+
+  function extractGeneric() {
+    // 1. Structured data (JSON-LD) is the most reliable source.
+    const jsonld = extractFromJsonLd();
+    if (jsonld && jsonld.role && jsonld.company && jsonld.jd) return jsonld;
+
+    const meta = (sel) => {
+      const el = document.querySelector(sel);
+      return el ? el.getAttribute('content') || '' : '';
+    };
+    const ogTitle = meta('meta[property="og:title"]');
+    const ogDesc = meta('meta[property="og:description"]');
+    const metaDesc = meta('meta[name="description"]');
+    const siteName = meta('meta[property="og:site_name"]');
+
+    let role = textOf(document.querySelector('h1'));
+    let company = siteName;
+
+    if (ogTitle) {
+      // "Senior Frontend Engineer at Acme | Board" → role + company
+      const at = ogTitle.match(/^(.+?)\s+at\s+(.+)$/i);
+      if (at) {
+        role = role || at[1].trim();
+        company = company || at[2].split(/[|\u2022\u2013\u2014-]/)[0].trim();
+      }
+      if (!role) role = ogTitle.split(/[|\u2022\u2013\u2014-]/)[0].trim();
+    }
+
+    const jd = ogDesc || metaDesc || extractDescriptionText();
+
+    if (role && jd) {
+      return { role, company: company || 'Unknown', jd };
+    }
+    return null;
+  }
+
   const extractors = {
     "linkedin.com": () => {
       // LinkedIn's DOM changes frequently and has multiple layouts (standalone vs split-view)
@@ -354,11 +420,11 @@
   }
 
   if (!extractor) {
-    const jsonld = extractFromJsonLd();
-    if (jsonld && jsonld.role && jsonld.company && jsonld.jd) {
-      return jsonld;
+    const generic = extractGeneric();
+    if (generic && generic.role && generic.jd) {
+      return generic;
     }
-    return { error: "Unsupported Job Board" };
+    return { error: "Could not auto-extract this job. Use manual entry in the popup." };
   }
 
   // Execute the strategy and return the object
