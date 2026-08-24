@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from cv_optimizer import db
+from cv_optimizer.db import status_rank as _status_rank
 from cv_optimizer.config import settings
 from cv_optimizer.extractor import PDFExtractor
 from cv_optimizer.optimizer import CVOptimizer
@@ -31,26 +32,6 @@ def _validate_status(status: str) -> str:
         f"Invalid status '{status}'. "
         f"Valid: {', '.join(sorted(VALID_STATUSES))}, interview [N]"
     )
-
-
-def _status_rank(status: str) -> int:
-    """Returns a numeric rank for a status, used to detect backward transitions."""
-    if status == "draft":
-        return -1
-    if status == "applied":
-        return 0
-    if status == "ghosted":
-        return 1
-    m = INTERVIEW_PATTERN.match(status)
-    if m:
-        return 2 + int(m.group(1))
-    if status == "offer":
-        return 97
-    if status == "accepted":
-        return 98
-    if status == "rejected":
-        return 99
-    return 100  # unknown — always forward
 
 
 def _build_app_dir(app_id: int, company: str, role: str) -> Path:
@@ -108,6 +89,16 @@ def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job
     
     shutil.copy2(jd_source, jd_dest)
     logger.info(f"Copied JD to {jd_dest}")
+
+    # Persist the JD path early so the match scorer can read it independently.
+    db.update_application(app_id, jd_path=str(jd_dest))
+
+    # Best-effort Match Score (isolated; a failure must never block tracking).
+    try:
+        from cv_optimizer.matching import MatchService
+        MatchService().score_application(app_id)
+    except Exception as e:
+        logger.warning("Match scoring failed for app #%d: %s", app_id, e)
 
     # 4. Generate optimized CV
     try:

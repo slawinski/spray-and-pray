@@ -18,6 +18,12 @@ class Settings(BaseModel):
     output_md_path: str = Field(default="optimized_cv.md")
     output_pdf_path: str = Field(default="optimized_cv.pdf")
 
+    # Candidate <-> Job matching score
+    match_temperature: float = Field(default=0.0)
+    match_max_tokens: int = Field(default=4096)
+    match_scoring_version: str = Field(default="match-v1")
+    match_prompt_version: str = Field(default="match-prompt-v1")
+
     discord_webhook_url: str | None = Field(default=os.getenv("DISCORD_WEBHOOK_URL"))
 
 settings = Settings()

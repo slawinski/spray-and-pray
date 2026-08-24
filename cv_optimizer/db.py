@@ -1,4 +1,5 @@
 import json
+import re
 import sqlite3
 import logging
 from pathlib import Path
@@ -6,6 +7,32 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 DB_PATH = Path("applications.db")
+
+_INTERVIEW_PATTERN = re.compile(r"^interview (\d+)$")
+
+
+def status_rank(status: str) -> int:
+    """Returns a numeric rank for a status, used to detect backward transitions.
+
+    This is the canonical source of truth. Keep in sync with the SQL CASE in
+    `trg_status_forward_only` (see init_db).
+    """
+    if status == "draft":
+        return -1
+    if status == "applied":
+        return 0
+    if status == "ghosted":
+        return 1
+    m = _INTERVIEW_PATTERN.match(status)
+    if m:
+        return 2 + int(m.group(1))
+    if status == "offer":
+        return 97
+    if status == "accepted":
+        return 98
+    if status == "rejected":
+        return 99
+    return 100  # unknown — always forward
 
 
 def _connect() -> sqlite3.Connection:
@@ -63,6 +90,26 @@ def init_db() -> None:
                 FOREIGN KEY (session_id) REFERENCES interview_sessions(id),
                 FOREIGN KEY (application_id) REFERENCES applications(id)
             );
+
+            CREATE TABLE IF NOT EXISTS match_assessments (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                application_id      INTEGER NOT NULL,
+                score               INTEGER NOT NULL CHECK(score >= 0 AND score <= 100),
+                label               TEXT NOT NULL,
+                confidence          TEXT NOT NULL,
+                base_score          REAL NOT NULL,
+                assessment_json     TEXT NOT NULL,
+                candidate_hash      TEXT NOT NULL,
+                jd_hash             TEXT NOT NULL,
+                scoring_version     TEXT NOT NULL,
+                prompt_version      TEXT NOT NULL,
+                model_name          TEXT NOT NULL,
+                created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_match_assessments_app
+            ON match_assessments(application_id, id DESC);
             """
         )
         try:
@@ -81,6 +128,41 @@ def init_db() -> None:
             conn.execute("ALTER TABLE applications ADD COLUMN cover_letter_path TEXT")
         except Exception:
             pass
+        # Block backward status transitions at the storage layer, so even raw
+        # SQL cannot reintroduce a circular (draft -> applied -> draft) relation.
+        # Rank values must stay in sync with status_rank() above.
+        conn.execute(
+            """
+            CREATE TRIGGER IF NOT EXISTS trg_status_forward_only
+            BEFORE INSERT ON status_history
+            FOR EACH ROW
+            WHEN (
+                (CASE
+                    WHEN NEW.status = 'draft' THEN -1
+                    WHEN NEW.status = 'applied' THEN 0
+                    WHEN NEW.status = 'ghosted' THEN 1
+                    WHEN NEW.status = 'offer' THEN 97
+                    WHEN NEW.status = 'accepted' THEN 98
+                    WHEN NEW.status = 'rejected' THEN 99
+                    WHEN NEW.status LIKE 'interview %' THEN 2 + CAST(substr(NEW.status, 11) AS INTEGER)
+                    ELSE 100 END)
+                <
+                (SELECT MAX(CASE
+                    WHEN status = 'draft' THEN -1
+                    WHEN status = 'applied' THEN 0
+                    WHEN status = 'ghosted' THEN 1
+                    WHEN status = 'offer' THEN 97
+                    WHEN status = 'accepted' THEN 98
+                    WHEN status = 'rejected' THEN 99
+                    WHEN status LIKE 'interview %' THEN 2 + CAST(substr(status, 11) AS INTEGER)
+                    ELSE 100 END)
+                FROM status_history WHERE application_id = NEW.application_id)
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'backward status transition blocked');
+            END;
+            """
+        )
     _migrate_autoincrement()
     logger.info("Database initialised at %s", DB_PATH)
 
@@ -142,9 +224,24 @@ def insert_application(
 
 
 def insert_status(application_id: int, status: str) -> None:
-    """Records a status transition for an application."""
+    """Records a status transition for an application.
+
+    Raises ValueError if the transition is backward (lower rank than the
+    current latest status), which would create a circular Sankey relation.
+    """
     init_db()
+    new_rank = status_rank(status)
     with _connect() as conn:
+        row = conn.execute(
+            "SELECT status FROM status_history "
+            "WHERE application_id = ? ORDER BY transitioned_at DESC, id DESC LIMIT 1",
+            (application_id,),
+        ).fetchone()
+        if row is not None and status_rank(row[0]) > new_rank:
+            raise ValueError(
+                f"Backward status transition blocked: {row[0]} → {status}. "
+                "Use update_status() to revert cleanly."
+            )
         conn.execute(
             "INSERT INTO status_history (application_id, status) VALUES (?, ?)",
             (application_id, status),
@@ -516,3 +613,91 @@ def find_lesson_by_concept(concept: str, app_id: int | None = None) -> dict | No
         "created_at": row[5],
         "parent_lesson_id": row[6],
     }
+
+
+# ═══════════════════════════════════════════════════════════════
+# Match assessments
+# ═══════════════════════════════════════════════════════════════
+
+def insert_match_assessment(
+    application_id: int,
+    score: int,
+    label: str,
+    confidence: str,
+    base_score: float,
+    assessment_json: str,
+    candidate_hash: str,
+    jd_hash: str,
+    scoring_version: str,
+    prompt_version: str,
+    model_name: str,
+) -> int:
+    """Inserts a match assessment row and returns its id."""
+    init_db()
+    with _connect() as conn:
+        cursor = conn.execute(
+            "INSERT INTO match_assessments "
+            "(application_id, score, label, confidence, base_score, assessment_json, "
+            " candidate_hash, jd_hash, scoring_version, prompt_version, model_name) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (application_id, score, label, confidence, base_score, assessment_json,
+             candidate_hash, jd_hash, scoring_version, prompt_version, model_name),
+        )
+        return cursor.lastrowid
+
+
+def get_latest_match(application_id: int) -> dict | None:
+    """Returns the most recent match assessment for an application, or None."""
+    init_db()
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM match_assessments WHERE application_id = ? "
+            "ORDER BY id DESC LIMIT 1",
+            (application_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_latest_matches(application_ids: list[int]) -> dict[int, dict]:
+    """Batch-loads the latest match assessment per application id."""
+    if not application_ids:
+        return {}
+    init_db()
+    placeholders = ",".join("?" for _ in application_ids)
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            f"SELECT * FROM match_assessments WHERE application_id IN ({placeholders}) "
+            "ORDER BY id DESC",
+            tuple(application_ids),
+        ).fetchall()
+    result: dict[int, dict] = {}
+    for row in rows:
+        r = dict(row)
+        app_id = r["application_id"]
+        if app_id not in result:
+            result[app_id] = r
+    return result
+
+
+def find_cached_match(
+    application_id: int,
+    candidate_hash: str,
+    jd_hash: str,
+    scoring_version: str,
+    prompt_version: str,
+    model_name: str,
+) -> dict | None:
+    """Returns a cached assessment matching all identity fingerprints, or None."""
+    init_db()
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM match_assessments WHERE application_id = ? "
+            "AND candidate_hash = ? AND jd_hash = ? AND scoring_version = ? "
+            "AND prompt_version = ? AND model_name = ? "
+            "ORDER BY id DESC LIMIT 1",
+            (application_id, candidate_hash, jd_hash, scoring_version, prompt_version, model_name),
+        ).fetchone()
+    return dict(row) if row else None
