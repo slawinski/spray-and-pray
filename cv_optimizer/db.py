@@ -43,6 +43,11 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
+def connect() -> sqlite3.Connection:
+    """Public access to a configured connection for multi-step transactions."""
+    return _connect()
+
+
 def init_db() -> None:
     """Creates tables if they don't already exist."""
     with _connect() as conn:
@@ -110,6 +115,158 @@ def init_db() -> None:
 
             CREATE INDEX IF NOT EXISTS idx_match_assessments_app
             ON match_assessments(application_id, id DESC);
+
+            CREATE TABLE IF NOT EXISTS job_postings (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                company             TEXT NOT NULL,
+                role                TEXT NOT NULL,
+                description         TEXT NOT NULL,
+                description_hash    TEXT NOT NULL,
+
+                canonical_url       TEXT,
+
+                location_text       TEXT,
+                work_model          TEXT NOT NULL DEFAULT 'unknown',
+                remote_scope        TEXT NOT NULL DEFAULT 'unknown',
+                seniority           TEXT NOT NULL DEFAULT 'unknown',
+                employment_type     TEXT,
+
+                salary_min          REAL,
+                salary_max          REAL,
+                salary_currency     TEXT,
+                salary_period       TEXT,
+                salary_raw          TEXT,
+
+                posted_at           DATETIME,
+                first_seen_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_seen_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+                active_state        TEXT NOT NULL DEFAULT 'unknown',
+                active_confidence   TEXT NOT NULL DEFAULT 'low',
+
+                prefilter_state     TEXT NOT NULL DEFAULT 'pending',
+                prefilter_reason    TEXT,
+
+                match_state         TEXT NOT NULL DEFAULT 'pending',
+                latest_match_score  INTEGER,
+                latest_match_label  TEXT,
+
+                user_state          TEXT NOT NULL DEFAULT 'pending',
+
+                application_id      INTEGER UNIQUE,
+                imported_at         DATETIME,
+                dismissed_at        DATETIME,
+
+                -- normalized L3 dedupe fingerprint components (indexed)
+                company_norm        TEXT,
+                role_norm           TEXT,
+                location_norm       TEXT,
+
+                -- consecutive poll absences for direct ATS feeds
+                consecutive_absences INTEGER NOT NULL DEFAULT 0,
+
+                FOREIGN KEY(application_id)
+                    REFERENCES applications(id)
+                    ON DELETE SET NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_job_postings_canonical_url
+            ON job_postings(canonical_url);
+
+            CREATE INDEX IF NOT EXISTS idx_job_postings_fingerprint
+            ON job_postings(company_norm, role_norm, location_norm);
+
+            CREATE INDEX IF NOT EXISTS idx_job_postings_application
+            ON job_postings(application_id);
+
+            CREATE TABLE IF NOT EXISTS job_source_refs (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_posting_id  INTEGER NOT NULL,
+
+                source          TEXT NOT NULL,
+                external_id     TEXT NOT NULL,
+
+                source_url      TEXT,
+                apply_url       TEXT,
+
+                raw_json        TEXT,
+
+                first_seen_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_seen_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+                active_state    TEXT NOT NULL DEFAULT 'unknown',
+
+                FOREIGN KEY(job_posting_id)
+                    REFERENCES job_postings(id)
+                    ON DELETE CASCADE,
+
+                UNIQUE(source, external_id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_job_source_refs_job
+            ON job_source_refs(job_posting_id);
+
+            CREATE TABLE IF NOT EXISTS job_match_assessments (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_posting_id      INTEGER NOT NULL,
+
+                score               INTEGER NOT NULL
+                                    CHECK(score >= 0 AND score <= 100),
+
+                label               TEXT NOT NULL,
+                confidence          TEXT NOT NULL,
+                base_score          REAL NOT NULL,
+
+                assessment_json     TEXT NOT NULL,
+
+                candidate_hash      TEXT NOT NULL,
+                jd_hash             TEXT NOT NULL,
+
+                scoring_version     TEXT NOT NULL,
+                prompt_version      TEXT NOT NULL,
+                model_name          TEXT NOT NULL,
+
+                created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+                FOREIGN KEY(job_posting_id)
+                    REFERENCES job_postings(id)
+                    ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_job_match_job
+            ON job_match_assessments(job_posting_id, id DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_job_match_cache
+            ON job_match_assessments(
+                job_posting_id,
+                candidate_hash,
+                jd_hash,
+                scoring_version,
+                prompt_version,
+                model_name
+            );
+
+            CREATE TABLE IF NOT EXISTS discovery_runs (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                started_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                completed_at        DATETIME,
+
+                status              TEXT NOT NULL DEFAULT 'running',
+
+                fetched_count       INTEGER NOT NULL DEFAULT 0,
+                normalized_count    INTEGER NOT NULL DEFAULT 0,
+                new_count           INTEGER NOT NULL DEFAULT 0,
+                updated_count       INTEGER NOT NULL DEFAULT 0,
+                filtered_count      INTEGER NOT NULL DEFAULT 0,
+                scored_count        INTEGER NOT NULL DEFAULT 0,
+                qualified_count     INTEGER NOT NULL DEFAULT 0,
+                imported_count      INTEGER NOT NULL DEFAULT 0,
+
+                source_stats_json   TEXT,
+                errors_json         TEXT
+            );
             """
         )
         try:
@@ -190,12 +347,12 @@ def _migrate_autoincrement() -> None:
                 jd_path    TEXT,
                 cv_path    TEXT,
                 job_url    TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 source     TEXT,
-                cover_letter_path TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                cover_letter_path TEXT
             );
-            INSERT INTO applications_new (id, company, role, jd_path, cv_path, job_url, source, cover_letter_path, created_at)
-                SELECT id, company, role, jd_path, cv_path, job_url, source, cover_letter_path, created_at FROM applications;
+            INSERT INTO applications_new (id, company, role, jd_path, cv_path, job_url, created_at, source, cover_letter_path)
+                SELECT id, company, role, jd_path, cv_path, job_url, created_at, source, cover_letter_path FROM applications;
             DROP TABLE applications;
             ALTER TABLE applications_new RENAME TO applications;
             """
@@ -210,16 +367,23 @@ def insert_application(
     jd_path: str = None,
     cv_path: str = None,
     job_url: str = None,
+    source: str = None,
 ) -> int:
-    """Inserts a new application and returns its id."""
+    """Inserts a new application and returns its id.
+
+    `source` identifies the ingestion channel (e.g. 'direct', 'recruiter',
+    'auto:serpapi'). It participates in duplicate detection and is shown in
+    the TUI, so it MUST be persisted.
+    """
     init_db()
     with _connect() as conn:
         cursor = conn.execute(
-            "INSERT INTO applications (company, role, jd_path, cv_path, job_url) VALUES (?, ?, ?, ?, ?)",
-            (company, role, jd_path, cv_path, job_url),
+            "INSERT INTO applications (company, role, jd_path, cv_path, job_url, source) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (company, role, jd_path, cv_path, job_url, source),
         )
         new_id = cursor.lastrowid
-    logger.info("Inserted application %d — %s @ %s", new_id, role, company)
+    logger.info("Inserted application %d — %s @ %s (source=%s)", new_id, role, company, source)
     return new_id
 
 
@@ -515,6 +679,27 @@ def get_latest_readiness(app_id: int) -> int | None:
     return row[0] if row else None
 
 
+def get_latest_readiness_batch(application_ids: list[int]) -> dict[int, int]:
+    """Batch-loads the latest readiness score per application id (no N+1)."""
+    if not application_ids:
+        return {}
+    init_db()
+    placeholders = ",".join("?" for _ in application_ids)
+    with _connect() as conn:
+        rows = conn.execute(
+            f"SELECT application_id, readiness_score FROM interview_sessions "
+            f"WHERE application_id IN ({placeholders}) "
+            f"AND readiness_score IS NOT NULL "
+            f"ORDER BY created_at DESC, id DESC",
+            tuple(application_ids),
+        ).fetchall()
+    result: dict[int, int] = {}
+    for app_id, score in rows:
+        if app_id not in result:
+            result[app_id] = score
+    return result
+
+
 def create_lesson(
     concept: str,
     content_json: str,
@@ -701,3 +886,461 @@ def find_cached_match(
             (application_id, candidate_hash, jd_hash, scoring_version, prompt_version, model_name),
         ).fetchone()
     return dict(row) if row else None
+
+
+# ═══════════════════════════════════════════════════════════════
+# Discovery persistence — job_postings / job_source_refs /
+# job_match_assessments / discovery_runs
+# ═══════════════════════════════════════════════════════════════
+
+def _job_row_to_dict(row: sqlite3.Row) -> dict:
+    return dict(row)
+
+
+def insert_job_posting(
+    company: str,
+    role: str,
+    description: str,
+    description_hash: str,
+    canonical_url: str | None = None,
+    location_text: str | None = None,
+    work_model: str = "unknown",
+    remote_scope: str = "unknown",
+    seniority: str = "unknown",
+    employment_type: str | None = None,
+    salary_min: float | None = None,
+    salary_max: float | None = None,
+    salary_currency: str | None = None,
+    salary_period: str | None = None,
+    salary_raw: str | None = None,
+    posted_at: str | None = None,
+    active_state: str = "unknown",
+    active_confidence: str = "low",
+    company_norm: str | None = None,
+    role_norm: str | None = None,
+    location_norm: str | None = None,
+) -> int:
+    """Inserts a canonical job posting and returns its id."""
+    init_db()
+    with _connect() as conn:
+        cursor = conn.execute(
+            "INSERT INTO job_postings ("
+            " company, role, description, description_hash, canonical_url,"
+            " location_text, work_model, remote_scope, seniority, employment_type,"
+            " salary_min, salary_max, salary_currency, salary_period, salary_raw,"
+            " posted_at, active_state, active_confidence,"
+            " company_norm, role_norm, location_norm"
+            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (company, role, description, description_hash, canonical_url,
+             location_text, work_model, remote_scope, seniority, employment_type,
+             salary_min, salary_max, salary_currency, salary_period, salary_raw,
+             posted_at, active_state, active_confidence,
+             company_norm, role_norm, location_norm),
+        )
+        return cursor.lastrowid
+
+
+def get_job_posting(job_posting_id: int) -> dict | None:
+    init_db()
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM job_postings WHERE id = ?", (job_posting_id,)
+        ).fetchone()
+    return _job_row_to_dict(row) if row else None
+
+
+def get_job_posting_by_canonical_url(canonical_url: str) -> dict | None:
+    init_db()
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM job_postings WHERE canonical_url = ? "
+            "ORDER BY id DESC LIMIT 1",
+            (canonical_url,),
+        ).fetchone()
+    return _job_row_to_dict(row) if row else None
+
+
+def get_job_posting_by_source_id(source: str, external_id: str) -> dict | None:
+    """Returns the canonical posting owning a (source, external_id) ref."""
+    init_db()
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT p.* FROM job_postings p "
+            "JOIN job_source_refs r ON r.job_posting_id = p.id "
+            "WHERE r.source = ? AND r.external_id = ? "
+            "ORDER BY p.id DESC LIMIT 1",
+            (source, external_id),
+        ).fetchone()
+    return _job_row_to_dict(row) if row else None
+
+
+def find_job_postings_by_fingerprint(
+    company_norm: str, role_norm: str, location_norm: str
+) -> list[dict]:
+    """L3 dedupe candidates: same normalized company/title/location."""
+    init_db()
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT * FROM job_postings WHERE company_norm = ? AND role_norm = ? "
+            "AND location_norm = ?",
+            (company_norm, role_norm, location_norm),
+        ).fetchall()
+    return [_job_row_to_dict(r) for r in rows]
+
+
+def get_job_posting_by_application(application_id: int) -> dict | None:
+    init_db()
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM job_postings WHERE application_id = ? "
+            "ORDER BY id DESC LIMIT 1",
+            (application_id,),
+        ).fetchone()
+    return _job_row_to_dict(row) if row else None
+
+
+def get_job_postings_by_application_ids(application_ids: list[int]) -> dict[int, dict]:
+    """Batch lookup of discovery metadata keyed by application id."""
+    if not application_ids:
+        return {}
+    init_db()
+    placeholders = ",".join("?" for _ in application_ids)
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            f"SELECT * FROM job_postings WHERE application_id IN ({placeholders})",
+            tuple(application_ids),
+        ).fetchall()
+    return {r["application_id"]: _job_row_to_dict(r) for r in rows}
+
+
+def update_job_posting_seen(
+    job_posting_id: int,
+    *,
+    description: str | None = None,
+    description_hash: str | None = None,
+    canonical_url: str | None = None,
+    active_state: str | None = None,
+    active_confidence: str | None = None,
+    consecutive_absences: int | None = None,
+    reset_match: bool = False,
+) -> None:
+    """Updates staleness/activity fields after a posting is seen again."""
+    init_db()
+    fields = ["last_seen_at = CURRENT_TIMESTAMP"]
+    values: list = []
+    if description is not None:
+        fields.append("description = ?")
+        values.append(description)
+    if description_hash is not None:
+        fields.append("description_hash = ?")
+        values.append(description_hash)
+    if canonical_url is not None:
+        fields.append("canonical_url = ?")
+        values.append(canonical_url)
+    if active_state is not None:
+        fields.append("active_state = ?")
+        values.append(active_state)
+    if active_confidence is not None:
+        fields.append("active_confidence = ?")
+        values.append(active_confidence)
+    if consecutive_absences is not None:
+        fields.append("consecutive_absences = ?")
+        values.append(consecutive_absences)
+    if reset_match:
+        fields.append("match_state = 'pending'")
+    values.append(job_posting_id)
+    with _connect() as conn:
+        conn.execute(
+            f"UPDATE job_postings SET {', '.join(fields)} WHERE id = ?",
+            tuple(values),
+        )
+
+
+def get_pending_import_jobs(limit: int = 200) -> list[dict]:
+    """Scored, un-imported, non-dismissed, active postings awaiting import.
+
+    Used by the orchestrator to import previously scored qualifying jobs
+    without re-fetching or re-scoring them.
+    """
+    init_db()
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT * FROM job_postings WHERE match_state = 'scored' "
+            "AND user_state = 'pending' AND application_id IS NULL "
+            "AND active_state != 'inactive' AND prefilter_state != 'fail' "
+            "AND latest_match_score IS NOT NULL "
+            "ORDER BY latest_match_score DESC, last_seen_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [_job_row_to_dict(r) for r in rows]
+
+
+def bump_job_posting_absence(job_posting_id: int) -> int:
+    """Increments the consecutive-absence counter; returns the new value."""
+    init_db()
+    with _connect() as conn:
+        cursor = conn.execute(
+            "UPDATE job_postings SET consecutive_absences = consecutive_absences + 1 "
+            "WHERE id = ?",
+            (job_posting_id,),
+        )
+        row = conn.execute(
+            "SELECT consecutive_absences FROM job_postings WHERE id = ?",
+            (job_posting_id,),
+        ).fetchone()
+    return row[0] if row else 0
+
+
+def set_job_prefilter(job_posting_id: int, state: str, reason: str | None) -> None:
+    init_db()
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE job_postings SET prefilter_state = ?, prefilter_reason = ? "
+            "WHERE id = ?",
+            (state, reason, job_posting_id),
+        )
+
+
+def set_job_match_state(job_posting_id: int, match_state: str) -> None:
+    init_db()
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE job_postings SET match_state = ? WHERE id = ?",
+            (match_state, job_posting_id),
+        )
+
+
+def set_job_latest_match(
+    job_posting_id: int,
+    *,
+    score: int,
+    label: str,
+    match_state: str,
+) -> None:
+    init_db()
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE job_postings SET latest_match_score = ?, latest_match_label = ?, "
+            "match_state = ? WHERE id = ?",
+            (score, label, match_state, job_posting_id),
+        )
+
+
+def set_job_user_state(
+    job_posting_id: int,
+    user_state: str,
+    *,
+    dismissed_at: str | None = None,
+) -> None:
+    init_db()
+    with _connect() as conn:
+        if dismissed_at is None and user_state == "dismissed":
+            conn.execute(
+                "UPDATE job_postings SET user_state = ?, dismissed_at = CURRENT_TIMESTAMP "
+                "WHERE id = ?",
+                (user_state, job_posting_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE job_postings SET user_state = ?, dismissed_at = ? WHERE id = ?",
+                (user_state, dismissed_at, job_posting_id),
+            )
+
+
+def link_job_to_application(
+    job_posting_id: int, application_id: int
+) -> None:
+    """Marks a job posting as imported and linked to an application."""
+    init_db()
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE job_postings SET application_id = ?, user_state = 'imported', "
+            "imported_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (application_id, job_posting_id),
+        )
+
+
+def dismiss_job_for_application(application_id: int) -> None:
+    """Marks any posting linked to an application as dismissed.
+
+    Used when the user deletes an auto-imported Draft: the discovery record
+    survives (application_id becomes NULL via FK) and prevents re-import.
+    """
+    init_db()
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE job_postings SET user_state = 'dismissed', "
+            "dismissed_at = CURRENT_TIMESTAMP WHERE application_id = ?",
+            (application_id,),
+        )
+
+
+def insert_job_source_ref(
+    job_posting_id: int,
+    source: str,
+    external_id: str,
+    *,
+    source_url: str | None = None,
+    apply_url: str | None = None,
+    raw_json: str | None = None,
+    active_state: str = "unknown",
+) -> int:
+    """Upserts a source ref. Returns the ref id."""
+    init_db()
+    with _connect() as conn:
+        cursor = conn.execute(
+            "INSERT INTO job_source_refs "
+            "(job_posting_id, source, external_id, source_url, apply_url, raw_json, active_state) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(source, external_id) DO UPDATE SET "
+            "last_seen_at = CURRENT_TIMESTAMP, source_url = COALESCE(excluded.source_url, job_source_refs.source_url), "
+            "apply_url = COALESCE(excluded.apply_url, job_source_refs.apply_url), "
+            "raw_json = COALESCE(excluded.raw_json, job_source_refs.raw_json), "
+            "active_state = excluded.active_state",
+            (job_posting_id, source, external_id, source_url, apply_url, raw_json, active_state),
+        )
+        row = conn.execute(
+            "SELECT id FROM job_source_refs WHERE source = ? AND external_id = ?",
+            (source, external_id),
+        ).fetchone()
+    return row[0] if row else 0
+
+
+def get_job_source_refs(job_posting_id: int) -> list[dict]:
+    init_db()
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT * FROM job_source_refs WHERE job_posting_id = ? ORDER BY id",
+            (job_posting_id,),
+        ).fetchall()
+    return [_job_row_to_dict(r) for r in rows]
+
+
+def insert_job_match_assessment(
+    job_posting_id: int,
+    score: int,
+    label: str,
+    confidence: str,
+    base_score: float,
+    assessment_json: str,
+    candidate_hash: str,
+    jd_hash: str,
+    scoring_version: str,
+    prompt_version: str,
+    model_name: str,
+) -> int:
+    init_db()
+    with _connect() as conn:
+        cursor = conn.execute(
+            "INSERT INTO job_match_assessments "
+            "(job_posting_id, score, label, confidence, base_score, assessment_json, "
+            " candidate_hash, jd_hash, scoring_version, prompt_version, model_name) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (job_posting_id, score, label, confidence, base_score, assessment_json,
+             candidate_hash, jd_hash, scoring_version, prompt_version, model_name),
+        )
+        return cursor.lastrowid
+
+
+def get_latest_job_match(job_posting_id: int) -> dict | None:
+    init_db()
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM job_match_assessments WHERE job_posting_id = ? "
+            "ORDER BY id DESC LIMIT 1",
+            (job_posting_id,),
+        ).fetchone()
+    return _job_row_to_dict(row) if row else None
+
+
+def find_cached_job_match(
+    job_posting_id: int,
+    candidate_hash: str,
+    jd_hash: str,
+    scoring_version: str,
+    prompt_version: str,
+    model_name: str,
+) -> dict | None:
+    init_db()
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM job_match_assessments WHERE job_posting_id = ? "
+            "AND candidate_hash = ? AND jd_hash = ? AND scoring_version = ? "
+            "AND prompt_version = ? AND model_name = ? "
+            "ORDER BY id DESC LIMIT 1",
+            (job_posting_id, candidate_hash, jd_hash, scoring_version, prompt_version, model_name),
+        ).fetchone()
+    return _job_row_to_dict(row) if row else None
+
+
+def create_discovery_run() -> int:
+    init_db()
+    with _connect() as conn:
+        # The lock prevents concurrent runs, so any row still 'running'
+        # belongs to a crashed process — close it out before starting fresh.
+        conn.execute(
+            "UPDATE discovery_runs SET status = 'failed', "
+            "completed_at = CURRENT_TIMESTAMP WHERE status = 'running'"
+        )
+        cursor = conn.execute(
+            "INSERT INTO discovery_runs (status) VALUES ('running')"
+        )
+        return cursor.lastrowid
+
+
+def update_discovery_run(run_id: int, **counts: int) -> None:
+    init_db()
+    allowed = {
+        "fetched_count", "normalized_count", "new_count", "updated_count",
+        "filtered_count", "scored_count", "qualified_count", "imported_count",
+    }
+    fields = []
+    values: list = []
+    for key, value in counts.items():
+        if key in allowed:
+            fields.append(f"{key} = ?")
+            values.append(value)
+    if not fields:
+        return
+    values.append(run_id)
+    with _connect() as conn:
+        conn.execute(
+            f"UPDATE discovery_runs SET {', '.join(fields)} WHERE id = ?",
+            tuple(values),
+        )
+
+
+def finish_discovery_run(
+    run_id: int,
+    status: str,
+    *,
+    source_stats_json: str | None = None,
+    errors_json: str | None = None,
+) -> None:
+    init_db()
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE discovery_runs SET status = ?, completed_at = CURRENT_TIMESTAMP, "
+            "source_stats_json = ?, errors_json = ? WHERE id = ?",
+            (status, source_stats_json, errors_json, run_id),
+        )
+
+
+def get_discovery_run(run_id: int) -> dict | None:
+    init_db()
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM discovery_runs WHERE id = ?", (run_id,)
+        ).fetchone()
+    return _job_row_to_dict(row) if row else None

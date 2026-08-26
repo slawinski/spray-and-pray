@@ -75,7 +75,7 @@ def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job
         )
 
     # 1. Create DB record
-    app_id = db.insert_application(company, role, job_url=job_url)
+    app_id = db.insert_application(company, role, job_url=job_url, source=source)
     logger.info(f"Created application #{app_id}: {company} — {role}")
 
     # 2. Generate directory
@@ -257,7 +257,12 @@ def generate_cover_letter(app_id: int, master_cv_path: str = None) -> str:
 
 
 def remove_application(app_id: int) -> None:
-    """Deletes an application entirely — database records and filesystem directory."""
+    """Deletes an application entirely — database records and filesystem directory.
+
+    If the application was auto-imported from a discovered job posting, the
+    posting is first marked dismissed so the next discovery run does not
+    immediately re-import the same vacancy.
+    """
     db.init_db()
 
     app = db.get_application(app_id)
@@ -266,13 +271,16 @@ def remove_application(app_id: int) -> None:
 
     _id, company, role, _jd_path, _cv_path, _job_url, _created_at, _source, _cover_letter_path = app
 
-    # 1. Remove filesystem directory
+    # 1. Dismiss any linked discovery posting (survives via ON DELETE SET NULL).
+    db.dismiss_job_for_application(app_id)
+
+    # 2. Remove filesystem directory
     app_dir = _build_app_dir(app_id, company, role)
     if app_dir.exists():
         shutil.rmtree(app_dir)
         logger.info("Removed directory: %s", app_dir)
 
-    # 2. Remove database records (cascades to status_history, interview_sessions, lessons)
+    # 3. Remove database records (cascades to status_history, interview_sessions, lessons)
     db.delete_application(app_id)
 
     logger.info("Application #%d (%s — %s) fully removed", app_id, company, role)

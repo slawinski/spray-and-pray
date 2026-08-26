@@ -1,3 +1,4 @@
+import json
 import logging
 import subprocess
 import sys
@@ -35,6 +36,7 @@ COLUMNS = [
     ("#", 4),
     ("Company", 15),
     ("Role", 28),
+    ("Match", 5),
     ("Status", 14),
     ("Readiness", 5),
     ("Source", 16),
@@ -51,6 +53,22 @@ def _status_rich(status: str) -> str:
     if base == "interview":
         return f"[bold {color}]{status}[/]"
     return f"[{color}]{status}[/]"
+
+
+def _match_rich(score: int | None) -> str:
+    """Compact colored Match cell: 85+ bold green, 70-84 yellow,
+    55-69 orange, <55 dim red, none —."""
+    if score is None:
+        return "[dim]—[/]"
+    if score >= 85:
+        color = "bold green"
+    elif score >= 70:
+        color = "yellow"
+    elif score >= 55:
+        color = "orange3"
+    else:
+        color = "dim red"
+    return f"[{color}]{score:3d}[/]"
 
 
 def _checkmark(path: str | None, regenerating: bool = False) -> str:
@@ -105,6 +123,7 @@ class CvDashboard(App):
         Binding("q", "quit", "Quit"),
         Binding("r", "refresh", "Refresh"),
         Binding("/", "focus_filter", "Filter"),
+        Binding("J", "discover_jobs", "Discover"),
 
         Binding("enter", "toggle_detail", "Detail"),
         Binding("s", "change_status", "Status"),
@@ -132,6 +151,7 @@ class CvDashboard(App):
         self.filtered: list[dict] = []
         self.regenerating_ids: set[int] = set()
         self.generating_cl_ids: set[int] = set()
+        self.discovering: bool = False
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -167,14 +187,22 @@ class CvDashboard(App):
         end = start + self.page_size
         page = self.filtered[start:end]
 
+        # Batch queries — never per-row lookups.
+        page_ids = [app["id"] for app in page]
+        matches = db.get_latest_matches(page_ids)
+        readiness = db.get_latest_readiness_batch(page_ids)
+
         for idx, app in enumerate(page):
             created = app["created_at"][:10] if app["created_at"] else ""
+            match_row = matches.get(app["id"])
+            match_score = match_row["score"] if match_row else None
             table.add_row(
                 str(start + idx + 1),
                 _truncate(app["company"], 15),
                 _truncate(app["role"], 28),
+                _match_rich(match_score),
                 _status_rich(app["latest_status"]),
-                _readiness_compact(db.get_latest_readiness(app["id"])),
+                _readiness_compact(readiness.get(app["id"])),
                 _source_name(app.get("job_url"), app.get("source")),
                 created,
                 _checkmark(app["jd_path"]),
@@ -230,6 +258,53 @@ class CvDashboard(App):
         generate_sankey_html()
         self._notify("[bold green]✓[/] Sankey opened in browser")
 
+    def action_discover_jobs(self) -> None:
+        """Launch discovery in a background worker; the UI stays responsive."""
+        if self.discovering:
+            self._notify("[yellow]Discovery already running…[/]")
+            return
+        self.discovering = True
+        self._status("[bold blue]Discovering jobs…[/]")
+        self.run_worker(
+            self._run_discovery, exclusive=True, thread=True, group="discovery"
+        )
+
+    def _discovery_progress(self, message: str) -> None:
+        self.call_from_thread(self._status, f"[bold blue]⟳[/] {message}")
+
+    @work(exclusive=True, thread=True, group="discovery")
+    def _run_discovery(self) -> None:
+        try:
+            from cv_optimizer.discovery.config import load_config
+            from cv_optimizer.discovery.lock import DiscoveryLock
+            from cv_optimizer.discovery.service import DiscoveryService
+
+            lock = DiscoveryLock()
+            if not lock.acquire():
+                self.call_from_thread(
+                    self._notify, "[yellow]Discovery already in progress.[/]"
+                )
+                return
+            try:
+                config = load_config()
+                service = DiscoveryService(config=config, progress=self._discovery_progress)
+                result = service.run()
+            finally:
+                lock.release()
+
+            if result.imported > 0:
+                self.call_from_thread(
+                    self._notify,
+                    f"[bold green]✓[/] {result.imported} new 85%+ job matches added",
+                )
+            else:
+                self.call_from_thread(self._notify, "No new 85%+ matches.")
+        except Exception as e:
+            self.call_from_thread(self._notify, f"[red]✗[/] Discovery failed: {e}")
+        finally:
+            self.discovering = False
+            self.call_from_thread(self.refresh_apps)
+
     def action_lessons(self) -> None:
         webbrowser.open("http://localhost:8000/learn")
         self._notify("[bold green]✓[/] Lesson library opened in browser")
@@ -257,17 +332,71 @@ class CvDashboard(App):
                 if app["history"]:
                     last_updated = app["history"][-1]["transitioned_at"]
                 history_str = " -> ".join(h["status"] for h in app["history"]) if app["history"] else "none"
+                match_block = self._match_detail(app)
+                discovery_block = self._discovery_detail(app)
                 panel.update(
                     f"Application #{app['id']} — {app['company']} — {app['role']}\n"
-                    f"Status: {app['latest_status']} (last updated: {last_updated})\n"
-                    f"Readiness: {_readiness_bar(db.get_latest_readiness(app['id']))}\n"
-                    f"URL: {app['job_url'] or 'N/A'}\n"
-                    f"JD: {app['jd_path'] or 'N/A'}\n"
-                    f"CV: {app['cv_path'] or 'N/A'}\n"
-                    f"CL: {app.get('cover_letter_path') or 'N/A'}\n"
-                    f"Status History: {history_str}"
+                    + match_block
+                    + f"Status: {app['latest_status']} (last updated: {last_updated})\n"
+                    + f"Readiness: {_readiness_bar(db.get_latest_readiness(app['id']))}\n"
+                    + discovery_block
+                    + f"URL: {app['job_url'] or 'N/A'}\n"
+                    + f"JD: {app['jd_path'] or 'N/A'}\n"
+                    + f"CV: {app['cv_path'] or 'N/A'}\n"
+                    + f"CL: {app.get('cover_letter_path') or 'N/A'}\n"
+                    + f"Status History: {history_str}"
                 )
                 panel.add_class("visible")
+
+    def _match_detail(self, app: dict) -> str:
+        """Match breakdown: score, confidence, strengths, transferable
+        evidence, gaps — framework transfer visibly separated from direct."""
+        match_row = db.get_latest_matches([app["id"]]).get(app["id"])
+        if not match_row:
+            return ""
+        lines = [
+            f"Match: {match_row['score']} {match_row['label']} "
+            f"(confidence {match_row['confidence']})",
+        ]
+        try:
+            assessment = json.loads(match_row["assessment_json"])
+        except (ValueError, TypeError):
+            assessment = {}
+        strengths = []
+        transferable = []
+        gaps = []
+        for req in assessment.get("requirements", []):
+            level = req.get("evidence_level")
+            name = req.get("requirement", "?")
+            if level == "direct":
+                strengths.append(name)
+            elif level in ("framework_transfer", "framework_depth_gap"):
+                evidence = ", ".join(req.get("evidence_values") or []) or "other framework experience"
+                transferable.append(f"{name} → {evidence}")
+            elif level == "none":
+                gaps.append(name)
+        if strengths:
+            lines.append("  Strong: " + "; ".join(strengths[:8]))
+        if transferable:
+            lines.append("  Transferable: " + " | ".join(transferable[:4]))
+        if gaps:
+            lines.append("  Gaps: " + "; ".join(gaps[:8]))
+        return "\n".join(lines) + "\n"
+
+    def _discovery_detail(self, app: dict) -> str:
+        """Discovery metadata for auto-imported applications."""
+        job = db.get_job_posting_by_application(app["id"])
+        if not job:
+            return ""
+        lines = ["Discovery:"]
+        posted = (job.get("posted_at") or "")[:10]
+        discovered = (job.get("first_seen_at") or "")[:10]
+        lines.append(f"  Posted: {posted or '—'}   Discovered: {discovered or '—'}")
+        if job.get("location_text"):
+            lines.append(f"  Location: {job['location_text']} ({job.get('work_model', 'unknown')})")
+        if job.get("salary_raw"):
+            lines.append(f"  Salary: {job['salary_raw']}")
+        return "\n".join(lines) + "\n"
 
     def action_prepare(self) -> None:
         table = self.query_one("#apps-table", DataTable)

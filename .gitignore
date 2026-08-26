@@ -178,5 +178,10 @@ applications.db-shm
 applications/
 master_cv.json
 
+# Discovery runtime data (secrets live in .env, never in job_search.json)
+job_search.json
+.discovery.lock
+.discovery.launchd.log
+
 # Candidate photo (personal data)
 candidate.jpeg

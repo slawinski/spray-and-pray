@@ -259,6 +259,29 @@ cp master_cv.example.json master_cv.json
 | `DISCORD_WEBHOOK_URL` | ❌ | Discord webhook for push notifications |
 | `OLLAMA_BASE_URL` | ❌ | Optional local Ollama endpoint |
 | `OLLAMA_API_KEY` | ❌ | Optional Ollama key |
+| `SERPAPI_API_KEY` | ❌ | SerpApi key for Google Jobs discovery (`./cv-opt discover`) |
+
+### Discovery configuration (`job_search.json`)
+
+Automated job discovery is configured through `job_search.json` (see the
+commented `job_search.example.json`). Secrets stay in `.env` — never put the
+SerpApi key in `job_search.json`.
+
+| Setting | Default | Description |
+|---|---|---|
+| `enabled` | `true` | Master switch for discovery |
+| `minimum_match_score` | `85` | Auto-import threshold (STRONG band) |
+| `max_post_age_days` | `30` | Stale-post cutoff for aggregator results |
+| `max_scores_per_run` | `30` | LLM scoring budget per run |
+| `roles` | 8 role-centric queries | Searched by role, not by framework |
+| `seniority` | mid + senior (+unlevelled) | staff/lead excluded by default |
+| `locations` | Warsaw onsite/hybrid; remote PL/EU/EEA/EMEA/worldwide | Geography eligibility policy |
+| `framework_policy` | `transferable_js` | Mainstream JS frameworks treated as transferable in `match-v2` |
+| `auto_import` | `true` | Create Drafts for jobs scoring >= threshold |
+| `generation.auto_generate_cv` | `false` | CVs/cover letters are NOT auto-generated for discovered jobs |
+| `sources.*` | all enabled | Per-source enablement; ATS boards/sites lists |
+
+Malformed configuration fails loudly with a readable error.
 
 ### `cv_optimizer/config.py` settings
 
@@ -300,8 +323,77 @@ cp master_cv.example.json master_cv.json
 | `n` / `p` | Next / previous page |
 | `T` | Set source (e.g. "Referral") |
 | `u` | Open job posting URL |
+| `J` | Run automated job discovery (background worker) |
 | `D` | Delete application |
 | `escape` | Dismiss modal / detail panel |
+
+The application table shows a **Match** column (from `match-v2`): `85–100`
+bold green, `70–84` yellow, `55–69` orange, `<55` dim red. Auto-discovered
+applications show their `auto:<provider>` source. The detail panel splits
+evidence into **Strong** (direct), **Transferable** (framework transfer —
+e.g. "Svelte → React, Vue.js") and **Gaps**, plus discovery metadata
+(posted/discovered dates, location, salary).
+
+### 1b. Automated job discovery
+
+```bash
+./cv-opt discover              # fetch → dedupe → filter → score → import >=85
+./cv-opt discover --preview    # no LLM calls, no imports (debug search config)
+./cv-opt discover --no-import  # score + persist, no Draft creation
+./cv-opt discover --source serpapi --max-scores 10
+./cv-opt discover --rescore    # ignore the score cache
+```
+
+Discovery runs without FastAPI or the TUI — it talks to SQLite, the match
+engine, and the source adapters directly. Runs are serialized with a
+`.discovery.lock` file; a concurrent run prints `Discovery already in
+progress.` and exits.
+
+**Pipeline order (cost-optimized):** fetch → normalize → dedupe (source ID →
+canonical URL → company/title/location + JD similarity) → cheap prefilter
+(interns/juniors/backend-only/foreign-geography/short JDs) → prioritized
+score queue (newest, highest-confidence first, capped at
+`max_scores_per_run`) → `match-v2` → qualification → transactional Draft
+import. Dedupe and filtering happen **before** any LLM call; unchanged
+JD/candidate/scoring identities reuse cached assessments.
+
+**Why Drafts, not `applied`?** A discovered job is not an application until
+the user decides to pursue it. Qualifying jobs (`>= 85`, active, not
+dismissed) become `draft` applications containing the JD and the copied
+Match Assessment — but never a generated CV or cover letter, and never a
+fake `applied` status. Document generation stays a deliberate, per-job user
+action in the TUI (`ctrl+r`, `ctrl+g`).
+
+**Sources**
+
+| Source | Mechanism | Notes |
+|---|---|---|
+| `serpapi` | Google Jobs via SerpApi (`SERPAPI_API_KEY`) | Broad market source; role-centric queries, bounded pagination, 429-aware |
+| `lever` | `api.lever.co/v0/postings/{site}?mode=json` | Configure `sources.lever.sites` |
+| `ashby` | `api.ashbyhq.com/posting-api/job-board/{board}` | Compensation included; configure `sources.ashby.boards` |
+| `greenhouse` | `boards-api.greenhouse.io/v1/boards/{board}/jobs` | Public boards; configure `sources.greenhouse.boards` |
+
+One failing source never stops a run; rate-limited sources stop for that
+run only.
+
+**Dismissal & lifecycle.** Deleting an auto-imported Draft marks its
+discovery record `dismissed`, so the next run does not re-import it.
+Direct ATS postings missing from two consecutive polls become `inactive`
+and are never auto-imported. Jobs below the threshold stay in
+`job_postings` with their score, ready for reconsideration.
+
+**Notifications.** One batched macOS + Discord summary fires only when new
+Drafts were actually imported — never a "0 new jobs" message. Discord
+failures never fail discovery.
+
+**Scheduling (macOS).**
+
+```bash
+scripts/install_discovery_launchd.sh    # daily at 08:00 (no hardcoded paths)
+scripts/uninstall_discovery_launchd.sh
+```
+
+The launch agent runs `<repo>/.venv/bin/python <repo>/cv_optimizer.py discover`.
 
 ### 2. Browser extension
 
@@ -425,20 +517,55 @@ Optional. Feeds the interview generator with company-specific process details, k
 | `status_history` | Ordered status transitions per application |
 | `interview_sessions` | Mock interview questions, answers, scores, readiness |
 | `lessons` | Generated lessons with content JSON, linked to sessions/apps |
+| `job_postings` | Canonical discovered vacancies — separate from `applications` by design |
+| `job_source_refs` | Per-source identities (`UNIQUE(source, external_id)`), enabling one posting ↔ many sources |
+| `job_match_assessments` | Versioned `match-v2` scores per posting, with cache identity (candidate/JD/version/model) |
+| `discovery_runs` | Run-level observability: counts, per-source stats, errors |
+
+### Match Score v2 — framework transferability
+
+The Match Score (docs/specs/MATCHING_SCORE_SPEC.md) gained a `match-v2`
+scoring version with a new evidence taxonomy:
+
+| Level | Value | Meaning |
+|---|---|---|
+| `direct` | 1.00 | Exact skill evidenced in the Master CV |
+| `framework_transfer` | 0.92 | Named mainstream JS framework absent, but other mainstream JS framework production experience exists and the JD does not demand framework-specific depth |
+| `strong_transfer` | 0.75 | Closely transferable non-framework evidence |
+| `framework_depth_gap` | 0.60 | Exact framework depth is central to the role (e.g. "6+ years Angular") |
+| `partial` | 0.40 | Some relevant evidence |
+| `unknown` | 0.50 | Non-skill facts the CV cannot establish |
+| `none` | 0.00 | No evidence — hard-gap caps still apply |
+
+The framework family (React, Next.js, Preact, Vue, Nuxt, Angular, Svelte,
+SvelteKit, Solid, SolidStart, Ember, Qwik, Lit + aliases) is validated in
+Python: the LLM proposes a level, but only genuine JS-frontend-framework
+names may receive `framework_transfer`/`framework_depth_gap`, and the
+profile must evidence at least one *other* framework. React does not
+"transfer" to Django or Kubernetes. Framework transfer never triggers the
+missing-core hard caps (`<=69` / `<=54`); a genuinely absent independent
+must-have still does. Historical `match-v1` rows remain stored and versioned.
 
 ---
 
 ## Testing
 
-The test suite uses plain Python (no framework), matching the project's lightweight style.
-
 ```bash
-python3 tests/test_cover_letter.py   # Cover letter parser, PDF HTML escaping, URL validation, DB, prompt
-python3 tests/test_sankey.py         # Sankey cleaning/dedup/aggregation logic
-python3 tests/test_integration.py    # DB + tracker + sankey smoke test
+python3 -m pytest tests/ -q
 ```
 
-All tests are assert-based with a manual runner; expect `✓ All N tests passed`.
+Key suites:
+
+- `tests/test_framework_transferability.py` — `match-v2` evidence taxonomy, framework-family validation, hard-cap interactions (no LLM calls)
+- `tests/test_discovery_filters.py` — deterministic prefilter (geography/role/seniority/JD length)
+- `tests/test_discovery_dedupe*.py` — URL normalization, fingerprints, cross-source merge, false-split protection
+- `tests/test_discovery_sources.py` — fixture JSON → `DiscoveredJob` normalization for all four providers
+- `tests/test_discovery_importer.py` — transactional Draft import, threshold, dismissal lifecycle
+- `tests/test_discovery_integration.py` — end-to-end runs with a fake source and mocked LLM (cache, budget, isolation, modes)
+- `tests/test_source_persistence.py` — `source` persistence + migration-from-existing-DB regressions
+
+All provider network calls are mocked or fixture-backed; live integration
+tests are intentionally opt-in.
 
 ---
 

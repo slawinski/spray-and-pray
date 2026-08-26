@@ -1,0 +1,23 @@
+{
+  "jobs": [
+    {
+      "id": 424242,
+      "internal_job_id": 1001,
+      "title": "Product Engineer",
+      "location": {"name": "Remote — EMEA"},
+      "absolute_url": "https://boards.greenhouse.io/exampleai/jobs/424242",
+      "updated_at": "2026-08-24T09:00:00-04:00",
+      "metadata": [{"id": 4001, "name": "Engineering", "value": "Product"}]
+    },
+    {
+      "id": 424243,
+      "internal_job_id": 1002,
+      "title": "Senior Web Engineer",
+      "location": {"name": "Warsaw, Poland"},
+      "absolute_url": "https://boards.greenhouse.io/exampleai/jobs/424243",
+      "updated_at": "2026-08-22T09:00:00-04:00",
+      "metadata": []
+    }
+  ],
+  "meta": {"total": 2}
+}

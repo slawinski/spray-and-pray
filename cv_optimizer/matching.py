@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field, ValidationError
 from cv_optimizer.config import settings
 from cv_optimizer import db
 from cv_optimizer.extractor import PDFExtractor
+from cv_optimizer.framework_transfer import validate_framework_transfer
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,15 @@ Category = Literal[
 
 Priority = Literal["must", "should", "nice"]
 
-EvidenceLevel = Literal["direct", "strong_transfer", "partial", "none", "unknown"]
+EvidenceLevel = Literal[
+    "direct",
+    "framework_transfer",
+    "strong_transfer",
+    "framework_depth_gap",
+    "partial",
+    "none",
+    "unknown",
+]
 
 
 class MatchRequirement(BaseModel):
@@ -107,9 +116,11 @@ PRIORITY_WEIGHTS: dict[str, float] = {
 
 EVIDENCE_VALUES: dict[str, float] = {
     "direct": 1.00,
+    "framework_transfer": 0.92,
     "strong_transfer": 0.75,
-    "partial": 0.40,
+    "framework_depth_gap": 0.60,
     "unknown": 0.50,
+    "partial": 0.40,
     "none": 0.00,
 }
 
@@ -128,7 +139,13 @@ SCORE_BANDS: list[tuple[int, str]] = [
 # Core categories that must be extractable for an engineering role (spec 18).
 _CORE_CATEGORIES = {"role_scope", "technical", "experience_delivery"}
 
-_POSITIVE_EVIDENCE = ("direct", "strong_transfer", "partial")
+_POSITIVE_EVIDENCE = (
+    "direct",
+    "framework_transfer",
+    "strong_transfer",
+    "framework_depth_gap",
+    "partial",
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -216,6 +233,10 @@ def validate_evidence(
     """Validates evidence pointers, dedupes them, and downgrades unsupported
     positive classifications to 'none'.
 
+    Also validates framework-transfer classifications in Python: the named
+    requirement must belong to the mainstream JS frontend framework family
+    and the profile must evidence at least one other member of that family.
+
     Returns (analysis, warnings, evidence_values_by_req_id).
     """
     warnings: list[str] = []
@@ -224,6 +245,17 @@ def validate_evidence(
     for req in analysis.requirements:
         values: list[str] = []
         valid_paths: list[str] = []
+
+        # Python-side framework-transfer validation (match-v2).
+        if req.evidence_level in ("framework_transfer", "framework_depth_gap"):
+            effective, warning = validate_framework_transfer(
+                req.requirement, req.evidence_level, profile
+            )
+            if warning is not None:
+                warnings.append(f"Requirement {req.id}: {warning}")
+                req.evidence_level = effective
+                req.evidence_paths = []
+                req.rationale = f"{req.rationale} [downgraded to none: {warning}]"
 
         if req.evidence_level in _POSITIVE_EVIDENCE:
             for pointer in req.evidence_paths:
@@ -450,7 +482,81 @@ def _read_jd_text(jd_path: str) -> str:
 
 
 class MatchService:
-    """Orchestrates fingerprinting, caching, analysis, scoring, persistence."""
+    """Orchestrates fingerprinting, caching, analysis, scoring, persistence.
+
+    One canonical matching engine lives here: :meth:`assess_text` scores raw
+    JD text before any application exists. The application-bound and
+    job-posting-bound wrappers only add caching + persistence and MUST NOT
+    duplicate the scoring logic.
+    """
+
+    def _load_profile(self, master_cv_path: str | None) -> tuple[dict, dict, str]:
+        cv_path = master_cv_path or settings.master_cv_path
+        with open(cv_path, "r", encoding="utf-8") as f:
+            master_cv = json.load(f)
+        profile = build_match_profile(master_cv)
+        candidate_hash = profile_hash(profile)
+        return master_cv, profile, candidate_hash
+
+    def assess_text(
+        self,
+        jd_text: str,
+        *,
+        master_cv_path: str | None = None,
+    ) -> dict:
+        """Scores raw JD text against the Master CV. No persistence.
+
+        Owns: Master CV loading, profile projection, candidate hash, JD
+        normalization/hash, requirement extraction, evidence validation,
+        deterministic scoring, and version/model/prompt identity.
+        """
+        if len(normalize_jd_for_hash(jd_text)) < MIN_JD_CHARS:
+            raise ValueError("Job description is too short to score reliably.")
+
+        _master_cv, profile, candidate_hash = self._load_profile(master_cv_path)
+        jd_hash_value = jd_hash(jd_text)
+
+        analysis = MatchAnalyzer().analyze(jd_text, profile)
+        logger.info("Match analysis: %d requirements extracted", len(analysis.requirements))
+
+        if not analysis.requirements:
+            raise ValueError("No requirements extracted; cannot score.")
+
+        analysis, warnings, evidence_values = validate_evidence(analysis, profile)
+
+        result = MatchScorer.calculate(analysis)
+
+        assessment = {
+            "role_family": analysis.role_family,
+            "target_seniority": analysis.target_seniority,
+            "requirements": [
+                {
+                    **req.model_dump(),
+                    "priority_weight": PRIORITY_WEIGHTS[req.priority],
+                    "evidence_value": EVIDENCE_VALUES[req.evidence_level],
+                    "evidence_values": evidence_values.get(req.id, []),
+                }
+                for req in analysis.requirements
+            ],
+            "eligibility": [e.model_dump() for e in analysis.eligibility],
+            "category_breakdown": result["category_breakdown"],
+            "missing_core_requirements": result["missing_core_requirements"],
+            "unknown_requirements": result["unknown_requirements"],
+            "validation_warnings": warnings,
+        }
+
+        return {
+            "score": result["score"],
+            "label": result["label"],
+            "confidence": result["confidence"],
+            "base_score": result["base_score"],
+            "candidate_hash": candidate_hash,
+            "jd_hash": jd_hash_value,
+            "scoring_version": settings.match_scoring_version,
+            "prompt_version": settings.match_prompt_version,
+            "model_name": settings.model_name,
+            "assessment": assessment,
+        }
 
     def score_application(
         self,
@@ -472,12 +578,7 @@ class MatchService:
         if len(normalize_jd_for_hash(jd_text)) < MIN_JD_CHARS:
             raise ValueError("Job description is too short to score reliably.")
 
-        cv_path = master_cv_path or settings.master_cv_path
-        with open(cv_path, "r", encoding="utf-8") as f:
-            master_cv = json.load(f)
-
-        profile = build_match_profile(master_cv)
-        candidate_hash = profile_hash(profile)
+        _master_cv, _profile, candidate_hash = self._load_profile(master_cv_path)
         jd_hash_value = jd_hash(jd_text)
 
         if not force:
@@ -511,34 +612,7 @@ class MatchService:
 
         logger.info("Scoring match for application #%s", app_id)
 
-        analysis = MatchAnalyzer().analyze(jd_text, profile)
-        logger.info("Match analysis: %d requirements extracted", len(analysis.requirements))
-
-        if not analysis.requirements:
-            raise ValueError("No requirements extracted; cannot score.")
-
-        analysis, warnings, evidence_values = validate_evidence(analysis, profile)
-
-        result = MatchScorer.calculate(analysis)
-
-        assessment = {
-            "role_family": analysis.role_family,
-            "target_seniority": analysis.target_seniority,
-            "requirements": [
-                {
-                    **req.model_dump(),
-                    "priority_weight": PRIORITY_WEIGHTS[req.priority],
-                    "evidence_value": EVIDENCE_VALUES[req.evidence_level],
-                    "evidence_values": evidence_values.get(req.id, []),
-                }
-                for req in analysis.requirements
-            ],
-            "eligibility": [e.model_dump() for e in analysis.eligibility],
-            "category_breakdown": result["category_breakdown"],
-            "missing_core_requirements": result["missing_core_requirements"],
-            "unknown_requirements": result["unknown_requirements"],
-            "validation_warnings": warnings,
-        }
+        result = self.assess_text(jd_text, master_cv_path=master_cv_path)
 
         assessment_id = db.insert_match_assessment(
             application_id=app_id,
@@ -546,31 +620,115 @@ class MatchService:
             label=result["label"],
             confidence=result["confidence"],
             base_score=result["base_score"],
-            assessment_json=json.dumps(assessment, ensure_ascii=False),
-            candidate_hash=candidate_hash,
-            jd_hash=jd_hash_value,
-            scoring_version=settings.match_scoring_version,
-            prompt_version=settings.match_prompt_version,
-            model_name=settings.model_name,
+            assessment_json=json.dumps(result["assessment"], ensure_ascii=False),
+            candidate_hash=result["candidate_hash"],
+            jd_hash=result["jd_hash"],
+            scoring_version=result["scoring_version"],
+            prompt_version=result["prompt_version"],
+            model_name=result["model_name"],
         )
 
         logger.info(
             "Match score #%s: %s %s (confidence=%s, version=%s)",
             app_id, result["score"], result["label"], result["confidence"],
-            settings.match_scoring_version,
+            result["scoring_version"],
         )
 
         return {
             "assessment_id": assessment_id,
-            "score": result["score"],
-            "label": result["label"],
-            "confidence": result["confidence"],
-            "base_score": result["base_score"],
             "cached": False,
-            "candidate_hash": candidate_hash,
-            "jd_hash": jd_hash_value,
-            "scoring_version": settings.match_scoring_version,
-            "prompt_version": settings.match_prompt_version,
-            "model_name": settings.model_name,
-            "assessment": assessment,
+            **result,
+        }
+
+    def score_job_posting(
+        self,
+        job_posting_id: int,
+        *,
+        force: bool = False,
+        master_cv_path: str | None = None,
+    ) -> dict:
+        """Scores a discovered job posting before any application exists.
+
+        Persists the assessment into ``job_match_assessments`` and updates
+        the posting's latest score / match_state. Reuses cached assessments
+        when candidate hash, JD hash, and scoring identity all match.
+        """
+        job = db.get_job_posting(job_posting_id)
+        if job is None:
+            raise ValueError(f"Job posting #{job_posting_id} not found")
+
+        jd_text = job["description"]
+        if len(normalize_jd_for_hash(jd_text)) < MIN_JD_CHARS:
+            raise ValueError("Job description is too short to score reliably.")
+
+        _master_cv, _profile, candidate_hash = self._load_profile(master_cv_path)
+        jd_hash_value = jd_hash(jd_text)
+
+        if not force:
+            cached = db.find_cached_job_match(
+                job_posting_id,
+                candidate_hash,
+                jd_hash_value,
+                settings.match_scoring_version,
+                settings.match_prompt_version,
+                settings.model_name,
+            )
+            if cached:
+                logger.info(
+                    "Using cached job match assessment #%s for job posting #%s",
+                    cached["id"], job_posting_id,
+                )
+                return {
+                    "assessment_id": cached["id"],
+                    "score": cached["score"],
+                    "label": cached["label"],
+                    "confidence": cached["confidence"],
+                    "base_score": cached["base_score"],
+                    "cached": True,
+                    "candidate_hash": cached["candidate_hash"],
+                    "jd_hash": cached["jd_hash"],
+                    "scoring_version": cached["scoring_version"],
+                    "prompt_version": cached["prompt_version"],
+                    "model_name": cached["model_name"],
+                    "assessment": json.loads(cached["assessment_json"]),
+                }
+
+        db.set_job_match_state(job_posting_id, "scoring")
+        try:
+            result = self.assess_text(jd_text, master_cv_path=master_cv_path)
+        except Exception:
+            db.set_job_match_state(job_posting_id, "error")
+            raise
+
+        assessment_id = db.insert_job_match_assessment(
+            job_posting_id=job_posting_id,
+            score=result["score"],
+            label=result["label"],
+            confidence=result["confidence"],
+            base_score=result["base_score"],
+            assessment_json=json.dumps(result["assessment"], ensure_ascii=False),
+            candidate_hash=result["candidate_hash"],
+            jd_hash=result["jd_hash"],
+            scoring_version=result["scoring_version"],
+            prompt_version=result["prompt_version"],
+            model_name=result["model_name"],
+        )
+
+        db.set_job_latest_match(
+            job_posting_id,
+            score=result["score"],
+            label=result["label"],
+            match_state="scored",
+        )
+
+        logger.info(
+            "Job match score for posting #%s: %s %s (confidence=%s, version=%s)",
+            job_posting_id, result["score"], result["label"], result["confidence"],
+            result["scoring_version"],
+        )
+
+        return {
+            "assessment_id": assessment_id,
+            "cached": False,
+            **result,
         }

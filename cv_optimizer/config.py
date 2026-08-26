@@ -19,10 +19,13 @@ class Settings(BaseModel):
     output_pdf_path: str = Field(default="optimized_cv.pdf")
 
     # Candidate <-> Job matching score
+    # match-v2 introduces framework-transfer evidence levels for mainstream
+    # JavaScript frontend frameworks (see docs/specs for Milestone 3 v2).
+    # Historical match-v1 assessments remain stored and versioned.
     match_temperature: float = Field(default=0.0)
     match_max_tokens: int = Field(default=4096)
-    match_scoring_version: str = Field(default="match-v1")
-    match_prompt_version: str = Field(default="match-prompt-v1")
+    match_scoring_version: str = Field(default="match-v2")
+    match_prompt_version: str = Field(default="match-prompt-v2")
 
     discord_webhook_url: str | None = Field(default=os.getenv("DISCORD_WEBHOOK_URL"))
 

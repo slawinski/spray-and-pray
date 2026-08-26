@@ -1,0 +1,70 @@
+{
+  "search_metadata": {"id": "fixture-serpapi-1"},
+  "search_parameters": {
+    "engine": "google_jobs",
+    "q": "frontend engineer",
+    "location": "Warsaw, Poland",
+    "hl": "en"
+  },
+  "jobs_results": [
+    {
+      "title": "Senior Frontend Engineer",
+      "company_name": "Dash0",
+      "location": "Warsaw, Poland",
+      "via": "Dash0",
+      "job_id": "serp-dash0-sfe",
+      "share_link": "https://www.google.com/search?ibp=serp-dash0-sfe",
+      "apply_link": "https://careers.dash0.com/jobs/senior-frontend-engineer?utm_source=google_jobs&gh_src=abc",
+      "detected_extensions": {
+        "posted_at": "3 days ago",
+        "schedule_type": "Full-time"
+      },
+      "description": "Dash0 is looking for a Senior Frontend Engineer in Warsaw. You will build complex data visualization interfaces for our observability platform using React, TypeScript, and modern CSS. Strong product collaboration, accessibility, and design systems experience required. Hybrid work model with an office in Warsaw. 5+ years of frontend engineering experience."
+    },
+    {
+      "title": "Junior React Developer",
+      "company_name": "Example Startups",
+      "location": "Warsaw, Poland",
+      "via": "Example Startups",
+      "job_id": "serp-example-junior",
+      "share_link": "https://www.google.com/search?ibp=serp-example-junior",
+      "apply_link": "https://jobs.example.com/junior-react-developer",
+      "detected_extensions": {
+        "posted_at": "1 day ago",
+        "schedule_type": "Full-time"
+      },
+      "description": "We are looking for a Junior React Developer to join our Warsaw team. You will learn from senior engineers and work on our web application. Basic JavaScript knowledge required."
+    },
+    {
+      "title": "Python Backend Engineer",
+      "company_name": "DataCorp",
+      "location": "Warsaw, Poland",
+      "via": "DataCorp",
+      "job_id": "serp-datacorp-backend",
+      "share_link": "https://www.google.com/search?ibp=serp-datacorp-backend",
+      "apply_link": "https://datacorp.io/careers/python-backend-engineer",
+      "detected_extensions": {
+        "posted_at": "5 days ago",
+        "schedule_type": "Full-time"
+      },
+      "description": "DataCorp is hiring a Python Backend Engineer to build data pipelines and internal APIs. You will work with Python, FastAPI, PostgreSQL, and Kubernetes. Experience with distributed systems required."
+    },
+    {
+      "title": "Frontend Engineer",
+      "company_name": "RemoteCo",
+      "location": "Remote — Europe",
+      "via": "RemoteCo",
+      "job_id": "serp-remoteco-fe",
+      "share_link": "https://www.google.com/search?ibp=serp-remoteco-fe",
+      "apply_link": "https://remoteco.example/careers/frontend-engineer",
+      "detected_extensions": {
+        "posted_at": "1 day ago",
+        "schedule_type": "Full-time"
+      },
+      "description": "RemoteCo is a fully remote company hiring a Frontend Engineer anywhere in Europe. You will work on our Vue.js design system and component library, collaborating closely with designers. TypeScript, testing, and accessibility are core to the role. Salary range 90000-110000 EUR per year."
+    }
+  ],
+  "serpapi_pagination": {
+    "next_page_token": null
+  }
+}

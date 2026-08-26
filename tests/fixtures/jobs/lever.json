@@ -1,0 +1,30 @@
+[
+  {
+    "id": "a3f2c1d0-9e6f-4b5a-9c1d-2e3f4a5b6c7d",
+    "text": "Senior Product Engineer",
+    "descriptionPlain": "We are looking for a Senior Product Engineer to join our team in Warsaw (hybrid). You will own features end-to-end across our React and TypeScript stack, work closely with product and design, and ship high-quality user interfaces. 5+ years of experience building web applications, strong accessibility and performance mindset.",
+    "categories": {
+      "team": "Engineering",
+      "location": "Warsaw, Poland",
+      "commitment": "Full-time"
+    },
+    "workplaceType": "Hybrid",
+    "hostedUrl": "https://jobs.lever.co/acmecorp/a3f2c1d0-9e6f-4b5a-9c1d-2e3f4a5b6c7d",
+    "applyUrl": "https://jobs.lever.co/acmecorp/a3f2c1d0-9e6f-4b5a-9c1d-2e3f4a5b6c7d/apply",
+    "createdAt": 1755072000000
+  },
+  {
+    "id": "b4e3d2e1-1f6a-4c6b-9d2e-3f4a5b6c7d8e",
+    "text": "Angular Developer",
+    "descriptionPlain": "We use Angular for our customer portal. You will work on Angular components and services, collaborate with the design team, and improve the performance of our application. Remote within Poland. Knowledge of RxJS is a plus.",
+    "categories": {
+      "team": "Engineering",
+      "location": "Poland",
+      "commitment": "Full-time"
+    },
+    "workplaceType": "Remote",
+    "hostedUrl": "https://jobs.lever.co/acmecorp/b4e3d2e1-1f6a-4c6b-9d2e-3f4a5b6c7d8e",
+    "applyUrl": "https://jobs.lever.co/acmecorp/b4e3d2e1-1f6a-4c6b-9d2e-3f4a5b6c7d8e/apply",
+    "createdAt": 1755331200000
+  }
+]

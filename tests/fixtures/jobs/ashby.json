@@ -1,0 +1,44 @@
+{
+  "jobs": [
+    {
+      "id": "ashby-001",
+      "title": "Senior Svelte Engineer",
+      "department": "Engineering",
+      "location": "Europe",
+      "secondaryLocations": [
+        {"location": "Warsaw, Poland", "isRemote": false},
+        {"location": "Remote", "isRemote": true}
+      ],
+      "isRemote": false,
+      "workplaceType": "Remote",
+      "publishedAt": "2026-08-21T10:00:00.000Z",
+      "employmentType": "Full-time",
+      "address": {
+        "postalAddress": {"addressCountry": "PL"}
+      },
+      "descriptionPlain": "We are building a next-generation analytics UI with Svelte and SvelteKit. As a Senior Svelte Engineer you will lead the frontend architecture, mentor other engineers, and work closely with the product team. Deep knowledge of Svelte runes and reactivity internals is essential. Remote across Europe.",
+      "compensation": {
+        "compensationTierSummary": "€80k–€110k / year"
+      },
+      "jobUrl": "https://jobs.ashbyhq.com/exampleco/ashby-001",
+      "applyUrl": "https://jobs.ashbyhq.com/exampleco/ashby-001/application"
+    },
+    {
+      "id": "ashby-002",
+      "title": "Frontend Engineer (React)",
+      "department": "Engineering",
+      "location": "Warsaw, Poland",
+      "secondaryLocations": [],
+      "isRemote": false,
+      "workplaceType": "Hybrid",
+      "publishedAt": "2026-08-23T08:30:00.000Z",
+      "employmentType": "Full-time",
+      "descriptionPlain": "Join our Warsaw team building a React and TypeScript design system used by thousands of developers. You will work on accessibility, performance, and developer experience. Hybrid model, 2 days per week in the Warsaw office. 4+ years of frontend experience with React required.",
+      "compensation": {
+        "compensationTierSummary": "PLN 240000 / year"
+      },
+      "jobUrl": "https://jobs.ashbyhq.com/exampleco/ashby-002",
+      "applyUrl": "https://jobs.ashbyhq.com/exampleco/ashby-002/application"
+    }
+  ]
+}

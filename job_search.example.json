@@ -1,0 +1,82 @@
+{
+  "enabled": true,
+  "minimum_match_score": 85,
+  "max_post_age_days": 30,
+  "max_scores_per_run": 30,
+  "max_fetch_per_run": 500,
+
+  "roles": [
+    "frontend engineer",
+    "frontend developer",
+    "product engineer",
+    "software engineer frontend",
+    "full stack engineer javascript",
+    "full stack engineer typescript",
+    "web engineer",
+    "ui engineer"
+  ],
+
+  "seniority": {
+    "include": ["mid", "senior"],
+    "include_unleveled": true,
+    "include_staff": false,
+    "include_lead": false
+  },
+
+  "locations": {
+    "warsaw": {
+      "onsite": true,
+      "hybrid": true
+    },
+    "remote": {
+      "poland": true,
+      "europe": true,
+      "eu": false,
+      "eea": false,
+      "emea": true,
+      "worldwide": true
+    }
+  },
+
+  "framework_policy": "transferable_js",
+
+  "priorities": {
+    "javascript_typescript": "high",
+    "product_engineering": "high",
+    "design_systems": "high",
+    "accessibility": "high",
+    "data_visualization": "high",
+    "realtime_interfaces": "high",
+    "ux_collaboration": "high",
+    "nodejs": "medium",
+    "ai_products": "medium",
+    "mentoring": "medium"
+  },
+
+  "auto_import": true,
+
+  "generation": {
+    "auto_generate_cv": false,
+    "auto_generate_cover_letter": false,
+    "auto_generate_cv_min_score": null
+  },
+
+  "sources": {
+    "serpapi": {
+      "enabled": true,
+      "max_pages_per_query": 2
+    },
+    "greenhouse": {
+      "enabled": true,
+      "boards": []
+    },
+    "lever": {
+      "enabled": true,
+      "sites": []
+    },
+    "ashby": {
+      "enabled": true,
+      "boards": []
+    }
+  }
+}
