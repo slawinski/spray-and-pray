@@ -592,6 +592,17 @@ def set_source(application_id: int, source: str | None) -> None:
     logger.info("Set source for app %d to %s", application_id, source)
 
 
+def set_application_job_url(application_id: int, job_url: str | None) -> None:
+    """Sets or clears the job posting URL for an application."""
+    init_db()
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE applications SET job_url = ? WHERE id = ?",
+            (job_url, application_id),
+        )
+    logger.info("Set job_url for app %d to %s", application_id, job_url)
+
+
 def create_interview_session(application_id: int, questions: list[dict]) -> int:
     init_db()
     with _connect() as conn:

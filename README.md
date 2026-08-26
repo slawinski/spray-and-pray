@@ -324,6 +324,8 @@ Malformed configuration fails loudly with a readable error.
 | `T` | Set source (e.g. "Referral") |
 | `u` | Open job posting URL |
 | `J` | Run automated job discovery (background worker) |
+| `m` | Generate Match Score for the selected application |
+| `M` | Backfill Match Scores for all applications missing one |
 | `D` | Delete application |
 | `escape` | Dismiss modal / detail panel |
 
@@ -343,6 +345,23 @@ e.g. "Svelte → React, Vue.js") and **Gaps**, plus discovery metadata
 ./cv-opt discover --source serpapi --max-scores 10
 ./cv-opt discover --rescore    # ignore the score cache
 ```
+
+### 1c. Match-score backfill
+
+Applications tracked before the Match Score feature (or whose scoring
+failed) show `—` in the Match column. Backfill them from the TUI (`M` for
+all missing, `m` for the selected row) or from the CLI:
+
+```bash
+./cv-opt score              # score every application missing a Match Score
+./cv-opt score --force      # re-score every application that has a JD
+./cv-opt score 3 12         # score specific application ids
+./cv-opt score --json       # machine-readable summary
+```
+
+Applications without a stored JD are skipped and reported, one failing
+application never stops the batch, and existing cached assessments are
+reused (no duplicate LLM calls) unless `--force` is given.
 
 Discovery runs without FastAPI or the TUI — it talks to SQLite, the match
 engine, and the source adapters directly. Runs are serialized with a

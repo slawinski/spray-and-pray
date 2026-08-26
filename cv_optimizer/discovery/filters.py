@@ -60,6 +60,32 @@ _US_ONLY_PATTERN = re.compile(
     r"\b(us|usa|u\.s\.|united states)\s+only\b", re.IGNORECASE
 )
 
+# "Remote US", "US (Remote)", "(Remote US)", "Remote - India", "US only remote",
+# etc. — aggregator titles often carry the real geography while location_text
+# says "Anywhere". Adjacency to "remote" is required to avoid matching prose
+# like "work with US clients".
+_REMOTE_COUNTRY_TOKENS = (
+    r"us|usa|u\.s\.|united states|uk|canada|germany|india|australia"
+    r"|brazil|japan|singapore|france|spain|italy|netherlands|sweden"
+    r"|norway|denmark|finland|austria|switzerland|ireland|portugal"
+    r"|czech|israel|ukraine|romania"
+)
+_REMOTE_COUNTRY_TITLE_RE = re.compile(
+    rf"\bremote\b[\s\-\(\):]*\b(?:{_REMOTE_COUNTRY_TOKENS})\b"
+    rf"|\b(?:{_REMOTE_COUNTRY_TOKENS})\b[\s\-\(\):]*\bremote\b",
+    re.IGNORECASE,
+)
+
+# A parenthetical that scopes the role to the US AND mentions remote —
+# "(US-Based / Remote / Part-Time)", "(Remote: US)". This does NOT match
+# "Remote worldwide (US-based startup)" because there the two words sit in
+# different parentheticals / prose.
+_PAREN_US_REMOTE_RE = re.compile(
+    r"\([^()]*\b(?:us|usa|u\.s\.|united states)\b[^()]*\bremote\b[^()]*\)"
+    r"|\([^()]*\bremote\b[^()]*\b(?:us|usa|u\.s\.|united states)\b[^()]*\)",
+    re.IGNORECASE,
+)
+
 # ── Role family ──────────────────────────────────────────────────────────────
 
 _ROLE_FAIL_PHRASES = (
@@ -260,6 +286,19 @@ def _check_geography(
     text = _norm(job.location_text)
     work_model = job.work_model
     scope = job.remote_scope
+
+    # Country-restricted remote signals in the TITLE ("Remote US", "US
+    # (Remote)", "Remote - India") — aggregators often leave location_text
+    # as "Anywhere" while the title carries the real geography.
+    combined = f"{text} {_norm(job.role)}"
+    if _REMOTE_COUNTRY_TITLE_RE.search(combined):
+        return PrefilterResult(
+            state="fail", reason="geography:country-restricted-remote"
+        )
+    if _US_ONLY_PATTERN.search(combined):
+        return PrefilterResult(state="fail", reason="geography:us-only")
+    if _PAREN_US_REMOTE_RE.search(combined):
+        return PrefilterResult(state="fail", reason="geography:us-remote")
 
     # Explicit residency constraints contradict Warsaw/Poland → fail.
     for pattern in _RESIDENCY_PATTERNS:

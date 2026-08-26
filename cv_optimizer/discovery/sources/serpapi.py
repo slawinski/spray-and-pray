@@ -23,6 +23,21 @@ logger = logging.getLogger(__name__)
 ENDPOINT = "https://serpapi.com/search"
 DEFAULT_MAX_PAGES = 2
 
+# Hosts that are aggregator/redirect links, never the real job page.
+_TRACKING_HOSTS = {
+    "google.com", "www.google.com", "google.co.uk", "www.google.co.uk",
+    "serpapi.com", "www.serpapi.com",
+}
+
+
+def _is_tracking_url(url: str) -> bool:
+    from urllib.parse import urlsplit
+
+    try:
+        return (urlsplit(url).hostname or "").lower() in _TRACKING_HOSTS
+    except ValueError:
+        return False
+
 
 class SerpApiSource(HttpJobSource):
     """Fetches Google Jobs results through SerpApi.
@@ -110,9 +125,9 @@ class SerpApiSource(HttpJobSource):
         extensions = raw.get("detected_extensions") or {}
         posted_at = parse_posted_at(extensions.get("posted_at"))
 
-        apply_url = raw.get("apply_link") or None
         share_link = raw.get("share_link") or None
-        canonical_url = default_canonical_url(canonical=apply_url, apply=share_link)
+        best_url = self._best_job_url(raw)
+        canonical_url = default_canonical_url(canonical=best_url, apply=share_link)
 
         workplace_type = extensions.get("schedule_type")
         work_model = classify_work_model(location, workplace_type=workplace_type)
@@ -132,7 +147,7 @@ class SerpApiSource(HttpJobSource):
             role=title,
             description=description,
             source_url=share_link,
-            apply_url=apply_url,
+            apply_url=best_url,
             canonical_url=canonical_url,
             location_text=location or None,
             work_model=work_model,
@@ -149,6 +164,34 @@ class SerpApiSource(HttpJobSource):
             active_confidence="medium",
             raw_payload=raw_payload,
         )
+
+    @staticmethod
+    def _best_job_url(raw: dict) -> str | None:
+        """The most useful real-world URL for a result.
+
+        Google Jobs responses bury the actual job page in apply_options /
+        source_link while apply_link/share_link are frequently google.com
+        redirect URLs. Prefer the first real URL; fall back to redirects
+        only when nothing real exists (they at least carry the job identity).
+        """
+        candidates: list[str] = []
+        for value in (raw.get("apply_link"),):
+            if value and not _is_tracking_url(str(value)):
+                candidates.append(str(value))
+        for option in raw.get("apply_options") or []:
+            link = option.get("link") if isinstance(option, dict) else None
+            if link and not _is_tracking_url(str(link)):
+                candidates.append(str(link))
+        for value in (raw.get("source_link"),):
+            if value and not _is_tracking_url(str(value)):
+                candidates.append(str(value))
+        if candidates:
+            return candidates[0]
+        # Redirect fallbacks: apply_link first, then the google share link.
+        for value in (raw.get("apply_link"), raw.get("share_link")):
+            if value:
+                return str(value)
+        return None
 
     @staticmethod
     def _extract_description(raw: dict) -> str:

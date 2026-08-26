@@ -142,6 +142,113 @@ def test_us_remote_only_fails(config):
     assert _prefilter(job, config) == "fail"
 
 
+def test_remote_us_in_title_fails_even_with_anywhere_location(config):
+    """Real aggregator case: title carries 'Remote US' while location_text
+    is 'Anywhere' (which alone would classify as worldwide remote)."""
+    job = make_job(
+        role="Frontend Developer $40 - $60/hr ( Remote US )",
+        location_text="Anywhere",
+        work_model="remote",
+        remote_scope="worldwide",
+    )
+    assert _prefilter(job, config) == "fail"
+
+
+@pytest.mark.parametrize(
+    "role",
+    [
+        "Staff Frontend Engineer - US (Remote)",
+        "Frontend Engineer (Remote - US)",
+        "Frontend Engineer US Remote",
+        "Frontend Engineer (Remote: US)",
+    ],
+)
+def test_us_remote_title_variants_fail(config, role):
+    job = make_job(
+        role=role,
+        seniority="unknown",
+        location_text="Anywhere",
+        work_model="remote",
+        remote_scope="worldwide",
+    )
+    assert _prefilter(job, config) == "fail", role
+
+
+def test_remote_other_country_in_title_fails(config):
+    job = make_job(
+        role="Frontend Engineer (Remote - India)",
+        seniority="unknown",
+        location_text="Anywhere",
+        work_model="remote",
+        remote_scope="worldwide",
+    )
+    assert _prefilter(job, config) == "fail"
+
+
+def test_usa_only_remote_title_fails(config):
+    job = make_job(
+        role="Frontend Engineer - React (USA only - 100% Remote)",
+        seniority="unknown",
+        location_text="Anywhere",
+        work_model="remote",
+        remote_scope="worldwide",
+    )
+    assert _prefilter(job, config) == "fail"
+
+
+def test_parenthesized_us_remote_title_fails(config):
+    job = make_job(
+        role="Frontend Engineer (US-Based / Remote / Part-Time)",
+        seniority="unknown",
+        location_text="Anywhere",
+        work_model="remote",
+        remote_scope="worldwide",
+    )
+    assert _prefilter(job, config) == "fail"
+
+
+def test_us_based_company_worldwide_remote_not_falsely_filtered(config):
+    """'US-based startup, remote worldwide' is NOT US-restricted."""
+    job = make_job(
+        role="Frontend Engineer (Remote worldwide) at US-based startup",
+        seniority="unknown",
+        location_text="Anywhere",
+        work_model="remote",
+        remote_scope="worldwide",
+    )
+    assert _prefilter(job, config) != "fail"
+
+
+def test_works_with_us_clients_not_falsely_filtered(config):
+    job = make_job(
+        role="Frontend Engineer — Remote",
+        seniority="unknown",
+        location_text="Remote",
+        work_model="remote",
+        remote_scope="unknown",
+    )
+    assert _prefilter(job, config) != "fail"
+
+
+def test_remote_europe_title_still_passes(config):
+    job = make_job(
+        role="Frontend Engineer (Remote - Europe)",
+        location_text="Anywhere",
+        work_model="remote",
+        remote_scope="europe",
+    )
+    assert _prefilter(job, config) == "pass"
+
+
+def test_warsaw_title_still_passes(config):
+    job = make_job(
+        role="Senior Frontend Engineer",
+        location_text="Warsaw, Poland",
+        work_model="hybrid",
+    )
+    assert _prefilter(job, config) == "pass"
+
+
 def test_remote_canada_fails(config):
     job = make_job(
         role="Frontend Engineer",

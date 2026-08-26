@@ -44,11 +44,47 @@ def test_serpapi_remote_europe_scope():
     assert remote.remote_scope == "europe"
 
 
-def test_serpapi_requires_api_key():
+def test_serpapi_requires_api_key(monkeypatch):
+    monkeypatch.delenv("SERPAPI_API_KEY", raising=False)
     source = SerpApiSource(api_key="")
     with pytest.raises(Exception) as exc:
         source.fetch(__import__("cv_optimizer.discovery.models", fromlist=["DiscoveryQuery"]).DiscoveryQuery(q="x"))
     assert "SERPAPI_API_KEY" in str(exc.value)
+
+
+def test_serpapi_prefers_real_apply_url_over_google_redirect():
+    raw = {
+        "apply_link": "https://google.com/search?ibp=htl;jobs",
+        "share_link": "https://www.google.com/search?ibp=htl;jobs",
+        "apply_options": [{"link": "https://remotezest.up.railway.app/job/xyz?utm_source=google_jobs_apply"}],
+    }
+    assert SerpApiSource._best_job_url(raw) == "https://remotezest.up.railway.app/job/xyz?utm_source=google_jobs_apply"
+
+
+def test_serpapi_uses_source_link_when_no_apply_options():
+    raw = {
+        "apply_link": "https://google.com/search?ibp=htl;jobs",
+        "share_link": "https://www.google.com/search?ibp=htl;jobs",
+        "source_link": "https://www.monster.com/job-openings/frontend-abc",
+    }
+    assert SerpApiSource._best_job_url(raw) == "https://www.monster.com/job-openings/frontend-abc"
+
+
+def test_serpapi_falls_back_to_redirect_when_nothing_real():
+    raw = {
+        "apply_link": None,
+        "share_link": "https://www.google.com/search?ibp=htl;jobs",
+    }
+    assert SerpApiSource._best_job_url(raw) == "https://www.google.com/search?ibp=htl;jobs"
+
+
+def test_serpapi_google_redirect_apply_link_ignored_when_real_option_exists():
+    raw = {
+        "apply_link": "https://google.com/search?ibp=htl;jobs",
+        "apply_options": [{"link": "https://www.google.com/search?x=1"}, {"link": "https://jobs.example.com/real"}],
+        "source_link": None,
+    }
+    assert SerpApiSource._best_job_url(raw) == "https://jobs.example.com/real"
 
 
 # ── Lever ────────────────────────────────────────────────────────────────────

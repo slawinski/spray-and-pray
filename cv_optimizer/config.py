@@ -23,7 +23,7 @@ class Settings(BaseModel):
     # JavaScript frontend frameworks (see docs/specs for Milestone 3 v2).
     # Historical match-v1 assessments remain stored and versioned.
     match_temperature: float = Field(default=0.0)
-    match_max_tokens: int = Field(default=4096)
+    match_max_tokens: int = Field(default=8192)
     match_scoring_version: str = Field(default="match-v2")
     match_prompt_version: str = Field(default="match-prompt-v2")
 

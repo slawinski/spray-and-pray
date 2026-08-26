@@ -138,6 +138,8 @@ class CvDashboard(App):
         Binding("T", "set_source", "Source"),
         Binding("u", "open_url", "URL"),
         Binding("D", "delete_application", "Delete"),
+        Binding("m", "score_match", "Score Match"),
+        Binding("M", "score_all_missing", "Score All"),
         Binding("escape", "dismiss", "Dismiss"),
     ]
 
@@ -227,12 +229,24 @@ class CvDashboard(App):
     def _notify(self, message: str) -> None:
         self.query_one("#status-bar", Static).update(f"[yellow]{message}[/]")
 
-    def action_delete_application(self) -> None:
+    def _selected_app(self) -> dict | None:
+        """The application under the table cursor, accounting for the
+        current page. The table only renders `page_size` rows per page, so
+        cursor_row must be offset by the page start."""
         table = self.query_one("#apps-table", DataTable)
         row = table.cursor_row
-        if row is None or row >= len(self.filtered):
+        if row is None:
+            return None
+        start = self.current_page * self.page_size
+        index = start + row
+        if index >= len(self.filtered):
+            return None
+        return self.filtered[index]
+
+    def action_delete_application(self) -> None:
+        app = self._selected_app()
+        if app is None:
             return
-        app = self.filtered[row]
 
         def on_confirm(result: bool | None) -> None:
             if not result:
@@ -251,6 +265,69 @@ class CvDashboard(App):
             ),
             on_confirm,
         )
+
+    def action_score_match(self) -> None:
+        """Generate/refresh the Match Score for the selected application."""
+        app = self._selected_app()
+        if app is None:
+            return
+        if not app["jd_path"] or not Path(app["jd_path"]).exists():
+            self._notify(f"No JD file found for application #{app['id']}")
+            return
+        self.run_worker(
+            self._score_one,
+            app["id"], app["company"], app["role"],
+            exclusive=True, thread=True, group="scoring",
+        )
+
+    def action_score_all_missing(self) -> None:
+        """Backfill Match Scores for all applications missing one."""
+        self._notify("[bold blue]⟳[/] Scoring applications missing a Match…")
+        self.run_worker(
+            self._score_all, exclusive=True, thread=True, group="scoring"
+        )
+
+    @work(exclusive=True, thread=True, group="scoring")
+    def _score_one(self, app_id: int, company: str, role: str) -> None:
+        from cv_optimizer.matching import MatchService
+
+        try:
+            outcome = MatchService().score_application(app_id)
+            self.call_from_thread(
+                self._notify,
+                f"[bold green]✓[/] {company} — {role}: "
+                f"{outcome['score']} {outcome['label']}"
+                + (" (cached)" if outcome["cached"] else ""),
+            )
+        except Exception as e:
+            self.call_from_thread(self._notify, f"[red]✗[/] Match scoring failed: {e}")
+        finally:
+            self.call_from_thread(self.refresh_apps)
+
+    @work(exclusive=True, thread=True, group="scoring")
+    def _score_all(self) -> None:
+        from cv_optimizer.matching import MatchService
+
+        def progress(message: str) -> None:
+            self.call_from_thread(self._status, f"[bold blue]⟳[/] {message}")
+
+        try:
+            result = MatchService().score_missing_applications(progress=progress)
+            if result["scored"]:
+                note = f"[bold green]✓[/] Scored {result['scored']} application(s)"
+                if result["skipped_no_jd"]:
+                    note += f" · {result['skipped_no_jd']} skipped (no JD)"
+                if result["errors"]:
+                    note += f" · {len(result['errors'])} failed"
+                self.call_from_thread(self._notify, note)
+            else:
+                self.call_from_thread(
+                    self._notify, "No applications missing a Match Score."
+                )
+        except Exception as e:
+            self.call_from_thread(self._notify, f"[red]✗[/] Match scoring failed: {e}")
+        finally:
+            self.call_from_thread(self.refresh_apps)
 
     def action_sankey(self) -> None:
         from cv_optimizer.sankey import generate_sankey_html
@@ -317,36 +394,33 @@ class CvDashboard(App):
         self.query_one("#filter-input", Input).focus()
 
     def action_toggle_detail(self) -> None:
-        table = self.query_one("#apps-table", DataTable)
-        row = table.cursor_row
-        if row is None:
+        app = self._selected_app()
+        if app is None:
             return
-        if row < len(self.filtered):
-            app = self.filtered[row]
-            panel = self.query_one("#detail-panel", Static)
-            if panel.has_class("visible"):
-                panel.remove_class("visible")
-                panel.update("")
-            else:
-                last_updated = ""
-                if app["history"]:
-                    last_updated = app["history"][-1]["transitioned_at"]
-                history_str = " -> ".join(h["status"] for h in app["history"]) if app["history"] else "none"
-                match_block = self._match_detail(app)
-                discovery_block = self._discovery_detail(app)
-                panel.update(
-                    f"Application #{app['id']} — {app['company']} — {app['role']}\n"
-                    + match_block
-                    + f"Status: {app['latest_status']} (last updated: {last_updated})\n"
-                    + f"Readiness: {_readiness_bar(db.get_latest_readiness(app['id']))}\n"
-                    + discovery_block
-                    + f"URL: {app['job_url'] or 'N/A'}\n"
-                    + f"JD: {app['jd_path'] or 'N/A'}\n"
-                    + f"CV: {app['cv_path'] or 'N/A'}\n"
-                    + f"CL: {app.get('cover_letter_path') or 'N/A'}\n"
-                    + f"Status History: {history_str}"
-                )
-                panel.add_class("visible")
+        panel = self.query_one("#detail-panel", Static)
+        if panel.has_class("visible"):
+            panel.remove_class("visible")
+            panel.update("")
+        else:
+            last_updated = ""
+            if app["history"]:
+                last_updated = app["history"][-1]["transitioned_at"]
+            history_str = " -> ".join(h["status"] for h in app["history"]) if app["history"] else "none"
+            match_block = self._match_detail(app)
+            discovery_block = self._discovery_detail(app)
+            panel.update(
+                f"Application #{app['id']} — {app['company']} — {app['role']}\n"
+                + match_block
+                + f"Status: {app['latest_status']} (last updated: {last_updated})\n"
+                + f"Readiness: {_readiness_bar(db.get_latest_readiness(app['id']))}\n"
+                + discovery_block
+                + f"URL: {app['job_url'] or 'N/A'}\n"
+                + f"JD: {app['jd_path'] or 'N/A'}\n"
+                + f"CV: {app['cv_path'] or 'N/A'}\n"
+                + f"CL: {app.get('cover_letter_path') or 'N/A'}\n"
+                + f"Status History: {history_str}"
+            )
+            panel.add_class("visible")
 
     def _match_detail(self, app: dict) -> str:
         """Match breakdown: score, confidence, strengths, transferable
@@ -399,11 +473,9 @@ class CvDashboard(App):
         return "\n".join(lines) + "\n"
 
     def action_prepare(self) -> None:
-        table = self.query_one("#apps-table", DataTable)
-        row = table.cursor_row
-        if row is None or row >= len(self.filtered):
+        app = self._selected_app()
+        if app is None:
             return
-        app = self.filtered[row]
 
         if not app["jd_path"] or not Path(app["jd_path"]).exists():
             self._notify(f"No JD file found for application #{app['id']}")
@@ -418,11 +490,9 @@ class CvDashboard(App):
         self._notify("[bold green]✓[/] Loading screen opened in browser")
 
     def action_set_source(self) -> None:
-        table = self.query_one("#apps-table", DataTable)
-        row = table.cursor_row
-        if row is None or row >= len(self.filtered):
+        app = self._selected_app()
+        if app is None:
             return
-        app = self.filtered[row]
 
         def on_source(result: str | None) -> None:
             if result == app.get("source"):
@@ -438,11 +508,9 @@ class CvDashboard(App):
         )
 
     def action_change_status(self) -> None:
-        table = self.query_one("#apps-table", DataTable)
-        row = table.cursor_row
-        if row is None or row >= len(self.filtered):
+        app = self._selected_app()
+        if app is None:
             return
-        app = self.filtered[row]
 
         def on_status(result: str | None) -> None:
             if result is None:
@@ -459,11 +527,9 @@ class CvDashboard(App):
         self.push_screen(StatusModal(app["id"], app["latest_status"]), on_status)
 
     def action_open_folder(self) -> None:
-        table = self.query_one("#apps-table", DataTable)
-        row = table.cursor_row
-        if row is None or row >= len(self.filtered):
+        app = self._selected_app()
+        if app is None:
             return
-        app = self.filtered[row]
 
         target = app["cv_path"]
         if target and Path(target).exists():
@@ -476,11 +542,9 @@ class CvDashboard(App):
                 self._notify(f"CV path not found at {target}")
 
     def action_open_url(self) -> None:
-        table = self.query_one("#apps-table", DataTable)
-        row = table.cursor_row
-        if row is None or row >= len(self.filtered):
+        app = self._selected_app()
+        if app is None:
             return
-        app = self.filtered[row]
         url = app.get("job_url")
         if url:
             webbrowser.open(url)
@@ -489,11 +553,9 @@ class CvDashboard(App):
             self._notify("No job URL available for this application")
 
     def action_regenerate_cv(self) -> None:
-        table = self.query_one("#apps-table", DataTable)
-        row = table.cursor_row
-        if row is None or row >= len(self.filtered):
+        app = self._selected_app()
+        if app is None:
             return
-        app = self.filtered[row]
 
         from cv_optimizer.tui.screens.modals import ConfirmModal
 
@@ -510,11 +572,9 @@ class CvDashboard(App):
         )
 
     def action_generate_cl(self) -> None:
-        table = self.query_one("#apps-table", DataTable)
-        row = table.cursor_row
-        if row is None or row >= len(self.filtered):
+        app = self._selected_app()
+        if app is None:
             return
-        app = self.filtered[row]
 
         if not app["jd_path"] or not Path(app["jd_path"]).exists():
             self._notify(f"No JD file found for application #{app['id']}")

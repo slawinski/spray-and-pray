@@ -174,4 +174,4 @@ Return exactly one JSON object matching this schema, and nothing else:
 }
 ```
 
-Use lowercase values exactly as specified for category, priority, and evidence_level.
+Use lowercase values exactly as specified for category, priority, and evidence_level. Evidence pointers: at most 3 per requirement and at most 2 per eligibility signal.

@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from openai import OpenAI
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from cv_optimizer.config import settings
 from cv_optimizer import db
@@ -71,6 +71,15 @@ class MatchRequirement(BaseModel):
     evidence_paths: list[str] = Field(default_factory=list, max_length=3)
     rationale: str
 
+    @field_validator("evidence_paths", mode="before")
+    @classmethod
+    def _truncate_paths(cls, value):
+        """The LLM occasionally returns 4+ pointers; keep the first 3
+        instead of rejecting the whole assessment."""
+        if isinstance(value, list) and len(value) > 3:
+            return value[:3]
+        return value
+
 
 class EligibilitySignal(BaseModel):
     kind: Literal[
@@ -78,11 +87,19 @@ class EligibilitySignal(BaseModel):
         "work_authorization",
         "security_clearance",
         "language",
+        "location_work_model",  # tolerated: LLMs confuse this category with a kind
         "other",
     ]
     requirement: str
     state: Literal["satisfied", "contradicted", "unknown"]
     evidence_paths: list[str] = Field(default_factory=list, max_length=2)
+
+    @field_validator("evidence_paths", mode="before")
+    @classmethod
+    def _truncate_paths(cls, value):
+        if isinstance(value, list) and len(value) > 2:
+            return value[:2]
+        return value
 
 
 class RawMatchAnalysis(BaseModel):
@@ -423,7 +440,10 @@ def _parse_json_response(text: str) -> Any:
     except json.JSONDecodeError:
         match = re.search(r"\{.*\}", cleaned, re.DOTALL)
         if match:
-            return json.loads(match.group(0))
+            try:
+                return json.loads(match.group(0))
+            except json.JSONDecodeError:
+                pass
         raise ValueError(f"Could not parse JSON from LLM response: {cleaned[:200]}")
 
 
@@ -438,6 +458,21 @@ class MatchAnalyzer:
             max_retries=2,
         )
 
+    def _create_completion(self, request: dict):
+        """Sends the analysis request. Disables thinking-mode reasoning
+        where the provider supports it (reasoning models waste their output
+        budget on hidden tokens and can return empty content for long JDs),
+        with a fallback for providers that reject the unknown field."""
+        try:
+            return self.client.chat.completions.create(
+                **request,
+                extra_body={"thinking": {"type": "disabled"}},
+            )
+        except Exception as exc:
+            if "thinking" not in str(exc):
+                raise
+            return self.client.chat.completions.create(**request)
+
     def analyze(self, jd_text: str, profile: dict) -> RawMatchAnalysis:
         user_content = (
             "JOB DESCRIPTION (untrusted data):\n" + jd_text + "\n\n"
@@ -446,17 +481,36 @@ class MatchAnalyzer:
         )
 
         logger.info("Running match analysis against LLM...")
-        response = self.client.chat.completions.create(
-            model=settings.model_name,
-            messages=[
+        request = {
+            "model": settings.model_name,
+            "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_content},
             ],
-            temperature=settings.match_temperature,
-            max_tokens=settings.match_max_tokens,
-        )
+            "temperature": settings.match_temperature,
+            "max_tokens": settings.match_max_tokens,
+        }
+
+        response = self._create_completion(request)
+        if response.choices[0].finish_reason == "length":
+            # The model hit the output token limit mid-JSON. Retry once with
+            # a doubled budget before giving up.
+            logger.warning(
+                "Match analysis truncated (finish_reason=length); retrying with %d tokens",
+                request["max_tokens"] * 2,
+            )
+            retry_request = {**request, "max_tokens": request["max_tokens"] * 2}
+            response = self._create_completion(retry_request)
 
         raw = response.choices[0].message.content or ""
+        if not raw.strip():
+            raise ValueError(
+                "LLM returned empty content "
+                f"(finish_reason={response.choices[0].finish_reason}). "
+                "The model likely exhausted its output budget on reasoning "
+                "tokens; check match_max_tokens / thinking settings."
+            )
+
         data = _parse_json_response(raw)
 
         if not isinstance(data, dict):
@@ -732,3 +786,131 @@ class MatchService:
             "cached": False,
             **result,
         }
+
+    def score_missing_applications(        self,
+        *,
+        force: bool = False,
+        progress=None,
+    ) -> dict:
+        """Backfills match scores for applications that have none.
+
+        With ``force=True`` every application with a JD is re-scored.
+        Applications without a stored JD are skipped (reported, not errors).
+        One failing application never stops the batch.
+
+        Returns ``{"scored": int, "skipped_no_jd": int, "errors": [...]}``.
+        """
+        progress = progress or (lambda message: None)
+        apps = db.list_applications_with_status()
+        existing = db.get_latest_matches([a["id"] for a in apps])
+        targets = [a for a in apps if force or a["id"] not in existing]
+
+        result: dict = {"scored": 0, "skipped_no_jd": 0, "errors": []}
+        total = len(targets)
+        for index, app in enumerate(targets, start=1):
+            jd_path = app.get("jd_path")
+            if not jd_path or not Path(jd_path).exists():
+                result["skipped_no_jd"] += 1
+                logger.info(
+                    "Skipping application #%s (no JD file): %s — %s",
+                    app["id"], app["company"], app["role"],
+                )
+                continue
+            progress(
+                f"Scoring {index}/{total}: {app['company']} — {app['role'][:44]}"
+            )
+            try:
+                outcome = self.score_application(app["id"], force=force)
+                result["scored"] += 1
+                logger.info(
+                    "Backfilled match for application #%s: %s %s",
+                    app["id"], outcome["score"], outcome["label"],
+                )
+            except Exception as exc:  # noqa: BLE001 — per-app isolation
+                message = f"#{app['id']} {app['company']} — {app['role'][:40]}: {exc}"
+                result["errors"].append(message)
+                logger.warning("Match scoring failed for application #%s: %s", app["id"], exc)
+        return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Standalone CLI: `./cv-opt score`
+# ─────────────────────────────────────────────────────────────────────────────
+
+def run_score_cli(argv: list[str] | None = None) -> int:
+    """Backfills match scores from the command line.
+
+    `cv-opt score`            → score applications missing a match score
+    `cv-opt score --force`    → re-score every application that has a JD
+    `cv-opt score 3 12`       → score specific application ids
+    """
+    import argparse
+    import sys as _sys
+
+    parser = argparse.ArgumentParser(
+        prog="cv-opt score",
+        description="Generate Match Scores for tracked applications.",
+    )
+    parser.add_argument(
+        "app_ids", nargs="*", type=int, metavar="APP_ID",
+        help="Specific application ids to score (default: all missing).",
+    )
+    parser.add_argument(
+        "--force", action="store_true",
+        help="Re-score even when a cached assessment exists.",
+    )
+    parser.add_argument(
+        "--json", action="store_true",
+        help="Print the result summary as JSON.",
+    )
+    args = parser.parse_args(argv)
+
+    import logging as _logging
+
+    _logging.basicConfig(
+        level=_logging.INFO, format="%(levelname)s %(name)s: %(message)s", stream=_sys.stdout
+    )
+
+    service = MatchService()
+    if args.app_ids:
+        result: dict = {"scored": 0, "skipped_no_jd": 0, "errors": []}
+        total = len(args.app_ids)
+        for index, app_id in enumerate(args.app_ids, start=1):
+            app = db.get_application(app_id)
+            if app is None:
+                result["errors"].append(f"application #{app_id}: not found")
+                continue
+            _id, company, role, jd_path, *_rest = app
+            if not jd_path or not Path(jd_path).exists():
+                result["skipped_no_jd"] += 1
+                print(f"[skip] #{app_id} {company} — {role} (no JD file)")
+                continue
+            print(f"Scoring {index}/{total}: #{app_id} {company} — {role}")
+            try:
+                outcome = service.score_application(app_id, force=args.force)
+                result["scored"] += 1
+                print(
+                    f"  → {outcome['score']} {outcome['label']} "
+                    f"(confidence={outcome['confidence']}"
+                    + (", cached)" if outcome["cached"] else ")")
+                )
+            except Exception as exc:  # noqa: BLE001
+                message = f"#{app_id} {company} — {role}: {exc}"
+                result["errors"].append(message)
+                print(f"  ✗ {exc}")
+    else:
+        result = service.score_missing_applications(force=args.force, progress=print)
+
+    if args.json:
+        import json as _json
+
+        print(_json.dumps(result, ensure_ascii=False))
+        return 1 if result["errors"] else 0
+
+    print()
+    print(f"scored:        {result['scored']}")
+    print(f"skipped (no JD): {result['skipped_no_jd']}")
+    print(f"errors:        {len(result['errors'])}")
+    for error in result["errors"][:10]:
+        print(f"  - {error}")
+    return 1 if result["errors"] else 0

@@ -236,24 +236,39 @@ class DiscoveryService:
             budget = max_scores if max_scores is not None else self.config.max_scores_per_run
             candidates = self._prioritize(touched_ids, force_rescore=force_rescore)
 
-            processed: list[tuple[dict, dict]] = []
-            llm_budget_used = 0
+            # Candidate hash is constant for the whole run — load it once
+            # instead of per job.
+            candidate_hash = None
+            try:
+                from cv_optimizer.matching import MatchService
+
+                candidate_hash = MatchService()._load_profile(None)[2]
+            except Exception:  # noqa: BLE001 — unreadable CV: every cache check misses
+                pass
+
+            # Select the jobs to process this run, honoring the LLM budget.
+            # Cache hits are free; cache misses (new CV/version/model) count.
+            scoring_phase: list[dict] = []
+            budget_left = budget
             for job_row in candidates:
                 needs_llm = job_row["match_state"] in ("pending", "error") or force_rescore
-                if not needs_llm:
-                    # Cache-ready row: only free when the cache identity still
-                    # matches. A cache miss (new CV/version/model) MUST count
-                    # against the budget.
-                    if not self._has_cached_match(job_row):
-                        if llm_budget_used >= budget:
-                            db.set_job_match_state(job_row["id"], "pending")
-                            continue
-                        needs_llm = True
+                if not needs_llm and not self._has_cached_match(job_row, candidate_hash):
+                    if budget_left <= 0:
+                        db.set_job_match_state(job_row["id"], "pending")
+                        continue
+                    needs_llm = True
                 if needs_llm:
-                    if llm_budget_used >= budget:
+                    if budget_left <= 0:
                         continue  # remains pending for the next run
-                    llm_budget_used += 1
-                self.progress(f"Scoring {len(processed) + 1}/{budget}…")
+                    budget_left -= 1
+                scoring_phase.append(job_row)
+
+            processed: list[tuple[dict, dict]] = []
+            total = len(scoring_phase)
+            for index, job_row in enumerate(scoring_phase, start=1):
+                self.progress(
+                    f"Scoring {index}/{total}: {job_row['company']} — {job_row['role'][:48]}"
+                )
                 try:
                     score_result = MatchService().score_job_posting(
                         job_row["id"], force=force_rescore
@@ -518,19 +533,13 @@ class DiscoveryService:
         rows.sort(key=sort_key, reverse=True)
         return rows
 
-    def _has_cached_match(self, job_row: dict) -> bool:
+    def _has_cached_match(self, job_row: dict, candidate_hash: str | None) -> bool:
         """True when the posting's scoring identity matches an existing
         cached assessment (free to reuse, no LLM call needed)."""
-        from cv_optimizer.matching import (
-            MatchService,
-            jd_hash as _jd_hash,
-        )
-
-        try:
-            service = MatchService()
-            _master_cv, _profile, candidate_hash = service._load_profile(None)
-        except Exception:  # noqa: BLE001 — unreadable CV means no cache identity
+        if candidate_hash is None:
             return False
+        from cv_optimizer.matching import jd_hash as _jd_hash
+
         return (
             db.find_cached_job_match(
                 job_row["id"],
