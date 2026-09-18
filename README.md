@@ -71,6 +71,7 @@ Everything runs locally. There is no backend service, no account, and no data le
   - Ghosted is replaced by any real outcome (interview/offer/accepted/rejected/withdrawn).
   - `withdrawn` is candidate-initiated: selectable from `applied`, `interview N`, or `offer` — never from `ghosted` silence.
   - Backtracking (undo) is supported cleanly.
+- Edit a tracked application (`e` key: company, role, job URL) to fix bad auto-import scrapes — renames the application directory and role-derived JD/CV/cover-letter files and repoints the stored paths.
 - Per-application filesystem directories (`applications/{company}_{role}_{id}/`) hold the JD, CV, and cover letter.
 
 ### 5. Terminal UI Dashboard

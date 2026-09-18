@@ -557,8 +557,15 @@ def update_application(
     jd_path: str = None,
     cv_path: str = None,
     cover_letter_path: str = None,
+    company: str = None,
+    role: str = None,
 ) -> None:
-    """Updates jd_path, cv_path, and/or cover_letter_path on an existing application."""
+    """Updates mutable fields on an existing application.
+
+    `company`/`role` only change the stored labels — callers that rename
+    them must also move the application directory and files (see
+    tracker.edit_application); this function never touches the filesystem.
+    """
     init_db()
     fields: list[str] = []
     values: list[str] = []
@@ -572,6 +579,12 @@ def update_application(
     if cover_letter_path is not None:
         fields.append("cover_letter_path = ?")
         values.append(cover_letter_path)
+    if company is not None:
+        fields.append("company = ?")
+        values.append(company)
+    if role is not None:
+        fields.append("role = ?")
+        values.append(role)
 
     if not fields:
         return

@@ -17,8 +17,8 @@ from textual import work
 from textual.worker import Worker, WorkerState
 
 from cv_optimizer import db
-from cv_optimizer.tracker import _build_app_dir, track, reoptimize, update_status, _validate_status, remove_application, generate_cover_letter
-from cv_optimizer.tui.screens.modals import ConfirmModal, SourceModal, StatusModal
+from cv_optimizer.tracker import _build_app_dir, track, reoptimize, update_status, _validate_status, remove_application, generate_cover_letter, edit_application
+from cv_optimizer.tui.screens.modals import ConfirmModal, SourceModal, StatusModal, EditModal
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +128,7 @@ class CvDashboard(App):
 
         Binding("enter", "toggle_detail", "Detail"),
         Binding("s", "change_status", "Status"),
+        Binding("e", "edit_application", "Edit"),
         Binding("o", "open_folder", "Open"),
         Binding("ctrl+r", "regenerate_cv", "Gen CV"),
         Binding("ctrl+g", "generate_cl", "Gen CL"),
@@ -549,6 +550,38 @@ class CvDashboard(App):
 
         from cv_optimizer.tui.screens.modals import StatusModal
         self.push_screen(StatusModal(app["id"], app["latest_status"]), on_status)
+
+    def action_edit_application(self) -> None:
+        app = self._selected_app()
+        if app is None:
+            return
+
+        def on_edit(result: dict | None) -> None:
+            if result is None:
+                return
+            try:
+                # The modal always returns strings — diff against current
+                # values so untouched fields are left alone (None = no change).
+                kwargs: dict = {}
+                if result["company"].strip() != app["company"]:
+                    kwargs["company"] = result["company"]
+                if result["role"].strip() != app["role"]:
+                    kwargs["role"] = result["role"]
+                if (result["job_url"].strip() or None) != app.get("job_url"):
+                    kwargs["job_url"] = result["job_url"]
+                if not kwargs:
+                    self._notify("No changes.")
+                    return
+                updated = edit_application(app["id"], **kwargs)
+                self.refresh_apps(select_id=app["id"])
+                self._notify(f"[bold green]✓[/] Updated {updated['company']} — {updated['role']}")
+            except ValueError as e:
+                self._notify(f"[red]✗[/] {e}")
+
+        self.push_screen(
+            EditModal(app["id"], app["company"], app["role"], app.get("job_url")),
+            on_edit,
+        )
 
     def action_open_folder(self) -> None:
         app = self._selected_app()

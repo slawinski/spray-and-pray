@@ -135,3 +135,40 @@ class SourceModal(ModalScreen[str]):
             self.dismiss(None)
         else:
             self.dismiss(self.current_source)  # cancel — keep current
+
+
+class EditModal(ModalScreen[dict]):
+    """Corrects company/role/job URL (e.g. after a bad auto-import scrape)."""
+
+    def __init__(self, app_id: int, company: str, role: str, job_url: str | None) -> None:
+        super().__init__()
+        self.app_id = app_id
+        self.company = company
+        self.role = role
+        self.job_url = job_url
+
+    def compose(self) -> ComposeResult:
+        yield Vertical(
+            Label(f"Edit Application #{self.app_id}"),
+            Label("Company"),
+            Input(value=self.company, id="edit-company"),
+            Label("Role"),
+            Input(value=self.role, id="edit-role"),
+            Label("Job URL (empty = clear)"),
+            Input(value=self.job_url or "", id="edit-url"),
+            Horizontal(
+                Button("Save", id="save", variant="primary"),
+                Button("Cancel", id="cancel"),
+            ),
+            id="edit-modal",
+        )
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "save":
+            self.dismiss({
+                "company": self.query_one("#edit-company", Input).value,
+                "role": self.query_one("#edit-role", Input).value,
+                "job_url": self.query_one("#edit-url", Input).value,
+            })
+        else:
+            self.dismiss(None)

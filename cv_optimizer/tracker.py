@@ -405,6 +405,133 @@ def update_status(application_id: int, status: str) -> None:
     logger.info("Application #%d: → %s", application_id, validated)
 
 
+def _clean_role_stem(role: str) -> str:
+    """JD-file stem for a role — mirrors the naming in track()."""
+    return re.sub(r'[^\w\-]', '_', role.lower()).strip('_')
+
+
+def edit_application(
+    application_id: int,
+    company: str = None,
+    role: str = None,
+    job_url: str = None,
+) -> dict:
+    """Corrects company/role/job_url on an application, keeping DB + filesystem in sync.
+
+    Company and role feed the application directory ({company}_{role}_{id})
+    and the role-derived JD/CV/cover-letter filenames, so changing them moves
+    the directory, renames those files, and repoints the stored paths.
+    `None` leaves a field unchanged; `""` clears the job URL.
+    """
+    db.init_db()
+
+    app = db.get_application(application_id)
+    if app is None:
+        raise ValueError(f"Application #{application_id} not found.")
+
+    _id, old_company, old_role, jd_path, cv_path, old_url, _created, source, cl_path = app
+
+    new_company = html.unescape(company).strip() if company is not None else old_company
+    new_role = html.unescape(role).strip() if role is not None else old_role
+    if not new_company:
+        raise ValueError("Company must not be empty.")
+    if not new_role:
+        raise ValueError("Role must not be empty.")
+    new_url = job_url.strip() or None if job_url is not None else old_url
+
+    renamed = (new_company, new_role) != (old_company, old_role)
+    if renamed:
+        clash = db.find_application(new_company, new_role, source=source)
+        if clash is not None and clash["id"] != application_id:
+            raise ValueError(
+                f"Application already tracked — #{clash['id']}: {clash['company']} — {clash['role']}"
+            )
+
+    new_jd_path, new_cv_path, new_cl_path = jd_path, cv_path, cl_path
+
+    if renamed:
+        old_dir = _build_app_dir(application_id, old_company, old_role)
+        new_dir = _build_app_dir(application_id, new_company, new_role)
+        if old_dir != new_dir:
+            if old_dir.exists():
+                if new_dir.exists():
+                    raise ValueError(f"Cannot rename: {new_dir} already exists.")
+                old_dir.rename(new_dir)
+                logger.info("Renamed directory: %s → %s", old_dir, new_dir)
+            else:
+                new_dir.mkdir(parents=True, exist_ok=True)
+                logger.info("Old directory %s missing; created %s", old_dir, new_dir)
+
+        role_changed = new_role != old_role
+
+        # JD file: stem is exactly the cleaned role (see track()).
+        if jd_path:
+            old_jd = new_dir / Path(jd_path).name
+            new_jd = new_dir / f"{_clean_role_stem(new_role)}{Path(jd_path).suffix}"
+            if role_changed and old_jd != new_jd and old_jd.exists():
+                old_jd.rename(new_jd)
+                logger.info("Renamed JD: %s → %s", old_jd, new_jd)
+            new_jd_path = str(new_jd if role_changed else old_jd)
+
+        # CV + cover letter: base is cleaned "{candidate} {role}".
+        if role_changed:
+            try:
+                with open(settings.master_cv_path, "r", encoding="utf-8") as f:
+                    master_name = json.load(f).get("personal_info", {}).get("name", "Candidate")
+                old_base = _build_cv_filename(master_name, old_role)
+                new_base = _build_cv_filename(master_name, new_role)
+            except (OSError, ValueError):
+                old_base = new_base = None
+            if old_base and new_base and old_base != new_base:
+                for old_name, new_name in (
+                    (f"{old_base}.md", f"{new_base}.md"),
+                    (f"{old_base}.pdf", f"{new_base}.pdf"),
+                    (f"{old_base}_Cover_Letter.md", f"{new_base}_Cover_Letter.md"),
+                    (f"{old_base}_Cover_Letter.pdf", f"{new_base}_Cover_Letter.pdf"),
+                ):
+                    src = new_dir / old_name
+                    if src.exists():
+                        src.rename(new_dir / new_name)
+                        logger.info("Renamed file: %s → %s", src, new_dir / new_name)
+                if cv_path:
+                    new_cv_path = str(new_dir / f"{new_base}.pdf")
+                if cl_path:
+                    new_cl_path = str(new_dir / f"{new_base}_Cover_Letter.pdf")
+            else:
+                if cv_path:
+                    new_cv_path = str(new_dir / Path(cv_path).name)
+                if cl_path:
+                    new_cl_path = str(new_dir / Path(cl_path).name)
+        else:
+            if cv_path:
+                new_cv_path = str(new_dir / Path(cv_path).name)
+            if cl_path:
+                new_cl_path = str(new_dir / Path(cl_path).name)
+
+        db.update_application(
+            application_id,
+            jd_path=new_jd_path,
+            cv_path=new_cv_path,
+            cover_letter_path=new_cl_path,
+            company=new_company,
+            role=new_role,
+        )
+        logger.info("Application #%d renamed: %s — %s", application_id, new_company, new_role)
+
+    if job_url is not None and new_url != old_url:
+        db.set_application_job_url(application_id, new_url)
+
+    return {
+        "id": application_id,
+        "company": new_company,
+        "role": new_role,
+        "job_url": new_url,
+        "jd_path": new_jd_path,
+        "cv_path": new_cv_path,
+        "cover_letter_path": new_cl_path,
+    }
+
+
 def list_all() -> list[tuple]:
     """Returns all applications for display."""
     db.init_db()
