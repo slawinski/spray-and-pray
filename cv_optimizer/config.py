@@ -4,6 +4,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+def _env_flag(name: str) -> bool:
+    """Parses an opt-in env var (1/true/yes/on, case-insensitive)."""
+    return os.getenv(name, "false").lower() in ("1", "true", "yes", "on")
+
+
 class Settings(BaseModel):
     llm_base_url: str = Field(default="https://api.deepseek.com/v1")
     llm_api_key: str = Field(default=os.getenv("DEEPSEEK_API_KEY", ""))
@@ -28,5 +33,10 @@ class Settings(BaseModel):
     match_prompt_version: str = Field(default="match-prompt-v2")
 
     discord_webhook_url: str | None = Field(default=os.getenv("DISCORD_WEBHOOK_URL"))
+
+    # Automated job discovery (TUI [J], `cv-opt discover`, launchd agent).
+    # Opt-in via ENABLE_DISCOVERY=true — off by default so scheduled runs
+    # and notifications stay silent until you actually want them.
+    enable_discovery: bool = Field(default=_env_flag("ENABLE_DISCOVERY"))
 
 settings = Settings()

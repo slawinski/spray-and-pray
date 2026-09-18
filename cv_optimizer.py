@@ -3,6 +3,7 @@
 Entry points:
   `cv-opt`                     → interactive TUI dashboard
   `cv-opt discover [flags]`    → standalone automated job discovery
+                                 (opt-in: requires ENABLE_DISCOVERY=true)
   `cv-opt score [flags] [ids]` → backfill Match Scores for applications
 """
 

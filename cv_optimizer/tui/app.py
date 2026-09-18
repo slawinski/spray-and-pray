@@ -17,6 +17,7 @@ from textual import work
 from textual.worker import Worker, WorkerState
 
 from cv_optimizer import db
+from cv_optimizer.config import settings
 from cv_optimizer.tracker import _build_app_dir, track, reoptimize, update_status, _validate_status, remove_application, generate_cover_letter, edit_application
 from cv_optimizer.tui.screens.modals import ConfirmModal, SourceModal, StatusModal, EditModal
 
@@ -124,7 +125,8 @@ class CvDashboard(App):
         Binding("q", "quit", "Quit"),
         Binding("r", "refresh", "Refresh"),
         Binding("/", "focus_filter", "Filter"),
-        Binding("J", "discover_jobs", "Discover"),
+        # Discovery is opt-in (ENABLE_DISCOVERY=true) — hidden entirely when off.
+        *([Binding("J", "discover_jobs", "Discover")] if settings.enable_discovery else []),
 
         Binding("enter", "toggle_detail", "Detail"),
         Binding("s", "change_status", "Status"),
@@ -362,6 +364,9 @@ class CvDashboard(App):
 
     def action_discover_jobs(self) -> None:
         """Launch discovery in a background worker; the UI stays responsive."""
+        if not settings.enable_discovery:
+            self._notify("Discovery is disabled (set ENABLE_DISCOVERY=true to enable it).")
+            return
         if self.discovering:
             self._notify("[yellow]Discovery already running…[/]")
             return

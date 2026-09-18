@@ -4,6 +4,7 @@ import argparse
 import json
 import logging
 import sys
+from cv_optimizer.config import settings
 from cv_optimizer.discovery.config import load_config
 from cv_optimizer.discovery.lock import DiscoveryLock
 from cv_optimizer.discovery.service import DiscoveryService
@@ -11,6 +12,7 @@ from cv_optimizer.discovery.service import DiscoveryService
 logger = logging.getLogger(__name__)
 
 LOCK_MESSAGE = "Discovery already in progress."
+DISABLED_MESSAGE = "Discovery is disabled. Set ENABLE_DISCOVERY=true to enable it."
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -74,6 +76,10 @@ def _setup_logging(verbose: bool) -> None:
 def run_discovery(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     _setup_logging(args.verbose)
+
+    if not settings.enable_discovery:
+        print(DISABLED_MESSAGE)
+        return 0
 
     try:
         config = load_config(args.config)
