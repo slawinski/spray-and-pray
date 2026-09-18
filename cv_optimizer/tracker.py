@@ -291,8 +291,10 @@ def update_status(application_id: int, status: str) -> None:
 
     Rules:
       1. No-op: same as current status → skip.
-      2. Draft activation: when moving from draft to applied, also insert ghosted
-         (the normal pessimistic default kicks in once you actually apply).
+      2. Draft activation: "draft" is pre-application prep, so the funnel must
+         always pass through "applied". Moving from draft to any real status
+         auto-activates by inserting applied (plus the pessimistic ghosted
+         default), so draft never skips straight to interview/rejection.
       3. Ghosted replacement: if currently ghosted and moving to interview/offer/accepted/rejected,
          delete the ghosted record first (it was a pessimistic default, not a real state).
       4. Undo/backtrack: if the new status ranks lower than any existing transition,
@@ -319,15 +321,23 @@ def update_status(application_id: int, status: str) -> None:
     new_rank = _status_rank(validated)
     history = db.get_status_history_with_ids(application_id)  # [(id, status, at), ...]
 
-    # Rule 2 — Draft activation: moving from draft → applied kicks in
-    # the normal pessimistic ghosted default.
-    if current == "draft" and validated == "applied":
+    # Rule 2 — Draft activation: "draft" is pre-application prep, so every
+    # application must pass through "applied" before any outcome. Moving from
+    # draft to any real status auto-activates: insert applied, then the normal
+    # pessimistic ghosted default (which the ghosted-replacement rule below
+    # swaps out when the target is a concrete outcome like interview/rejection).
+    if current == "draft":
         db.insert_status(application_id, "applied")
         db.insert_status(application_id, "ghosted")
         logger.info(
             "Application #%d: activated from draft → applied → ghosted", application_id,
         )
-        return
+        if validated in ("applied", "ghosted"):
+            return
+        # Target is a post-apply outcome — fall through so the ghosted-
+        # replacement rule swaps the transient ghosted for the real status.
+        current = "ghosted"
+        history = db.get_status_history_with_ids(application_id)
 
     # Rule 3 — ghosted replacement: pessimistic default was wrong.
     # Ghosted gets replaced by any real outcome (interview, offer, accepted, rejected).

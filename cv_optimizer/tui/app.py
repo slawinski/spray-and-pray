@@ -175,11 +175,34 @@ class CvDashboard(App):
     def refresh_apps(self, select_id: int | None = None) -> None:
         try:
             self.applications = db.list_applications_with_status()
-            self.filtered = list(self.applications)
-            self.current_page = 0
+            self._apply_filter()
+            if select_id is not None:
+                # Keep the page that holds the selected app so the cursor
+                # stays put after an in-place row update (status, source, ...).
+                self.current_page = self._page_containing(select_id)
+            else:
+                self.current_page = 0
             self.render_table(select_id=select_id)
         except Exception as e:
             self._notify(f"DB error: {e}")
+
+    def _apply_filter(self) -> None:
+        """Recompute self.filtered from self.applications using filter_text."""
+        text = self.filter_text.lower()
+        if not text:
+            self.filtered = list(self.applications)
+        else:
+            self.filtered = [
+                a for a in self.applications
+                if text in a["company"].lower() or text in a["role"].lower()
+            ]
+
+    def _page_containing(self, app_id: int) -> int:
+        """Index of the page that holds app_id in the filtered list (0 if absent)."""
+        for idx, app in enumerate(self.filtered):
+            if app["id"] == app_id:
+                return idx // self.page_size
+        return 0
 
     def render_table(self, select_id: int | None = None) -> None:
         table = self.query_one("#apps-table", DataTable)
@@ -498,7 +521,7 @@ class CvDashboard(App):
             if result == app.get("source"):
                 return  # no change
             db.set_source(app["id"], result)
-            self.refresh_apps()
+            self.refresh_apps(select_id=app["id"])
             label = result or "auto-detect"
             self._notify(f"[bold green]✓[/] Source set to {label}")
 
@@ -518,7 +541,7 @@ class CvDashboard(App):
             try:
                 validated = _validate_status(result)
                 update_status(app["id"], validated)
-                self.refresh_apps()
+                self.refresh_apps(select_id=app["id"])
                 self._notify(f"Status updated to {validated}")
             except ValueError as e:
                 self._notify(str(e))
@@ -658,14 +681,7 @@ class CvDashboard(App):
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "filter-input":
             self.filter_text = event.value
-            text = event.value.lower()
-            if not text:
-                self.filtered = list(self.applications)
-            else:
-                self.filtered = [
-                    a for a in self.applications
-                    if text in a["company"].lower() or text in a["role"].lower()
-                ]
+            self._apply_filter()
             self.current_page = 0
             self.render_table()
 

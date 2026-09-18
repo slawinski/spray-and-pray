@@ -5,7 +5,7 @@ from pathlib import Path
 # Ensure project root is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from cv_optimizer.sankey import build_sankey_flows, _clean_ghosted, _deduplicate_consecutive, render_sankey
+from cv_optimizer.sankey import build_sankey_flows, _clean_ghosted, _deduplicate_consecutive, _strip_draft, render_sankey
 
 
 def test_ghosted_cleaning_idempotent():
@@ -140,6 +140,45 @@ def test_render_sankey_output():
     assert "applied" in output
     assert "ghosted" in output
     assert "──[" in output
+
+
+def test_strip_draft_removes_all_draft():
+    """Draft entries are removed regardless of position."""
+    assert _strip_draft(["draft", "applied", "ghosted"]) == ["applied", "ghosted"]
+    assert _strip_draft(["draft"]) == []
+    assert _strip_draft(["applied", "rejected"]) == ["applied", "rejected"]
+
+
+def test_draft_only_app_produces_no_flows():
+    """An application still in draft contributes no edges to the Sankey."""
+    transitions = [(1, "draft", "t1")]
+    assert build_sankey_flows(transitions) == {}
+
+
+def test_draft_leading_chain_starts_at_applied():
+    """draft → applied → rejected renders as applied → rejected (no draft node)."""
+    transitions = [
+        (1, "draft", "t1"),
+        (1, "applied", "t2"),
+        (1, "rejected", "t3"),
+    ]
+    flows = build_sankey_flows(transitions)
+    assert "draft" not in {s for s, _ in flows} | {t for _, t in flows}
+    assert flows == {("applied", "rejected"): 1}
+
+
+def test_draft_stripped_before_ghosted_cleaning():
+    """draft → applied → ghosted → interview 1 → draft is impossible, but if a
+    stray draft existed it must not interfere with ghosted cleaning."""
+    transitions = [
+        (1, "draft", "t1"),
+        (1, "applied", "t2"),
+        (1, "ghosted", "t3"),
+        (1, "interview 1", "t4"),
+    ]
+    flows = build_sankey_flows(transitions)
+    assert "draft" not in {s for s, _ in flows} | {t for _, t in flows}
+    assert flows == {("applied", "interview 1"): 1}
 
 
 def test_circular_ghosted_applied_resolves():

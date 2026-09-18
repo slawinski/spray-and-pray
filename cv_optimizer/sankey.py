@@ -19,6 +19,10 @@ def build_sankey_flows(
 
     Returns:
         Dict mapping each unique (source, target) pair to its occurrence count.
+
+    "draft" is stripped up front: it represents pre-application prep rather
+    than a real funnel stage, so the diagram starts at "applied" and
+    still-draft applications contribute no edges.
     """
     # Group transitions by application_id, preserving order.
     apps: dict[int, list[str]] = defaultdict(list)
@@ -28,13 +32,23 @@ def build_sankey_flows(
     flows: dict[tuple[str, str], int] = defaultdict(int)
 
     for app_id, chain in apps.items():
-        cleaned = _clean_ghosted(chain)
+        active = _strip_draft(chain)
+        cleaned = _clean_ghosted(active)
         deduped = _deduplicate_consecutive(cleaned)
         logger.debug("app %d chain %s -> %s -> %s", app_id, chain, cleaned, deduped)
         for i in range(len(deduped) - 1):
             flows[(deduped[i], deduped[i + 1])] += 1
 
     return dict(flows)
+
+
+def _strip_draft(chain: list[str]) -> list[str]:
+    """Drop 'draft' entries — pre-application prep isn't part of the funnel.
+
+    Applications that never leave draft produce no edges and are thus
+    excluded from the Sankey entirely.
+    """
+    return [s for s in chain if s != "draft"]
 
 
 def _clean_ghosted(chain: list[str]) -> list[str]:
