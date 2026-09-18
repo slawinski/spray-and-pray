@@ -32,6 +32,8 @@ def status_rank(status: str) -> int:
         return 98
     if status == "rejected":
         return 99
+    if status == "withdrawn":
+        return 99
     return 100  # unknown — always forward
 
 
@@ -301,6 +303,7 @@ def init_db() -> None:
                     WHEN NEW.status = 'offer' THEN 97
                     WHEN NEW.status = 'accepted' THEN 98
                     WHEN NEW.status = 'rejected' THEN 99
+                    WHEN NEW.status = 'withdrawn' THEN 99
                     WHEN NEW.status LIKE 'interview %' THEN 2 + CAST(substr(NEW.status, 11) AS INTEGER)
                     ELSE 100 END)
                 <
@@ -311,6 +314,7 @@ def init_db() -> None:
                     WHEN status = 'offer' THEN 97
                     WHEN status = 'accepted' THEN 98
                     WHEN status = 'rejected' THEN 99
+                    WHEN status = 'withdrawn' THEN 99
                     WHEN status LIKE 'interview %' THEN 2 + CAST(substr(status, 11) AS INTEGER)
                     ELSE 100 END)
                 FROM status_history WHERE application_id = NEW.application_id)

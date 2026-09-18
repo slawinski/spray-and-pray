@@ -29,6 +29,7 @@ STATUS_COLORS = {
     "offer": "bright_green",
     "accepted": "bold bright_green",
     "rejected": "red",
+    "withdrawn": "orange3",
     "ghosted": "grey37",
 }
 

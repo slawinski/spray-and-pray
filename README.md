@@ -30,7 +30,7 @@ SAP is a personal pipeline for the entire application lifecycle:
 
 1. **Capture** a job posting (1-click from a browser extension, or a local JD file).
 2. **Optimize** your Master CV and generate a matching cover letter — both tuned to pass Applicant Tracking Systems (ATS) while reading like a human wrote them.
-3. **Track** every application through a status state machine (draft → applied → ghosted → interview N → offer → accepted/rejected).
+3. **Track** every application through a status state machine (draft → applied → ghosted → interview N → offer → accepted/rejected/withdrawn).
 4. **Prepare** with role-specific mock interviews, evaluated by an LLM with a readiness score.
 5. **Learn** from your weaknesses with auto-generated, interactive lessons.
 
@@ -66,9 +66,10 @@ Everything runs locally. There is no backend service, no account, and no data le
 ### 4. Application Tracking
 - SQLite database (WAL mode) persists every application with its status history.
 - A status state machine with flow constraints prevents nonsense transitions (e.g. circular ghosted/applied toggling, "un-rejecting" an offer):
-  - `draft` → `applied` → `ghosted` → `interview 1` → … → `interview N` → `offer` → `accepted` / `rejected`
+  - `draft` → `applied` → `ghosted` → `interview 1` → … → `interview N` → `offer` → `accepted` / `rejected` / `withdrawn`
   - Draft activation auto-inserts `ghosted` (pessimistic default).
-  - Ghosted is replaced by any real outcome (interview/offer/rejected).
+  - Ghosted is replaced by any real outcome (interview/offer/accepted/rejected/withdrawn).
+  - `withdrawn` is candidate-initiated: selectable from `applied`, `interview N`, or `offer` — never from `ghosted` silence.
   - Backtracking (undo) is supported cleanly.
 - Per-application filesystem directories (`applications/{company}_{role}_{id}/`) hold the JD, CV, and cover letter.
 

@@ -153,6 +153,7 @@ Returns a dict per app: `{id, company, role, jd_path, cv_path, created_at, lates
 | `offer`       | `bright_green`        |
 | `accepted`    | `bright_green` + bold |
 | `rejected`    | `red`                 |
+| `withdrawn`   | `orange`              |
 | `ghosted`     | `grey` (dim)          |
 
 **State:**
@@ -210,7 +211,7 @@ action_refresh() -> refresh_apps()
 
 Opens a `ModalScreen` with an Input field for the new status string. Pre-populates the input with the current status.
 
-**Validation:** Reuses `tracker._validate_status()` — accepts `applied`, `rejected`, `ghosted`, `offer`, `accepted`, `interview N`.
+**Validation:** Reuses `tracker._validate_status()` — accepts `applied`, `rejected`, `withdrawn`, `ghosted`, `offer`, `accepted`, `interview N`. `withdrawn` is blocked from `ghosted` silence (selectable from `applied`, `interview N`, `offer`).
 
 On confirm:
 

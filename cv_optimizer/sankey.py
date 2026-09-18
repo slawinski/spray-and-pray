@@ -161,7 +161,7 @@ def render_sankey(flows: dict[tuple[str, str], int]) -> str:
         1 if kv[0].startswith("interview") else
         2 if kv[0] == "offer" else
         3 if kv[0] == "accepted" else
-        4 if kv[0] == "rejected" else 5,
+        4 if kv[0] in ("rejected", "withdrawn") else 5,
         kv[0],
     ))
     count_parts = ", ".join(f"{s}: {c}" for s, c in sorted_counts)
@@ -192,6 +192,7 @@ STATUS_COLORS_SANKEY = {
     "offer": "rgba(255, 193, 7, 0.8)",
     "accepted": "rgba(0, 200, 83, 0.9)",
     "rejected": "rgba(244, 67, 54, 0.8)",
+    "withdrawn": "rgba(255, 152, 0, 0.8)",
     "ghosted": "rgba(158, 158, 158, 0.6)",
 }
 
@@ -218,7 +219,7 @@ def generate_sankey_html() -> Path:
         1 if s.startswith("interview") else
         2 if s == "offer" else
         3 if s == "accepted" else
-        4 if s == "rejected" else 5,
+        4 if s in ("rejected", "withdrawn") else 5,
         s,
     ))
     node_index = {n: i for i, n in enumerate(nodes)}

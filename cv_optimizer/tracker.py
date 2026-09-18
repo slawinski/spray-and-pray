@@ -19,8 +19,22 @@ logger = logging.getLogger(__name__)
 
 APPLICATIONS_DIR = Path("applications")
 
-VALID_STATUSES = {"draft", "applied", "ghosted", "rejected", "offer", "accepted"}
+VALID_STATUSES = {"draft", "applied", "ghosted", "withdrawn", "rejected", "offer", "accepted"}
 INTERVIEW_PATTERN = re.compile(r"^interview (\d+)$")
+
+
+def _has_engagement(history: list[tuple]) -> bool:
+    """True if the process advanced past the initial post-apply wait.
+
+    Used to tell the two ghosted meanings apart: the pessimistic default
+    sitting right behind 'applied' (no engagement yet — withdrawing is
+    allowed and swaps it out) vs. real employer silence after interviews
+    or an offer (withdrawing is blocked).
+    """
+    return any(
+        entry[1] == "offer" or INTERVIEW_PATTERN.match(entry[1])
+        for entry in history
+    )
 
 
 def _validate_status(status: str) -> str:
@@ -295,8 +309,11 @@ def update_status(application_id: int, status: str) -> None:
          always pass through "applied". Moving from draft to any real status
          auto-activates by inserting applied (plus the pessimistic ghosted
          default), so draft never skips straight to interview/rejection.
-      3. Ghosted replacement: if currently ghosted and moving to interview/offer/accepted/rejected,
+      3. Ghosted replacement: if currently ghosted and moving to interview/offer/accepted/rejected/withdrawn,
          delete the ghosted record first (it was a pessimistic default, not a real state).
+         Exception: 'withdrawn' is blocked when ghosted reflects real silence
+         after interviews/an offer (see _has_engagement) — you can only
+         withdraw from applied, interview N, or offer.
       4. Undo/backtrack: if the new status ranks lower than any existing transition,
          delete all transitions at or above that rank (undo a mistake cleanly).
       5. Otherwise: just append the new transition.
@@ -321,6 +338,16 @@ def update_status(application_id: int, status: str) -> None:
     new_rank = _status_rank(validated)
     history = db.get_status_history_with_ids(application_id)  # [(id, status, at), ...]
 
+    # 'withdrawn' is a candidate-initiated quit: selectable from applied,
+    # interview N, or offer — never from ghosted silence after engagement.
+    # (Ghosted with no engagement yet is just the pessimistic default behind
+    # applied; withdrawing there is allowed and swaps it out below.)
+    if validated == "withdrawn" and current == "ghosted" and _has_engagement(history):
+        raise ValueError(
+            "Cannot move to 'withdrawn' from 'ghosted' — ghosted means employer "
+            "silence, not an active process. Withdraw from applied, interview, or offer."
+        )
+
     # Rule 2 — Draft activation: "draft" is pre-application prep, so every
     # application must pass through "applied" before any outcome. Moving from
     # draft to any real status auto-activates: insert applied, then the normal
@@ -340,7 +367,9 @@ def update_status(application_id: int, status: str) -> None:
         history = db.get_status_history_with_ids(application_id)
 
     # Rule 3 — ghosted replacement: pessimistic default was wrong.
-    # Ghosted gets replaced by any real outcome (interview, offer, accepted, rejected).
+    # Ghosted gets replaced by any real outcome (interview, offer, accepted, rejected, withdrawn).
+    # Note: withdrawn-from-real-ghosted is already rejected by the guard above,
+    # so reaching here with withdrawn means the transient default — swap it out.
     if current == "ghosted" and new_rank >= _status_rank("interview 1"):
         db.delete_status_by_id(history[-1][0])
         logger.info(

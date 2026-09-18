@@ -8,7 +8,7 @@ from textual.widgets import Button, Input, Label, Select, Static
 
 from cv_optimizer import db
 
-BASE_STATUSES = ["draft", "applied", "ghosted", "rejected", "offer", "accepted"]
+BASE_STATUSES = ["draft", "applied", "ghosted", "withdrawn", "rejected", "offer", "accepted"]
 
 
 def _next_interview(history: list[dict]) -> int:
