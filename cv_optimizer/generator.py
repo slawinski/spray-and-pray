@@ -74,7 +74,6 @@ body {
 .main-column ul { padding-left: 20px; margin-top: 15px; }
 .main-column li { margin-bottom: 3px; }
 
-/* Identity-only work-history ledger; ordinary role blocks keep their spacing. */
 .main-column blockquote { margin: 0; padding: 0; }
 .main-column blockquote p {
     margin: 4px 0;
