@@ -1,4 +1,4 @@
-"""Independent, fail-closed checking of cleaned document Markdown.
+"""Independent, advisory checking of cleaned document Markdown.
 
 Writers never receive exclusions. This checker alone receives both sides of the
 eligibility boundary. A pass applies only to the supplied Markdown, not later edits.
@@ -6,6 +6,7 @@ eligibility boundary. A pass applies only to the supplied Markdown, not later ed
 
 import json
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 from openai import OpenAI
@@ -17,8 +18,20 @@ from cv_optimizer.profiles import ProfileContext, ProfileError
 SYSTEM_PROMPT = (Path(__file__).parent / "prompts" / "validate_document.md").read_text()
 
 
-class DocumentValidationError(ValueError):
-    """Document content could not be approved; includes type and correction guidance."""
+@dataclass(frozen=True)
+class ValidationResult:
+    """Detailed local warnings plus a content-free notification summary."""
+
+    warnings: tuple[str, ...] = ()
+    checker_completed: bool = True
+
+    @property
+    def summary(self) -> str:
+        if not self.checker_completed:
+            return "Content check incomplete; review the document and local logs."
+        if self.warnings:
+            return "Content check warnings; review the document and local logs."
+        return ""
 
 
 def _contains(text: str, phrase: str) -> bool:
@@ -27,20 +40,15 @@ def _contains(text: str, phrase: str) -> bool:
     return bool(phrase.strip()) and bool(re.search(pattern, text, re.IGNORECASE))
 
 
-def _factual_text(markdown: str, document_type: str) -> tuple[str, str]:
-    """Limit literal checks to claims; academic/subject meaning is checked semantically."""
-    factual, employment = [], []
+def _employment_text(markdown: str, document_type: str) -> str:
+    """Extract employment claims for literal title and identity checks."""
+    employment = []
     section = ""
     for line in markdown.splitlines():
         plain = line.replace("**", "").replace("*", "").strip()
         if document_type == "cover_letter":
             if not re.match(r"^(?:re|subject|dotyczy)\s*:", plain, re.IGNORECASE):
-                # Only unambiguous first-person claims get literal checks.
-                # Vacancy needs and less explicit phrasing go to the semantic check.
                 for sentence in re.split(r"(?<=[.!?])\s+", plain):
-                    if re.search(r"\b(?:I|(?i:my|we|pracowałem|pracowałam|korzystam|używam|posiadam))\b",
-                                 sentence):
-                        factual.append(sentence)
                     if re.search(r"\b(?:I (?:worked|served|was)|my (?:role|work)|pracowałem|pracowałam)\b",
                                  sentence, re.IGNORECASE):
                         employment.append(sentence)
@@ -48,22 +56,14 @@ def _factual_text(markdown: str, document_type: str) -> tuple[str, str]:
         heading = re.match(r"^##\s+(.+)$", plain)
         if heading:
             section = heading[1].casefold()
-        elif section not in ("", "education", "edukacja", "wykształcenie", "personal info", "dane osobowe", "dane kontaktowe",
-                             "languages", "języki", "gdpr disclaimer", "klauzula rodo"):
-            factual.append(plain)
-            if section in ("experience", "doświadczenie"):
-                employment.append(plain)
-    return "\n".join(factual), "\n".join(employment)
+        elif section in ("experience", "doświadczenie"):
+            employment.append(plain)
+    return "\n".join(employment)
 
 
 def _literal_violations(markdown: str, context: ProfileContext, document_type: str) -> list[str]:
-    factual, employment = _factual_text(markdown, document_type)
+    employment = _employment_text(markdown, document_type)
     violations = []
-    allowed_skills = [value for values in context.facts.get("skills", {}).values() for value in values]
-    for skill in context.excluded.get("skills", []):
-        value = skill["value"]
-        if value not in allowed_skills and _contains(factual, value):
-            violations.append(f"{value!r}: excluded skill; remove the claim or correct the approved profile")
 
     allowed_roles = context.facts.get("experience", [])
     allowed_titles = {role.get("title", role.get("role")) for role in allowed_roles}
@@ -126,8 +126,8 @@ class DocumentValidator:
         self.temperature = temperature if temperature is not None else settings.temperature
 
     def validate(self, markdown: str, context: ProfileContext, document_type: str,
-                 language: str = "en") -> None:
-        """Return None on approval; raise on violations or an unavailable/invalid check.
+                 language: str = "en") -> ValidationResult:
+        """Return advisory findings; checker failures never reject the document.
 
         document_type is 'cv' or 'cover_letter'. Call after writer cleanup and
         before rendering/publication. No rewriting or application-level retries.
@@ -135,12 +135,10 @@ class DocumentValidator:
         if not isinstance(context, ProfileContext):
             raise ProfileError("Expected ProfileContext; use resolve_profile(master, name) before validation")
         if document_type not in ("cv", "cover_letter"):
-            raise DocumentValidationError(f"{document_type}: check requires document_type 'cv' or 'cover_letter'")
+            return ValidationResult(("Unknown document type; content check skipped",), False)
         if not markdown.strip():
-            raise DocumentValidationError(f"{document_type}: empty document cannot be checked")
+            return ValidationResult(("empty document cannot be checked",), False)
         violations = _literal_violations(markdown, context, document_type)
-        if violations:
-            raise DocumentValidationError(f"{document_type}: content check failed: " + "; ".join(violations))
         payload = {"markdown": markdown, "profile": context.profile, "facts": context.facts,
                    "rules": context.rules, "excluded": context.excluded,
                    "document_type": document_type, "language": language}
@@ -154,10 +152,9 @@ class DocumentValidator:
             )
             verdict = _parse_verdict(response.choices[0].message.content)
         except Exception as exc:
-            raise DocumentValidationError(
-                f"{document_type}: checker failed; document is not approved. "
-                f"Check provider availability and JSON verdict: {exc}"
-            ) from exc
+            return ValidationResult(tuple(violations) + (
+                f"Checker failed; check provider availability and JSON verdict: {exc}",
+            ), False)
         if not verdict["passed"]:
-            details = "; ".join(f"{item['quote']!r}: {item['reason']}" for item in verdict["violations"])
-            raise DocumentValidationError(f"{document_type}: content check failed: {details}")
+            violations.extend(f"{item['quote']!r}: {item['reason']}" for item in verdict["violations"])
+        return ValidationResult(tuple(violations))

@@ -10,6 +10,8 @@ import pytest
 
 from cv_optimizer import tracker
 from cv_optimizer.config import settings
+from cv_optimizer.document_validation import DocumentValidator, ValidationResult
+from test_profile_prompts import FakeClient
 
 
 @pytest.fixture()
@@ -34,7 +36,7 @@ def generation(tmp_path, monkeypatch, temp_db, temp_apps_dir):
     renderer = Mock(side_effect=render)
     monkeypatch.setattr(tracker, "PDFGenerator", lambda: SimpleNamespace(generate=renderer))
     monkeypatch.setattr(tracker, "CoverLetterPDFGenerator", lambda: SimpleNamespace(generate=renderer))
-    checker = Mock(return_value=None)
+    checker = Mock(return_value=ValidationResult())
     monkeypatch.setattr(tracker, "DocumentValidator", lambda: SimpleNamespace(validate=checker), raising=False)
     return SimpleNamespace(db=temp_db, jd=jd, master=master, cv=cv, letter=letter,
                            renderer=renderer, render=render, checker=checker, apps=temp_apps_dir)
@@ -135,12 +137,10 @@ def test_unselected_draft_blocks_writers(generation, action):
     g.renderer.assert_not_called()
 
 
-@pytest.mark.parametrize("failure", ["checker", "policy", "renderer"])
+@pytest.mark.parametrize("failure", ["policy", "renderer"])
 def test_failed_initial_attempt_has_no_artifacts_or_ready_path(generation, failure):
     g = generation
-    if failure == "checker":
-        g.checker.side_effect = ValueError("cv: excluded claim")
-    elif failure == "policy":
+    if failure == "policy":
         g.master.write_text('{}')
     else:
         def broken_render(markdown, path):
@@ -195,20 +195,97 @@ def test_migrated_application_regenerates_as_it_after_enrichment(generation, mon
     assert Path(g.db.get_application(app_id)[4]).is_file()
 
 
-@pytest.mark.parametrize("action,column", [(tracker.reoptimize, 4), (tracker.generate_cover_letter, 8)])
-def test_failed_replacement_check_leaves_prior_pair_untouched(generation, action, column):
+@pytest.mark.parametrize("profile", ["it", "mechanical_engineering"])
+@pytest.mark.parametrize("verdict", [
+    '{"passed": false, "violations": [{"quote": "PRIVATE EXCERPT", "reason": "PRIVATE REASON"}]}',
+    "malformed verdict", TimeoutError("PRIVATE PROVIDER ERROR"),
+])
+def test_advisory_check_publishes_all_document_flows(generation, monkeypatch, caplog, profile, verdict):
     g = generation
-    app_id = tracker.track("Acme", "Engineer", str(g.jd), cv_profile="it", with_cover_letter=True)
-    before_app = g.db.get_application(app_id)
-    path = Path(before_app[column])
-    before_pair = (path.read_bytes(), path.with_suffix(".md").read_bytes())
-    g.renderer.reset_mock()
-    g.checker.side_effect = ValueError("content check failed: excluded claim")
-    with pytest.raises(ValueError, match="excluded claim"):
-        action(app_id)
-    assert g.db.get_application(app_id) == before_app
-    assert (path.read_bytes(), path.with_suffix(".md").read_bytes()) == before_pair
-    g.renderer.assert_not_called()
+    client = FakeClient(*([verdict] * 4))
+    monkeypatch.setattr(tracker, "DocumentValidator", lambda: DocumentValidator(client=client))
+    warnings = []
+    app_id = tracker.track("Acme", "Engineer", str(g.jd), cv_profile=profile,
+                           with_cover_letter=True, on_warning=warnings.append)
+    g.cv.return_value = "## Summary\nReplacement CV"
+    g.letter.return_value = "## Candidate\nReplacement letter"
+    tracker.reoptimize(app_id, on_warning=warnings.append)
+    tracker.generate_cover_letter(app_id, on_warning=warnings.append)
+    app = g.db.get_application(app_id)
+    for column, expected in [(4, g.cv.return_value), (8, g.letter.return_value)]:
+        path = Path(app[column])
+        assert path.read_bytes() == b"%PDF-fake\n" + expected.encode()
+        assert path.with_suffix(".md").read_text() == expected
+    assert len(warnings) == len(client.requests) == 4
+    assert all("Content check" in warning and "PRIVATE" not in warning for warning in warnings)
+    expected_detail = "JSON" if verdict == "malformed verdict" else "PRIVATE"
+    assert expected_detail in caplog.text
+
+
+def test_checker_constructor_and_warning_delivery_failure_do_not_block(generation, monkeypatch, caplog):
+    g = generation
+    monkeypatch.setattr(tracker, "DocumentValidator", Mock(side_effect=RuntimeError("checker unavailable")))
+    notify = Mock(side_effect=RuntimeError("notification unavailable"))
+    app_id = tracker.track("Acme", "Engineer", str(g.jd), cv_profile="it",
+                           with_cover_letter=True, on_warning=notify)
+    assert all(Path(g.db.get_application(app_id)[col]).exists() for col in (4, 8))
+    assert notify.call_count == 2
+    assert "checker unavailable" in caplog.text
+    assert "notification" in caplog.text
+
+
+@pytest.mark.parametrize("later_letter", [False, True])
+@pytest.mark.parametrize("delivery_fails", [False, True])
+def test_server_advisory_completion_is_safe_and_best_effort(generation, monkeypatch, caplog,
+                                                          later_letter, delivery_fails):
+    import server
+    g = generation
+    g.checker.side_effect = RuntimeError("PRIVATE EXCERPT AND PROVIDER ERROR")
+    notify = Mock(side_effect=RuntimeError("delivery failed") if delivery_fails else None)
+    desktop = Mock(side_effect=RuntimeError("desktop failed") if delivery_fails else None)
+    monkeypatch.setattr(server, "send_discord_notification", notify)
+    monkeypatch.setattr(server.os, "system", desktop)
+    if later_letter:
+        app_id = g.db.insert_application("Acme", "Engineer", jd_path=str(g.jd), cv_profile="it")
+        server._run_cover_letter_generation(app_id)
+    else:
+        server.run_cv_optimizer("Acme", "Engineer", g.jd.read_text(), cv_profile="it")
+        app_id = g.db.list_applications()[0][0]
+    assert Path(g.db.get_application(app_id)[8]).exists()
+    assert notify.call_count == desktop.call_count == 1
+    assert "incomplete" in notify.call_args.kwargs["description"]
+    assert "PRIVATE" not in str(notify.call_args) + str(desktop.call_args)
+    assert "Generation Failed" not in str(notify.call_args)
+    assert "PRIVATE" in caplog.text
+
+
+@pytest.mark.parametrize("key,ready", [("ctrl+r", "CV regenerated"), ("ctrl+g", "Cover letter generated")])
+def test_tui_pilot_publishes_with_visible_advisory(generation, monkeypatch, key, ready):
+    import asyncio
+    from textual.widgets import Static
+    from cv_optimizer.tui.app import CvDashboard
+
+    g = generation
+    client = FakeClient('{"passed": false, "violations": [{"quote": "PRIVATE", "reason": "unsupported"}]}')
+    monkeypatch.setattr(tracker, "DocumentValidator", lambda: DocumentValidator(client=client))
+    app_id = g.db.insert_application("Acme", "Engineer", jd_path=str(g.jd), cv_profile="it")
+    g.db.insert_status(app_id, "draft")
+
+    async def run():
+        app = CvDashboard()
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.press(key)
+            await pilot.click("#yes")
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            status = str(app.query_one("#status-bar", Static).render())
+            assert ready in status and "Content check warnings" in status
+            assert status.index("Content check warnings") < status.index(ready)
+            assert "PRIVATE" not in status and "failed" not in status.lower()
+
+    asyncio.run(run())
+    column = 4 if key == "ctrl+r" else 8
+    assert Path(g.db.get_application(app_id)[column]).exists()
 
 
 @pytest.mark.parametrize("action,column", [(tracker.reoptimize, 4), (tracker.generate_cover_letter, 8)])
@@ -306,7 +383,7 @@ def test_initial_letter_does_not_silently_follow_changed_profile(generation, mon
     assert g.db.get_application(app_id)[4] is None
 
 
-@pytest.mark.parametrize("outcome", ["tracked", "cv", "rejected_letter", "both", "changed"])
+@pytest.mark.parametrize("outcome", ["tracked", "cv", "warning_letter", "both", "changed"])
 def test_server_reports_actual_current_paths(generation, monkeypatch, outcome):
     import server
     g = generation
@@ -314,8 +391,8 @@ def test_server_reports_actual_current_paths(generation, monkeypatch, outcome):
         g.cv.side_effect = ValueError("CV rejected")
     elif outcome == "cv":
         g.letter.side_effect = ValueError("letter rejected")
-    elif outcome == "rejected_letter":
-        g.checker.side_effect = [None, ValueError("cover_letter: excluded claim")]
+    elif outcome == "warning_letter":
+        g.checker.side_effect = [ValidationResult(), ValidationResult(("PRIVATE EXCERPT",))]
     elif outcome == "changed":
         def switch(context, jd, language):
             app_id = g.db.list_applications()[0][0]
@@ -330,11 +407,14 @@ def test_server_reports_actual_current_paths(generation, monkeypatch, outcome):
     title = notify.call_args.kwargs["title"]
     if outcome in ("tracked", "changed"):
         assert "Tracked" in title and "ready" not in title.lower()
-    elif outcome in ("cv", "rejected_letter"):
+    elif outcome == "cv":
         assert "CV Ready" in title and "Letter" not in title
         assert "letter" in notify.call_args.kwargs["description"].lower()
     else:
         assert "CV + Cover Letter" in title
+        if outcome == "warning_letter":
+            assert "warning" in notify.call_args.kwargs["description"].lower()
+            assert "PRIVATE" not in str(notify.call_args)
     assert notify.call_count == desktop.call_count == 1
 
 

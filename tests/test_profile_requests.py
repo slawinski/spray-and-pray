@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 import shutil
 import subprocess
-from unittest.mock import Mock
+from unittest.mock import ANY, Mock
 
 import pytest
 from fastapi import BackgroundTasks, HTTPException
@@ -38,6 +38,7 @@ def test_request_background_runner_tracker_propagation(temp_db, monkeypatch, pro
     assert tracked.call_args.args[:2] == ("Example", "Engineer")
     assert tracked.call_args.kwargs == {
         "job_url": request.url, "source": "referral", "with_cover_letter": True, "cv_profile": profile,
+        "on_warning": ANY,
     }
 
 

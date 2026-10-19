@@ -476,11 +476,18 @@ unselected application fails: select its profile in the TUI first.
 Before publication, each generated CV and letter is checked independently against
 the selected facts and exclusions. This adds **one checker completion per
 document**, using the configured provider/model, in addition to writing costs.
-Rejection, malformed verdicts, and checker errors fail the attempt, not bypass it.
-No automatic correction loop runs. Correct the reported content or configuration
-and explicitly retry. A failed same-profile replacement preserves the prior valid
-files and ready path; after a profile change, old files remain on disk but are not
-marked ready. In-flight output for an outdated selection cannot publish.
+Content checking is **advisory**: excluded employment titles/identities, semantic
+findings, malformed verdicts, and checker/provider failures warn and still publish.
+Literal skill bans are removed entirely. Full reasons and excerpts stay in local
+logs; TUI and server completion notifications show safe warning summaries. An
+incomplete check is never reported as passed, and warning delivery cannot block
+publication. No automatic correction or checker retry loop runs.
+
+Profile selection and valid source projection remain required. Writer, renderer,
+and transactional publication failures still fail the attempt. A failed
+same-profile replacement preserves the prior files and ready path; after a profile
+change, old files remain on disk but are not marked ready. In-flight output for an
+outdated selection cannot publish.
 
 ---
 
