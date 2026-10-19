@@ -19,7 +19,7 @@ from textual.worker import Worker, WorkerState
 from cv_optimizer import db
 from cv_optimizer.config import settings
 from cv_optimizer.tracker import _build_app_dir, track, reoptimize, update_status, _validate_status, remove_application, generate_cover_letter, edit_application
-from cv_optimizer.tui.screens.modals import ConfirmModal, SourceModal, StatusModal, EditModal
+from cv_optimizer.tui.screens.modals import ConfirmModal, SourceModal, StatusModal, EditModal, ProfileModal, PROFILE_LABELS
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +131,7 @@ class CvDashboard(App):
         Binding("enter", "toggle_detail", "Detail"),
         Binding("s", "change_status", "Status"),
         Binding("e", "edit_application", "Edit"),
+        Binding("v", "set_profile", "CV Profile"),
         Binding("o", "open_folder", "Open"),
         Binding("ctrl+r", "regenerate_cv", "Gen CV"),
         Binding("ctrl+g", "generate_cl", "Gen CL"),
@@ -440,6 +441,7 @@ class CvDashboard(App):
             discovery_block = self._discovery_detail(app)
             panel.update(
                 f"Application #{app['id']} — {app['company']} — {app['role']}\n"
+                + f"CV profile: {PROFILE_LABELS.get(app.get('cv_profile'), 'Not selected')}\n"
                 + match_block
                 + f"Status: {app['latest_status']} (last updated: {last_updated})\n"
                 + f"Readiness: {_readiness_bar(db.get_latest_readiness(app['id']))}\n"
@@ -518,6 +520,49 @@ class CvDashboard(App):
             f"http://localhost:8000/prepare-interview/{app['id']}"
         )
         self._notify("[bold green]✓[/] Loading screen opened in browser")
+
+    def action_set_profile(self) -> None:
+        app = self._selected_app()
+        if app is not None:
+            self._select_profile(app)
+
+    def _select_profile(self, app: dict, on_selected=None) -> None:
+        def on_profile(result: str | None) -> None:
+            if result is None:
+                return
+
+            def save(confirmed: bool | None = True) -> None:
+                if not confirmed:
+                    return
+                try:
+                    db.set_application_profile(app["id"], result)
+                    self.refresh_apps(select_id=app["id"])
+                    panel = self.query_one("#detail-panel", Static)
+                    if panel.has_class("visible"):
+                        panel.remove_class("visible")
+                        self.action_toggle_detail()
+                    self._notify(f"[bold green]✓[/] CV profile set to {PROFILE_LABELS[result]}")
+                except Exception as e:
+                    self._notify(f"[red]✗[/] {e}")
+                    return
+                if on_selected is not None:
+                    on_selected()
+
+            if app.get("cv_profile") is not None and result != app["cv_profile"]:
+                self.push_screen(
+                    ConfirmModal(
+                        "Change CV Profile",
+                        f"Change to {PROFILE_LABELS[result]}?\n\n"
+                        "Existing files are kept, but both CV and cover letter will need regeneration.",
+                    ),
+                    save,
+                )
+            elif result != app.get("cv_profile"):
+                save()
+            elif on_selected is not None:
+                on_selected()
+
+        self.push_screen(ProfileModal(app["id"], app.get("cv_profile")), on_profile)
 
     def action_set_source(self) -> None:
         app = self._selected_app()
@@ -618,6 +663,9 @@ class CvDashboard(App):
         app = self._selected_app()
         if app is None:
             return
+        if app.get("cv_profile") is None:
+            self._select_profile(app, self.action_regenerate_cv)
+            return
 
         from cv_optimizer.tui.screens.modals import ConfirmModal
 
@@ -640,6 +688,10 @@ class CvDashboard(App):
 
         if not app["jd_path"] or not Path(app["jd_path"]).exists():
             self._notify(f"No JD file found for application #{app['id']}")
+            return
+
+        if app.get("cv_profile") is None:
+            self._select_profile(app, self.action_generate_cl)
             return
 
         from cv_optimizer.tui.screens.modals import ConfirmModal

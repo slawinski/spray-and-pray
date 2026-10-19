@@ -5,10 +5,15 @@ function setStatus(message, className = '') {
 }
 
 async function postTrack(payload) {
+    const profileSelect = document.getElementById('cv-profile');
+    if (!profileSelect.value) {
+        profileSelect.focus();
+        throw new Error('Please select a CV profile.');
+    }
     const response = await fetch('http://localhost:8000/api/track', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, cv_profile: profileSelect.value }),
     });
     if (!response.ok) {
         const body = await response.json().catch(() => ({}));

@@ -10,6 +10,7 @@ import json as json_mod
 import markdown
 import re
 from pathlib import Path
+from typing import Literal
 import logging
 from cv_optimizer.config import settings
 
@@ -34,6 +35,7 @@ class TrackRequest(BaseModel):
     company: str
     role: str
     jd: str
+    cv_profile: Literal["it", "mechanical_engineering"]
     url: str = None
     source: str = None
 
@@ -130,7 +132,7 @@ async def track_application(request: TrackRequest, background_tasks: BackgroundT
         )
 
     # We run the optimization in the background so the extension UI returns immediately
-    background_tasks.add_task(run_cv_optimizer, request.company, request.role, request.jd, request.url, request.source)
+    background_tasks.add_task(run_cv_optimizer, request.company, request.role, request.jd, request.url, request.source, cv_profile=request.cv_profile)
     
     return {"status": "success", "message": f"Tracking initiated for {request.company} - {request.role}"}
 
@@ -529,6 +531,10 @@ async def generate_cover_letter_endpoint(app_id: int, background_tasks: Backgrou
     app_data = db_mod.get_application(app_id)
     if not app_data:
         raise HTTPException(status_code=404, detail="Application not found")
+
+    profile, _ = db_mod.get_application_profile(app_id)
+    if profile is None:
+        raise HTTPException(status_code=400, detail="Select a CV profile for this application in the TUI before generating a cover letter")
 
     # Check if JD exists
     jd_path = app_data[3]
