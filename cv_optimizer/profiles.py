@@ -19,11 +19,6 @@ Positioning in policy is itself the candidate-approved snapshot, not a reference
 to the unrestricted legacy master summary. All other selections must resolve to
 source facts. Unknown policy keys, ambiguous references and wildcards fail.
 
-U3 should accept only ProfileContext: serialize ``facts`` for the writer and use
-``rules`` for presentation. NEVER serialize ``excluded`` to the writer. Those
-checker-only descriptors include omitted role identities separately from omitted
-achievements (with attribution) and skills (with category), plus other sections.
-No full source or other profile policy is retained on the context.
 """
 
 from copy import deepcopy

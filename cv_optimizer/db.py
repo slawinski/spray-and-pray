@@ -598,13 +598,15 @@ def list_applications_with_status() -> list[dict]:
     apps = list_applications()
     result = []
     with _connect() as conn:
+        profiles = {
+            row[0]: row[1:]
+            for row in conn.execute(
+                "SELECT id, cv_profile, cv_profile_revision FROM applications"
+            )
+        }
         for app in apps:
             app_id, company, role, jd_path, cv_path, job_url, created_at, source, cover_letter_path = app
-            profile_row = conn.execute(
-                "SELECT cv_profile, cv_profile_revision FROM applications WHERE id = ?",
-                (app_id,),
-            ).fetchone()
-            cv_profile, cv_profile_revision = _application_profile(profile_row, app_id)
+            cv_profile, cv_profile_revision = _application_profile(profiles.get(app_id), app_id)
             history_rows = conn.execute(
                 "SELECT status, transitioned_at FROM status_history "
                 "WHERE application_id = ? ORDER BY transitioned_at ASC",
