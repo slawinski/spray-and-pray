@@ -4,7 +4,7 @@ import shutil
 import re
 import html
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from cv_optimizer import db
 from cv_optimizer.db import status_rank as _status_rank
@@ -15,7 +15,7 @@ from cv_optimizer.generator import PDFGenerator
 from cv_optimizer.cover_letter import CoverLetterOptimizer, CoverLetterPDFGenerator
 from cv_optimizer.language import detect_job_description_language
 from cv_optimizer.profiles import resolve_profile, validate_profile_name
-from cv_optimizer.document_validation import DocumentValidator
+from cv_optimizer.document_validation import DocumentValidator, ValidationResult
 from cv_optimizer.documents import publish_document
 
 logger = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ def _build_cv_filename(name: str, role: str) -> str:
     combined = f"{clean_name} {clean_role}"
     return re.sub(r'[^\w]+', '_', combined).strip('_')
 
-def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job_url: str = None, with_cover_letter: bool = False, source: str = None, *, cv_profile: str = None) -> int:
+def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job_url: str = None, with_cover_letter: bool = False, source: str = None, *, cv_profile: str = None, on_warning: Callable[[str], None] | None = None) -> int:
     """
     Initializes a new application:
     1. Creates DB record
@@ -121,7 +121,7 @@ def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job
 
     # 4. Generate optimized CV
     try:
-        cv_path_str = _generate_document(app_id, master_cv_path, "cv", selection)
+        cv_path_str = _generate_document(app_id, master_cv_path, "cv", selection, on_warning=on_warning)
     except Exception as e:
         logger.warning(f"CV generation failed (application still tracked): {e}")
         cv_path_str = None
@@ -129,7 +129,7 @@ def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job
     # 5. Optionally generate cover letter against the initial selection/revision
     if with_cover_letter and cv_path_str:
         try:
-            _cl_path = _generate_document(app_id, master_cv_path, "cover_letter", selection)
+            _cl_path = _generate_document(app_id, master_cv_path, "cover_letter", selection, on_warning=on_warning)
             logger.info(f"Generated cover letter at {_cl_path}")
         except Exception as e:
             logger.warning(f"Cover letter generation failed (CV still tracked): {e}")
@@ -141,19 +141,20 @@ def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job
     return app_id
 
 
-def reoptimize(app_id: int, master_cv_path: str = None) -> None:
+def reoptimize(app_id: int, master_cv_path: str = None, *, on_warning: Callable[[str], None] | None = None) -> None:
     """Regenerates the CV for an existing application in-place (no new DB row)."""
-    _generate_document(app_id, master_cv_path, "cv")
+    _generate_document(app_id, master_cv_path, "cv", on_warning=on_warning)
     logger.info(f"CV regenerated for application #{app_id}")
 
 
-def generate_cover_letter(app_id: int, master_cv_path: str = None) -> str:
+def generate_cover_letter(app_id: int, master_cv_path: str = None, *, on_warning: Callable[[str], None] | None = None) -> str:
     """Generates a tailored, ATS-optimized cover letter for an existing application."""
-    return _generate_document(app_id, master_cv_path, "cover_letter")
+    return _generate_document(app_id, master_cv_path, "cover_letter", on_warning=on_warning)
 
 
 def _generate_document(app_id: int, master_cv_path: str, document_type: str,
-                       expected_selection: tuple[str, int] | None = None) -> str:
+                       expected_selection: tuple[str, int] | None = None,
+                       *, on_warning: Callable[[str], None] | None = None) -> str:
     """Resolve, write, check and publish against one persisted selection snapshot."""
     db.init_db()
 
@@ -191,7 +192,12 @@ def _generate_document(app_id: int, master_cv_path: str, document_type: str,
     )
     write = optimizer.optimize if document_type == "cv" else optimizer.generate
     markdown = write(context, job_description, language=language)
-    DocumentValidator().validate(markdown, context, document_type, language)
+    try:
+        result = DocumentValidator().validate(markdown, context, document_type, language)
+    except Exception as exc:
+        result = ValidationResult((f"Checker unavailable: {exc}",), False)
+    for warning in result.warnings:
+        logger.warning("Application #%d %s content advisory: %s", app_id, document_type, warning)
 
     candidate_name = context.facts.get("personal_info", {}).get("name", "Candidate")
     base_name = _build_cv_filename(candidate_name, role)
@@ -199,8 +205,15 @@ def _generate_document(app_id: int, master_cv_path: str, document_type: str,
         base_name += "_Cover_Letter"
     pdf_path = Path(jd_path).parent / f"{base_name}.pdf"
     renderer = PDFGenerator() if document_type == "cv" else CoverLetterPDFGenerator()
-    return publish_document(app_id, profile, revision, markdown, pdf_path,
-                            renderer.generate, document_type)
+    published = publish_document(app_id, profile, revision, markdown, pdf_path,
+                                 renderer.generate, document_type)
+    if result.summary and on_warning:
+        try:
+            on_warning(f"{document_type}: {result.summary}")
+        except Exception:
+            logger.warning("Application #%d %s warning notification failed", app_id, document_type,
+                           exc_info=True)
+    return published
 
 
 def remove_application(app_id: int) -> None:

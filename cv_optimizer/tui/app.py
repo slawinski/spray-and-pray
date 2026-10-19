@@ -257,6 +257,13 @@ class CvDashboard(App):
     def _notify(self, message: str) -> None:
         self.query_one("#status-bar", Static).update(f"[yellow]{message}[/]")
 
+    def _document_ready(self, message: str, warnings: list[str]) -> None:
+        note = " ".join(warnings)
+        try:
+            self.call_from_thread(self._notify, (f"[yellow]⚠ {note}[/] " if note else "") + message)
+        except Exception:
+            logger.warning("Document completion notification failed", exc_info=True)
+
     def _selected_app(self) -> dict | None:
         """The application under the table cursor, accounting for the
         current page. The table only renders `page_size` rows per page, so
@@ -717,10 +724,12 @@ class CvDashboard(App):
                 return
             self.regenerating_ids.add(app["id"])
             self.call_from_thread(self.render_table, app["id"])
-            reoptimize(app["id"])
+            self.call_from_thread(self._notify, "[bold yellow]⟳[/] Regenerating CV...")
+            warnings = []
+            reoptimize(app["id"], on_warning=warnings.append)
             self.regenerating_ids.discard(app["id"])
             self.call_from_thread(self.refresh_apps, app["id"])
-            self.call_from_thread(self._notify, f"[bold green]✓[/] CV regenerated for {app['company']} — {app['role']}")
+            self._document_ready(f"[bold green]✓[/] CV regenerated for {app['company']} — {app['role']}", warnings)
         except Exception as e:
             self.regenerating_ids.discard(app["id"])
             self.call_from_thread(self.render_table, app["id"])
@@ -731,21 +740,19 @@ class CvDashboard(App):
         try:
             self.generating_cl_ids.add(app["id"])
             self.call_from_thread(self.render_table, app["id"])
-            cl_path = generate_cover_letter(app["id"])
+            self.call_from_thread(self._notify, "[bold yellow]⟳[/] Generating cover letter...")
+            warnings = []
+            generate_cover_letter(app["id"], on_warning=warnings.append)
             self.generating_cl_ids.discard(app["id"])
             self.call_from_thread(self.refresh_apps, app["id"])
-            self.call_from_thread(self._notify, f"[bold green]✓[/] Cover letter generated for {app['company']} — {app['role']}")
+            self._document_ready(f"[bold green]✓[/] Cover letter generated for {app['company']} — {app['role']}", warnings)
         except Exception as e:
             self.generating_cl_ids.discard(app["id"])
             self.call_from_thread(self.render_table, app["id"])
             self.call_from_thread(self._notify, f"[red]✗[/] Cover letter generation failed: {e}")
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
-        if event.state == WorkerState.RUNNING:
-            self._notify(f"[bold yellow]⟳[/] Regenerating CV...")
-        elif event.state == WorkerState.SUCCESS:
-            pass  
-        elif event.state == WorkerState.ERROR:
+        if event.state == WorkerState.ERROR:
             self._notify(f"[red]✗[/] Regeneration failed")
 
     def action_next_page(self) -> None:

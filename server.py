@@ -68,6 +68,19 @@ def send_discord_notification(title: str, description: str, color: int, url: str
     except Exception as e:
         logger.warning(f"Failed to send Discord notification: {e}")
 
+def _notify_document_ready(*, title: str, description: str, desktop_message: str,
+                           color: int, url: str = None):
+    """Completion delivery is best effort; documents are already published."""
+    try:
+        os.system(f"""osascript -e 'display notification "{desktop_message}" with title "CV Optimizer"'""")
+    except Exception:
+        logger.warning("Desktop document notification failed", exc_info=True)
+    try:
+        send_discord_notification(title=title, description=description, color=color, url=url)
+    except Exception:
+        logger.warning("Discord document notification failed", exc_info=True)
+
+
 def run_cv_optimizer(company: str, role: str, jd_text: str, job_url: str = None, source: str = None, *, cv_profile: str = None):
     import tempfile
     temp_jd = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
@@ -78,7 +91,8 @@ def run_cv_optimizer(company: str, role: str, jd_text: str, job_url: str = None,
     try:
         logger.info(f"Triggering tracking pipeline for {company} - {role}")
         from cv_optimizer.tracker import track
-        app_id = track(company, role, str(temp_jd_path), job_url=job_url, with_cover_letter=True, source=source, cv_profile=cv_profile)
+        warnings = []
+        app_id = track(company, role, str(temp_jd_path), job_url=job_url, with_cover_letter=True, source=source, cv_profile=cv_profile, on_warning=warnings.append)
         
         from cv_optimizer import db
         application = db.get_application(app_id)
@@ -92,16 +106,20 @@ def run_cv_optimizer(company: str, role: str, jd_text: str, job_url: str = None,
             title, outcome, color = "⚠️ Cover Letter Ready", "Cover letter ready; CV not ready", 0xFFA500
         else:
             title, outcome, color = "⚠️ Application Tracked", "Application tracked only; documents not published", 0xFFA500
+        if warnings:
+            title = "⚠️ " + title.removeprefix("✅ ")
+            outcome += "; " + " ".join(warnings)
+            color = 0xFFA500
         logger.info("Application #%s: %s", app_id, outcome)
-        os.system(f"""osascript -e 'display notification "{outcome} for {role} at {company}." with title "CV Optimizer"'""")
 
         discord_desc = f"{outcome} for **{role}** at **{company}**.\nApplication #{app_id}."
         if job_url:
             discord_desc += f"\n\n🔗 [View Job Posting]({job_url})"
         
-        send_discord_notification(
+        _notify_document_ready(
             title=title,
             description=discord_desc,
+            desktop_message=f"{outcome} for {role} at {company}.",
             color=color,
             url=job_url or f"http://localhost:8000/api/open/{app_id}"
         )
@@ -111,7 +129,7 @@ def run_cv_optimizer(company: str, role: str, jd_text: str, job_url: str = None,
         os.system(f"""osascript -e 'display notification "Error executing command." with title "❌ CV Optimizer"'""")
         send_discord_notification(
             title="❌ CV Generation Failed",
-            description=f"Failed to generate CV for **{role}** at **{company}**.\nError: `{str(e)}`",
+            description=f"Failed to generate CV for **{role}** at **{company}**. See local logs for details.",
             color=0xFF0000
         )
     finally:
@@ -552,25 +570,27 @@ def _run_cover_letter_generation(app_id: int):
 
     try:
         logger.info(f"Generating cover letter for application #{app_id}")
-        cl_path = generate_cover_letter(app_id)
+        warnings = []
+        cl_path = generate_cover_letter(app_id, on_warning=warnings.append)
         logger.info(f"Cover letter generated: {cl_path}")
-        os.system(f"""osascript -e 'display notification "Cover letter generated for application #{app_id}!" with title "✅ Cover Letter Ready"'""")
+        note = " ".join(warnings)
 
         app_data = db_mod.get_application(app_id)
         company = str(app_data[1]) if app_data else "Unknown"
         role = str(app_data[2]) if app_data else "Unknown"
 
-        send_discord_notification(
-            title="✅ Cover Letter Generated",
-            description=f"Tailored cover letter ready for **{role}** at **{company}**.\n\n🔗 [Open in Finder](http://localhost:8000/api/open-cover-letter/{app_id})",
-            color=0x3498db,
+        _notify_document_ready(
+            title="⚠️ Cover Letter Generated with Warnings" if warnings else "✅ Cover Letter Generated",
+            description=f"Tailored cover letter ready for **{role}** at **{company}**. {note}\nApplication #{app_id}.\n\n🔗 [Open in Finder](http://localhost:8000/api/open-cover-letter/{app_id})",
+            desktop_message=f"Cover letter generated for application #{app_id}! {note}",
+            color=0xFFA500 if warnings else 0x3498db,
         )
     except Exception as e:
         logger.error(f"Cover letter generation failed: {e}")
         os.system(f"""osascript -e 'display notification "Cover letter generation failed for application #{app_id}" with title "❌ Cover Letter Failed"'""")
         send_discord_notification(
             title="❌ Cover Letter Generation Failed",
-            description=f"Failed to generate cover letter for application #{app_id}.\nError: `{str(e)}`",
+            description=f"Failed to generate cover letter for application #{app_id}. See local logs for details.",
             color=0xFF0000,
         )
 
