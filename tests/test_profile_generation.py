@@ -455,3 +455,30 @@ def test_real_pdf_render_after_positive_check(generation, monkeypatch):
     for path in (app[4], app[8]):
         assert Path(path).read_bytes().startswith(b"%PDF-")
         assert Path(path).stat().st_size > 1000
+
+
+def test_tracker_publishes_real_ledger_pdf_with_prepared_cv_context(generation, monkeypatch):
+    import fitz
+    from cv_optimizer.generator import PDFGenerator
+    from cv_optimizer.optimizer import CVOptimizer
+    from cv_optimizer.profiles import resolve_profile
+    from test_cv_ledger import many_role_source, source_markdown, normalized_text
+
+    g = generation
+    source = many_role_source()
+    g.master.write_text(json.dumps(source))
+    cv = CVOptimizer("http://fake", "fake", "fake")
+    client = FakeClient(source_markdown(resolve_profile(source, "mechanical_engineering")))
+    cv.client = client
+    monkeypatch.setattr(tracker, "CVOptimizer", lambda **kw: cv)
+    monkeypatch.setattr(tracker, "PDFGenerator", PDFGenerator)
+    app_id = tracker.track("Synthetic Works", "Engineer", str(g.jd), cv_profile="mechanical_engineering")
+    path = Path(g.db.get_application(app_id)[4])
+    assert path.with_suffix(".md").read_text().count("> **") == 7
+    assert "IT achievement sentinel" not in client.requests[0]["messages"][1]["content"]
+    assert g.checker.call_args.args[1].rules["role_detail"]["role-0"] == "ledger"
+    with fitz.open(path) as doc:
+        text = normalized_text(doc)
+        assert "IT achievement sentinel" not in text
+        assert all(role["title"] in text for role in source["experience"])
+        assert "Designed engineering fixture 7." in text

@@ -56,7 +56,7 @@ Use the approved headline from the selected facts. It may be engineering-led eve
 
 ### `## Experience`
 
-Per role, use this exact layout (empty line before bullets):
+For `detailed` and `brief` roles, use this exact layout (empty line before bullets):
 
 ```
 ### {{Job Title}}
@@ -64,6 +64,16 @@ Per role, use this exact layout (empty line before bullets):
 
 - {{Bullet}}
 ```
+
+For `ledger` roles only, replace the entire role block with an identity-only blockquote paragraph:
+
+```
+> **{{Exact Historical Job Title}}** | {{Company}} | {{Location}} | {{Start Date}} - {{End Date}}
+>
+> **{{Next Ledger Role Title}}** | {{Company}} | {{Location}} | {{Start Date}} - {{End Date}}
+```
+
+Each ledger role is its own paragraph, separated by a `>` blank line. Retain every supplied identity field exactly; omit only absent location/date fields, never invent them. Use no `###` role heading, no achievement bullets or descriptive prose for ledger roles. Do not move their achievements into Summary or another section. Consecutive ledger roles share a blockquote; end it with an unquoted blank line before a detailed/brief role. Keep everything inside the single Experience section, in the original global chronology, even when ledger and detailed roles alternate. Do not add an IT History section or merge separate employments. The `>` marker is layout syntax, not a quotation to attribute.
 
 **Bullet formula:** `{{Past-tense action verb}} {{Context / contribution}} {{Source-backed result}}.` Include tools, metrics, or a software tech stack only when supplied and relevant. A mechanical accomplishment does not require a software stack.
 
@@ -82,6 +92,7 @@ Examples:
 - Use PRESENTATION RULES `role_detail` keyed by role ID: relevance, not recency, determines detail.
 - `detailed` roles: emphasize relevant supplied achievements; use up to 4-6 bullets only when supported. Never pad sparse source facts.
 - `brief` roles: retain actual title, employer, dates and at most 1-2 short source-backed bullets. An empty achievement array means title/date-only, not permission to fabricate or omit the role.
+- `ledger` roles: identities only using the blockquote format above; zero achievements, regardless of vacancy relevance. Never treat all brief roles as ledger entries.
 - In engineering, relevant mechanical work receives detail while recent unrelated IT roles stay compressed. A recent role is not automatically the most detailed.
 
 **Ordering:** List roles in reverse chronological order (most recent first). Never reorder roles for any reason.
@@ -145,7 +156,7 @@ Populate directly from Master CV. Never fabricate.
 
 4. **Human readability first** - an ATS can't get you an offer; a recruiter does. If you must choose between ATS-match and readability, choose readability.
 
-5. **Formatting** - pure Markdown only: headers, bold, italics, and bulleted lists. No tables, HTML, images, or inline code. The CV must render cleanly as plain text.
+5. **Formatting** - pure Markdown only: headers, bold, italics, bulleted lists, and identity-only blockquotes for ledger roles. No tables, HTML, images, or inline code. The CV must render cleanly as plain text.
 
 6. **No em dashes** - never use the em dash character (U+2014) in the CV output. Use hyphens (-), commas, or colons instead. Em dashes are a telltale sign of LLM-generated text; no real human uses them in a CV.
 
