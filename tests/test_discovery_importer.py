@@ -95,6 +95,8 @@ def test_score_85_imports_draft(temp_db, temp_apps_dir, master_cv):
     assert app[7] == "auto:serpapi" or app[7] == "auto:discovery"
 
     assert db.get_latest_status(app_id) == "draft"
+    db.init_db()
+    assert db.get_application_profile(app_id) == (None, 0)
 
     job = db.get_job_posting(posting_id)
     assert job["application_id"] == app_id

@@ -14,6 +14,9 @@ from cv_optimizer.optimizer import CVOptimizer
 from cv_optimizer.generator import PDFGenerator
 from cv_optimizer.cover_letter import CoverLetterOptimizer, CoverLetterPDFGenerator
 from cv_optimizer.language import detect_job_description_language
+from cv_optimizer.profiles import resolve_profile, validate_profile_name
+from cv_optimizer.document_validation import DocumentValidator
+from cv_optimizer.documents import publish_document
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +66,7 @@ def _build_cv_filename(name: str, role: str) -> str:
     combined = f"{clean_name} {clean_role}"
     return re.sub(r'[^\w]+', '_', combined).strip('_')
 
-def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job_url: str = None, with_cover_letter: bool = False, source: str = None) -> int:
+def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job_url: str = None, with_cover_letter: bool = False, source: str = None, *, cv_profile: str = None) -> int:
     """
     Initializes a new application:
     1. Creates DB record
@@ -72,6 +75,7 @@ def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job
     4. Generates optimized CV inside the directory
     5. Sets initial status to 'draft' (pre-application prep; applied+ghosted come later)
     """
+    cv_profile = validate_profile_name(cv_profile)
     db.init_db()
 
     # Sanitize inputs: decode any HTML entities (e.g. &amp; → &)
@@ -89,7 +93,8 @@ def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job
         )
 
     # 1. Create DB record
-    app_id = db.insert_application(company, role, job_url=job_url, source=source)
+    app_id = db.insert_application(company, role, job_url=job_url, source=source, cv_profile=cv_profile)
+    selection = db.get_application_profile(app_id)
     logger.info(f"Created application #{app_id}: {company} — {role}")
 
     # 2. Generate directory
@@ -116,55 +121,20 @@ def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job
 
     # 4. Generate optimized CV
     try:
-        job_description = PDFExtractor.extract_text(str(jd_source))
-
-        language = detect_job_description_language(job_description).language
-        logger.info(
-            "Detected JD language: %s", language,
-        )
-
-        actual_master_cv = master_cv_path if master_cv_path else settings.master_cv_path
-        with open(actual_master_cv, "r", encoding="utf-8") as f:
-            master_cv_data = json.load(f)
-
-        optimizer = CVOptimizer(
-            base_url=settings.llm_base_url,
-            api_key=settings.llm_api_key,
-            model_name=settings.model_name,
-            temperature=settings.temperature,
-        )
-        optimized_md = optimizer.optimize(master_cv_data, job_description, language=language)
-
-        candidate_name = master_cv_data.get("personal_info", {}).get("name", "Candidate")
-        cv_base_name = _build_cv_filename(candidate_name, role)
-
-        # Save markdown
-        cv_md_path = app_dir / f"{cv_base_name}.md"
-        cv_md_path.write_text(optimized_md, encoding="utf-8")
-
-        # Save PDF
-        cv_pdf_path = app_dir / f"{cv_base_name}.pdf"
-        generator = PDFGenerator()
-        generator.generate(optimized_md, str(cv_pdf_path))
-
-        logger.info(f"Generated CV at {cv_pdf_path}")
-        cv_path_str = str(cv_pdf_path)
+        cv_path_str = _generate_document(app_id, master_cv_path, "cv", selection)
     except Exception as e:
         logger.warning(f"CV generation failed (application still tracked): {e}")
         cv_path_str = None
 
-    # 5. Update DB with file paths
-    db.update_application(app_id, jd_path=str(jd_dest), cv_path=cv_path_str)
-
-    # 6. Optionally generate cover letter
+    # 5. Optionally generate cover letter against the initial selection/revision
     if with_cover_letter and cv_path_str:
         try:
-            _cl_path = generate_cover_letter(app_id, master_cv_path)
+            _cl_path = _generate_document(app_id, master_cv_path, "cover_letter", selection)
             logger.info(f"Generated cover letter at {_cl_path}")
         except Exception as e:
             logger.warning(f"Cover letter generation failed (CV still tracked): {e}")
 
-    # 7. Set initial status to draft (pre-application prep)
+    # 6. Set initial status to draft (pre-application prep)
     db.insert_status(app_id, "draft")
 
     logger.info(f"Application #{app_id} tracked: draft")
@@ -173,55 +143,18 @@ def track(company: str, role: str, jd_path: str, master_cv_path: str = None, job
 
 def reoptimize(app_id: int, master_cv_path: str = None) -> None:
     """Regenerates the CV for an existing application in-place (no new DB row)."""
-    db.init_db()
-
-    app = db.get_application(app_id)
-    if app is None:
-        raise ValueError(f"Application #{app_id} not found.")
-
-    _id, company, role, jd_path, _cv_path, _job_url, _created_at, _source, _cover_letter_path = app
-
-    if not jd_path or not Path(jd_path).exists():
-        raise FileNotFoundError(f"JD file not found: {jd_path}")
-
-    actual_cv = master_cv_path or settings.master_cv_path
-    with open(actual_cv, "r", encoding="utf-8") as f:
-        master_cv_data = json.load(f)
-
-    jd_source = Path(jd_path)
-    job_description = PDFExtractor.extract_text(str(jd_source))
-
-    language = detect_job_description_language(job_description).language
-    logger.info("Detected JD language: %s", language)
-
-    optimizer = CVOptimizer(
-        base_url=settings.llm_base_url,
-        api_key=settings.llm_api_key,
-        model_name=settings.model_name,
-        temperature=settings.temperature,
-    )
-    optimized_md = optimizer.optimize(master_cv_data, job_description, language=language)
-
-    # Use the directory that already contains the JD — immune to role-name changes
-    app_dir = Path(jd_path).parent
-    app_dir.mkdir(parents=True, exist_ok=True)
-
-    candidate_name = master_cv_data.get("personal_info", {}).get("name", "Candidate")
-    cv_base_name = _build_cv_filename(candidate_name, role)
-
-    cv_md_path = app_dir / f"{cv_base_name}.md"
-    cv_pdf_path = app_dir / f"{cv_base_name}.pdf"
-
-    cv_md_path.write_text(optimized_md, encoding="utf-8")
-    PDFGenerator().generate(optimized_md, str(cv_pdf_path))
-
-    db.update_application(app_id, cv_path=str(cv_pdf_path))
-
+    _generate_document(app_id, master_cv_path, "cv")
     logger.info(f"CV regenerated for application #{app_id}")
 
 
 def generate_cover_letter(app_id: int, master_cv_path: str = None) -> str:
     """Generates a tailored, ATS-optimized cover letter for an existing application."""
+    return _generate_document(app_id, master_cv_path, "cover_letter")
+
+
+def _generate_document(app_id: int, master_cv_path: str, document_type: str,
+                       expected_selection: tuple[str, int] | None = None) -> str:
+    """Resolve, write, check and publish against one persisted selection snapshot."""
     db.init_db()
 
     app = db.get_application(app_id)
@@ -230,12 +163,18 @@ def generate_cover_letter(app_id: int, master_cv_path: str = None) -> str:
 
     _id, company, role, jd_path, _cv_path, _job_url, _created_at, _source, _cover_letter_path = app
 
+    profile, revision = db.get_application_profile(app_id)
+    if profile is None:
+        raise ValueError("Select an application profile before generating documents")
+    if expected_selection is not None and (profile, revision) != expected_selection:
+        raise ValueError("Application profile/revision changed; generate documents explicitly")
+
     if not jd_path or not Path(jd_path).exists():
         raise FileNotFoundError(f"JD file not found: {jd_path}")
 
     actual_cv = master_cv_path or settings.master_cv_path
     with open(actual_cv, "r", encoding="utf-8") as f:
-        master_cv_data = json.load(f)
+        context = resolve_profile(json.load(f), profile)
 
     jd_source = Path(jd_path)
     job_description = PDFExtractor.extract_text(str(jd_source))
@@ -243,31 +182,25 @@ def generate_cover_letter(app_id: int, master_cv_path: str = None) -> str:
     language = detect_job_description_language(job_description).language
     logger.info("Detected JD language: %s", language)
 
-    cover_optimizer = CoverLetterOptimizer(
+    optimizer_type = CVOptimizer if document_type == "cv" else CoverLetterOptimizer
+    optimizer = optimizer_type(
         base_url=settings.llm_base_url,
         api_key=settings.llm_api_key,
         model_name=settings.model_name,
         temperature=settings.temperature,
     )
-    cover_letter_md = cover_optimizer.generate(master_cv_data, job_description, language=language)
+    write = optimizer.optimize if document_type == "cv" else optimizer.generate
+    markdown = write(context, job_description, language=language)
+    DocumentValidator().validate(markdown, context, document_type, language)
 
-    # Use the directory that already contains the JD and CV
-    app_dir = Path(jd_path).parent
-    app_dir.mkdir(parents=True, exist_ok=True)
-
-    candidate_name = master_cv_data.get("personal_info", {}).get("name", "Candidate")
-    cl_base_name = _build_cv_filename(candidate_name, role) + "_Cover_Letter"
-
-    cl_md_path = app_dir / f"{cl_base_name}.md"
-    cl_pdf_path = app_dir / f"{cl_base_name}.pdf"
-
-    cl_md_path.write_text(cover_letter_md, encoding="utf-8")
-    CoverLetterPDFGenerator().generate(cover_letter_md, str(cl_pdf_path))
-
-    db.update_application(app_id, cover_letter_path=str(cl_pdf_path))
-
-    logger.info(f"Cover letter generated for application #{app_id}")
-    return str(cl_pdf_path)
+    candidate_name = context.facts.get("personal_info", {}).get("name", "Candidate")
+    base_name = _build_cv_filename(candidate_name, role)
+    if document_type == "cover_letter":
+        base_name += "_Cover_Letter"
+    pdf_path = Path(jd_path).parent / f"{base_name}.pdf"
+    renderer = PDFGenerator() if document_type == "cv" else CoverLetterPDFGenerator()
+    return publish_document(app_id, profile, revision, markdown, pdf_path,
+                            renderer.generate, document_type)
 
 
 def remove_application(app_id: int) -> None:

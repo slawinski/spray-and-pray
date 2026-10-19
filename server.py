@@ -10,6 +10,7 @@ import json as json_mod
 import markdown
 import re
 from pathlib import Path
+from typing import Literal
 import logging
 from cv_optimizer.config import settings
 
@@ -34,6 +35,7 @@ class TrackRequest(BaseModel):
     company: str
     role: str
     jd: str
+    cv_profile: Literal["it", "mechanical_engineering"]
     url: str = None
     source: str = None
 
@@ -66,7 +68,7 @@ def send_discord_notification(title: str, description: str, color: int, url: str
     except Exception as e:
         logger.warning(f"Failed to send Discord notification: {e}")
 
-def run_cv_optimizer(company: str, role: str, jd_text: str, job_url: str = None, source: str = None):
+def run_cv_optimizer(company: str, role: str, jd_text: str, job_url: str = None, source: str = None, *, cv_profile: str = None):
     import tempfile
     temp_jd = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
     temp_jd.write(jd_text)
@@ -76,19 +78,31 @@ def run_cv_optimizer(company: str, role: str, jd_text: str, job_url: str = None,
     try:
         logger.info(f"Triggering tracking pipeline for {company} - {role}")
         from cv_optimizer.tracker import track
-        app_id = track(company, role, str(temp_jd_path), job_url=job_url, with_cover_letter=True, source=source)
+        app_id = track(company, role, str(temp_jd_path), job_url=job_url, with_cover_letter=True, source=source, cv_profile=cv_profile)
         
-        logger.info(f"Optimization success for app #{app_id}")
-        os.system(f"""osascript -e 'display notification "CV + Cover Letter ready for {role} at {company}!" with title "✅ CV Optimizer"'""")
-        
-        discord_desc = f"Successfully generated tailored CV + Cover Letter for **{role}** at **{company}**.\nReady in `applications/`."
+        from cv_optimizer import db
+        application = db.get_application(app_id)
+        cv_ready = bool(application and application[4] and Path(application[4]).is_file())
+        letter_ready = bool(application and application[8] and Path(application[8]).is_file())
+        if cv_ready and letter_ready:
+            title, outcome, color = "✅ CV + Cover Letter Generated (Click to open Finder)", "CV + Cover Letter ready", 0x00FF00
+        elif cv_ready:
+            title, outcome, color = "⚠️ CV Ready", "CV ready; cover letter generation failed", 0xFFA500
+        elif letter_ready:
+            title, outcome, color = "⚠️ Cover Letter Ready", "Cover letter ready; CV not ready", 0xFFA500
+        else:
+            title, outcome, color = "⚠️ Application Tracked", "Application tracked only; documents not published", 0xFFA500
+        logger.info("Application #%s: %s", app_id, outcome)
+        os.system(f"""osascript -e 'display notification "{outcome} for {role} at {company}." with title "CV Optimizer"'""")
+
+        discord_desc = f"{outcome} for **{role}** at **{company}**.\nApplication #{app_id}."
         if job_url:
             discord_desc += f"\n\n🔗 [View Job Posting]({job_url})"
         
         send_discord_notification(
-            title="✅ CV + Cover Letter Generated (Click to open Finder)",
+            title=title,
             description=discord_desc,
-            color=0x00FF00,
+            color=color,
             url=job_url or f"http://localhost:8000/api/open/{app_id}"
         )
             
@@ -118,7 +132,7 @@ async def track_application(request: TrackRequest, background_tasks: BackgroundT
         )
 
     # We run the optimization in the background so the extension UI returns immediately
-    background_tasks.add_task(run_cv_optimizer, request.company, request.role, request.jd, request.url, request.source)
+    background_tasks.add_task(run_cv_optimizer, request.company, request.role, request.jd, request.url, request.source, cv_profile=request.cv_profile)
     
     return {"status": "success", "message": f"Tracking initiated for {request.company} - {request.role}"}
 
@@ -517,6 +531,10 @@ async def generate_cover_letter_endpoint(app_id: int, background_tasks: Backgrou
     app_data = db_mod.get_application(app_id)
     if not app_data:
         raise HTTPException(status_code=404, detail="Application not found")
+
+    profile, _ = db_mod.get_application_profile(app_id)
+    if profile is None:
+        raise HTTPException(status_code=400, detail="Select a CV profile for this application in the TUI before generating a cover letter")
 
     # Check if JD exists
     jd_path = app_data[3]

@@ -9,6 +9,57 @@ from textual.widgets import Button, Input, Label, Select, Static
 from cv_optimizer import db
 
 BASE_STATUSES = ["draft", "applied", "ghosted", "withdrawn", "rejected", "offer", "accepted"]
+PROFILE_LABELS = {"it": "IT", "mechanical_engineering": "Mechanical Engineering"}
+
+
+class ProfileModal(ModalScreen[str]):
+    """None is cancellation; a blank selection cannot be confirmed."""
+
+    BINDINGS = [("escape", "cancel", "Cancel")]
+    DEFAULT_CSS = """
+    ProfileModal #profile-modal {
+        width: 50;
+        max-width: 100%;
+        height: auto;
+        border: thick $primary;
+        padding: 1 2;
+        background: $surface;
+    }
+    ProfileModal Horizontal { height: 3; align: center middle; }
+    ProfileModal Button { margin: 0 1; min-width: 10; }
+    ProfileModal Label { margin-bottom: 1; }
+    """
+
+    def __init__(self, app_id: int, current_profile: str | None) -> None:
+        super().__init__()
+        self.app_id = app_id
+        self.current_profile = current_profile
+
+    def compose(self) -> ComposeResult:
+        yield Vertical(
+            Label(f"CV profile for Application #{self.app_id}"),
+            Select([(label, name) for name, label in PROFILE_LABELS.items()],
+                   id="profile-select", prompt="Select a profile...",
+                   value=self.current_profile if self.current_profile else Select.NULL),
+            Horizontal(
+                Button("Confirm", id="confirm", variant="primary"),
+                Button("Cancel", id="cancel"),
+            ),
+            id="profile-modal",
+        )
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "confirm":
+            select = self.query_one("#profile-select", Select)
+            if select.is_blank():
+                select.focus()
+                return
+            self.dismiss(str(select.value))
+        else:
+            self.dismiss(None)
 
 
 def _next_interview(history: list[dict]) -> int:

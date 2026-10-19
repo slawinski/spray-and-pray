@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 from cv_optimizer.config import settings
 from cv_optimizer.language import build_language_instruction
+from cv_optimizer.profiles import ProfileContext, ProfileError
 
 PROMPT_FILE = "cover_letter.md"
 SYSTEM_PROMPT = (Path(__file__).parent / "prompts" / PROMPT_FILE).read_text()
@@ -95,11 +96,13 @@ class CoverLetterOptimizer:
         self.model_name = model_name or settings.model_name
         self.temperature = temperature if temperature is not None else settings.temperature
 
-    def generate(self, master_cv: Dict[str, Any], job_description: str, language: str = "en") -> str:
-        """Generates a tailored cover letter from master CV and job description."""
+    def generate(self, context: ProfileContext, job_description: str, language: str = "en") -> str:
+        """Tailor a trusted resolver context; the caller validates before rendering."""
+        if not isinstance(context, ProfileContext):
+            raise ProfileError("Expected ProfileContext; use resolve_profile(master, name) before generation")
         logger.info("Generating cover letter via LLM (%s)...", language)
         try:
-            cleaned = self._generate_once(master_cv, job_description, language, settings.max_tokens)
+            cleaned = self._generate_once(context, job_description, language, settings.max_tokens)
 
             # Reasoning models (deepseek-v4-pro) can exhaust max_tokens during
             # chain-of-thought and return empty content. Retry once with a larger
@@ -109,7 +112,7 @@ class CoverLetterOptimizer:
                     "LLM returned empty cover letter; retrying with doubled max_tokens"
                 )
                 cleaned = self._generate_once(
-                    master_cv, job_description, language, settings.max_tokens * 2
+                    context, job_description, language, settings.max_tokens * 2
                 )
 
             if not cleaned.strip():
@@ -126,7 +129,7 @@ class CoverLetterOptimizer:
 
     def _generate_once(
         self,
-        master_cv: Dict[str, Any],
+        context: ProfileContext,
         job_description: str,
         language: str,
         max_tokens: int,
@@ -134,7 +137,9 @@ class CoverLetterOptimizer:
         """Performs a single LLM completion and cleans the raw output."""
         system_prompt = SYSTEM_PROMPT + "\n\n" + self._language_instruction(language)
         user_content = (
-            f"MASTER CV DATA:\n{json.dumps(master_cv, indent=2)}\n\n"
+            f"SELECTED PROFILE: {context.profile}\n"
+            f"APPROVED CV DATA:\n{json.dumps(context.facts, indent=2)}\n\n"
+            f"PRESENTATION RULES:\n{json.dumps(context.rules, indent=2)}\n\n"
             f"JOB DESCRIPTION:\n{job_description}"
         )
         response = self.client.chat.completions.create(

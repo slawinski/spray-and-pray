@@ -4,11 +4,20 @@ function setStatus(message, className = '') {
     statusEl.className = className;
 }
 
-async function postTrack(payload) {
+function selectedProfile() {
+    const profileSelect = document.getElementById('cv-profile');
+    if (!profileSelect.value) {
+        profileSelect.focus();
+        throw new Error('Please select a CV profile.');
+    }
+    return profileSelect.value;
+}
+
+async function postTrack(payload, profile) {
     const response = await fetch('http://localhost:8000/api/track', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, cv_profile: profile }),
     });
     if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -30,6 +39,7 @@ document.getElementById('extract-btn').addEventListener('click', async () => {
     btn.disabled = true;
 
     try {
+        const profile = selectedProfile();
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
         const results = await chrome.scripting.executeScript({
@@ -48,7 +58,7 @@ document.getElementById('extract-btn').addEventListener('click', async () => {
             role: jobData.role,
             jd: jobData.jd,
             url: tab.url,
-        });
+        }, profile);
 
         setStatus('✅ Success! CV + Cover Letter generating.', 'success');
     } catch (error) {
@@ -79,7 +89,8 @@ document.getElementById('manual-btn').addEventListener('click', async () => {
     setStatus('Sending to local API...');
 
     try {
-        await postTrack({ company, role, jd, url });
+        const profile = selectedProfile();
+        await postTrack({ company, role, jd, url }, profile);
         setStatus('✅ Success! CV + Cover Letter generating.', 'success');
     } catch (error) {
         setStatus(

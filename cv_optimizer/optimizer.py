@@ -2,13 +2,13 @@ import json
 import re
 import logging
 from pathlib import Path
-from typing import Dict, Any
 from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
 from cv_optimizer.config import settings
 from cv_optimizer.language import build_language_instruction, build_cv_heading_instruction
+from cv_optimizer.profiles import ProfileContext, ProfileError
 
 PROMPT_FILE = "optimize.md"
 SYSTEM_PROMPT = (Path(__file__).parent / "prompts" / PROMPT_FILE).read_text()
@@ -19,11 +19,13 @@ class CVOptimizer:
         self.model_name = model_name
         self.temperature = temperature
 
-    def optimize(self, master_cv: Dict[str, Any], job_description: str, language: str = "en") -> str:
-        """Sends CV and job description to LLM for optimization."""
+    def optimize(self, context: ProfileContext, job_description: str, language: str = "en") -> str:
+        """Tailor a trusted resolver context; the caller validates before rendering."""
+        if not isinstance(context, ProfileContext):
+            raise ProfileError("Expected ProfileContext; use resolve_profile(master, name) before generation")
         logger.info("Optimizing CV via LLM (%s)...", language)
         try:
-            cleaned = self._optimize_once(master_cv, job_description, language, settings.max_tokens)
+            cleaned = self._optimize_once(context, job_description, language, settings.max_tokens)
 
             # Reasoning models can exhaust max_tokens during chain-of-thought
             # and return empty content. Retry once with a larger budget so we
@@ -33,7 +35,7 @@ class CVOptimizer:
                     "LLM returned empty CV; retrying with doubled max_tokens"
                 )
                 cleaned = self._optimize_once(
-                    master_cv, job_description, language, settings.max_tokens * 2
+                    context, job_description, language, settings.max_tokens * 2
                 )
 
             if not cleaned.strip():
@@ -49,7 +51,7 @@ class CVOptimizer:
 
     def _optimize_once(
         self,
-        master_cv: Dict[str, Any],
+        context: ProfileContext,
         job_description: str,
         language: str,
         max_tokens: int,
@@ -60,7 +62,9 @@ class CVOptimizer:
         if heading_instruction:
             system_prompt += "\n\n" + heading_instruction
         user_content = (
-            f"MASTER CV DATA:\n{json.dumps(master_cv, indent=2)}\n\n"
+            f"SELECTED PROFILE: {context.profile}\n"
+            f"APPROVED CV DATA:\n{json.dumps(context.facts, indent=2)}\n\n"
+            f"PRESENTATION RULES:\n{json.dumps(context.rules, indent=2)}\n\n"
             f"JOB DESCRIPTION:\n{job_description}"
         )
         response = self.client.chat.completions.create(

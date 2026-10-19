@@ -42,6 +42,7 @@ Everything runs locally. There is no backend service, no account, and no data le
 
 ### 1. ATS-Optimized CV Generation
 - Takes a `master_cv.json` and a job description, produces a tailored CV in Markdown.
+- Uses the application's manually selected **IT** or **Mechanical Engineering** profile to select eligible facts before writing; the full career record is not sent to the document writer.
 - Uses a dedicated LLM prompt (`cv_optimizer/prompts/optimize.md`) that enforces:
   - **Exact keyword matching** — literal string comparison against the JD (e.g. `React.js` not `React`).
   - **Anti-hallucination** — every skill and achievement must trace back to the Master CV. Gaps are never fabricated.
@@ -61,7 +62,7 @@ Everything runs locally. There is no backend service, no account, and no data le
 - Chrome/Firefox extension (Manifest V3, vanilla JS) that scrapes the current tab's job posting and POSTs it to the local API.
 - Supports job boards with site-specific selectors plus a JSON-LD fallback:
   - LinkedIn, justjoin.it, nofluffjobs.com, theprotocol.it, greenhouse.io, workingnomads.com
-- Generates **all files** — JD copy, CV (`.md` + `.pdf`), and cover letter (`.md` + `.pdf`) — on a single click.
+- After explicit profile selection, starts generation of the JD copy, CV (`.md` + `.pdf`), and cover letter (`.md` + `.pdf`) on a single click. Documents become ready only after successful checking and publication; completion can be partial.
 
 ### 4. Application Tracking
 - SQLite database (WAL mode) persists every application with its status history.
@@ -178,6 +179,9 @@ spray-and-pray/
 │   ├── config.py              # Pydantic settings (LLM config, paths)
 │   ├── db.py                  # SQLite layer (schema, queries, migrations)
 │   ├── extractor.py           # JD text extraction (PyMuPDF)
+│   ├── profiles.py            # Validated, allowlist-based profile projection
+│   ├── document_validation.py # Independent generated-document checker
+│   ├── documents.py           # Checked Markdown/PDF publication
 │   ├── optimizer.py           # CV optimization via LLM
 │   ├── generator.py           # Markdown → 2-column CV PDF
 │   ├── cover_letter.py        # Cover letter LLM + PDF generation
@@ -319,6 +323,7 @@ Malformed configuration fails loudly with a readable error.
 | `o` | Open application folder in Finder |
 | `ctrl+r` | Re-generate CV |
 | `ctrl+g` | Generate cover letter |
+| `v` | Select or change the application's CV profile |
 | `P` | Prepare mock interview (opens browser) |
 | `L` | Open lesson library (browser) |
 | `S` | Open Sankey funnel (browser) |
@@ -385,6 +390,14 @@ Match Assessment — but never a generated CV or cover letter, and never a
 fake `applied` status. Document generation stays a deliberate, per-job user
 action in the TUI (`ctrl+r`, `ctrl+g`).
 
+New discovery drafts have **no profile selected**. The first CV or cover-letter
+action prompts for IT or Mechanical Engineering; cancelling leaves the draft
+unselected. The detail panel shows the stored choice. Use `v` to select or change
+it explicitly. Each application's CV and letter reuse that choice independently
+of other applications. Changing it clears both document-ready paths but leaves
+the old files on disk; it does not generate replacements. Choosing the same
+profile leaves readiness unchanged.
+
 **Sources**
 
 | Source | Mechanism | Notes |
@@ -422,8 +435,8 @@ The launch agent runs `<repo>/.venv/bin/python <repo>/cv_optimizer.py discover`.
 2. Load the `extension/` directory as an unpacked extension:
    - Chrome: `chrome://extensions` → Developer mode → *Load unpacked*
    - Firefox: `about:debugging` → *Load Temporary Add-on*
-3. Browse any supported job board, click the extension icon, and click **Optimize for this Job**.
-4. A macOS + Discord notification fires when the CV and cover letter are ready.
+3. Browse any supported job board, click the extension icon, explicitly select **IT** or **Mechanical Engineering**, and click **Optimize for this Job**. The same required selector applies to manual entry; there is no automatic profile choice.
+4. The completion notification distinguishes tracked-only failure, CV ready with letter failure, and both documents ready. An accepted request alone does not mean documents are ready.
 
 ### 3. Web server API
 
@@ -435,7 +448,7 @@ uvicorn server:app --host localhost --port 8000 --reload
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/track` | Start CV + cover letter pipeline. Body: `{company, role, jd, url?}` |
+| `POST` | `/api/track` | Start CV + cover letter pipeline. Body: `{company, role, jd, cv_profile, url?, source?}`; `cv_profile` must be `"it"` or `"mechanical_engineering"` |
 | `POST` | `/api/cover-letter/{app_id}` | Generate cover letter for an existing application |
 | `GET` | `/api/open/{app_id}` | Reveal CV PDF in Finder |
 | `GET` | `/api/open-cover-letter/{app_id}` | Reveal cover letter PDF in Finder |
@@ -452,61 +465,81 @@ uvicorn server:app --host localhost --port 8000 --reload
 | `GET` | `/graph` | D3.js knowledge graph |
 | `GET` | `/prepare-learn?concept=...` | Loading screen → lesson |
 
+`/api/track` rejects missing, null, empty, or unknown `cv_profile` values before
+scheduling generation or inserting an application. Older clients must send this
+field; omission is not an IT default. Direct new `track()` calls also require an
+explicit valid choice. Existing applications receive IT on the one-time profile
+migration, without rewriting saved files or retroactively checking them. Newly
+inserted drafts remain unselected across restarts. ID-only generation on an
+unselected application fails: select its profile in the TUI first.
+
+Before publication, each generated CV and letter is checked independently against
+the selected facts and exclusions. This adds **one checker completion per
+document**, using the configured provider/model, in addition to writing costs.
+Rejection, malformed verdicts, and checker errors fail the attempt, not bypass it.
+No automatic correction loop runs. Correct the reported content or configuration
+and explicitly retry. A failed same-profile replacement preserves the prior valid
+files and ready path; after a profile change, old files remain on disk but are not
+marked ready. In-flight output for an outdated selection cannot publish.
+
 ---
 
 ## Data model
 
 ### Master CV (`master_cv.json`)
 
-The single source of truth for all generated documents. The LLM is instructed to never invent anything beyond it.
+The shared factual career record lives at `master_cv.json` by default (the
+`master_cv_path` setting in `cv_optimizer/config.py`; a per-call source override
+must satisfy the same policy). Keep personal data local and ignored. Start from
+[`master_cv.example.json`](master_cv.example.json), the complete synthetic format
+example, and replace its fictional facts and profile selections with your own.
 
-```json
-{
-  "personal_info": {
-    "name": "Jane Doe",
-    "email": "jane@example.com",
-    "phone": "+1 555-0100",
-    "linkedin": "https://www.linkedin.com/in/janedoe",
-    "github": "https://github.com/janedoe",
-    "website": "https://janedoe.com",
-    "location": "New York, USA"
-  },
-  "summary": "Software Engineer with X years of experience in...",
-  "skills": {
-    "languages": ["JavaScript", "Python"],
-    "frameworks_and_libraries": ["React", "FastAPI"],
-    "tools_and_infrastructure": ["Docker", "Git"],
-    "soft_skills": ["Mentoring", "Public Speaking"]
-  },
-  "experience": [
-    {
-      "title": "Senior Software Engineer",
-      "company": "Tech Corp",
-      "location": "Remote",
-      "start_date": "01/2020",
-      "end_date": "Present",
-      "achievements": ["Built a real-time..."]
-    }
-  ],
-  "speaking_and_community": [
-    {
-      "organization": "Local Tech Meetup",
-      "url": "https://example.com/meetup",
-      "role": "Speaker",
-      "activities": ["Gave talks on..."]
-    }
-  ],
-  "education": [
-    { "degree": "B.S. in Computer Science", "university": "State University" }
-  ],
-  "certifications": [
-    { "name": "AWS Certified Solutions Architect", "issuer": "Amazon" }
-  ],
-  "languages": [ { "language": "English", "proficiency": "Native" } ],
-  "hobbies": ["Hiking", "Photography"],
-  "disclaimer": "I give consent for my personal data..."
-}
-```
+The existing `personal_info`, `summary`, `skills`, `experience`, education, and
+other factual sections remain canonical. Profile metadata controls document
+eligibility rather than maintaining separate biographies:
+
+- Give every experience and education record a unique, stable `id`.
+- `profile_shared` explicitly lists personal-info **field names**, exact language
+  entry snapshots, and the exact source `disclaimer` string (or `null` to omit
+  consent text). It does not copy unknown fields automatically.
+- `profiles.it` and `profiles.mechanical_engineering` each require an approved
+  `headline`, a `summary` string or structured-object snapshot, `roles`, `skills`,
+  and `education`. Positioning is approved per profile, not taken implicitly from
+  the unrestricted master summary or most recent job title. Historical job titles
+  and dates remain factual; an engineering headline does not assert current
+  mechanical practice.
+- `roles` maps stable IDs to `{"detail": "detailed" | "brief",
+  "achievements": [...]}`. Each achievement selector must exactly match a source
+  string in that role. `skills` maps source category names to exact source values;
+  `education` lists stable IDs for complete education views. Source order is
+  retained, so keep experience in truthful reverse chronology.
+- Optional `speaking_and_community` and `certifications` selectors are exact
+  source-entry snapshots; `hobbies` selectors are exact strings. Omission selects
+  nothing. Newly added facts are not automatically eligible for either profile.
+
+For example, retain the original concise IT master's record as `msc-it`; add
+separate expanded master's and bachelor's records (`msc-expanded`, `bsc`) for
+engineering. IT selects only `msc-it`, preserving its original values and concise
+presentation (attendance dates omitted as before). Engineering selects the two
+expanded records, including supplied dates, specializations, and theses. IT
+excludes historical mechanical employment entirely, not just its bullets, and
+mechanical-only skills. Engineering selects detailed historical engineering work
+and brief recent IT roles with explicitly chosen source achievements.
+
+When editing selected source text, update its exact selector too, including
+language, community, and certification snapshots. Duplicate IDs, ambiguous or
+dangling references, wildcards, missing prepared policies, and invalid supplied
+policies stop generation with a configuration error. There is no raw-master
+fallback; both supplied policies are validated even when only one is requested.
+
+The old-CV recovery was a **one-time candidate-reviewed import**, not a reusable
+import tool. Only confirmed source facts belong in the master; absent metrics,
+tools, issuers, dates, and current proficiency must remain unclaimed. Keep old
+personal documents and extraction drafts out of tracked fixtures.
+
+Matching and discovery still consume canonical master facts independently of
+document profiles. Enriching career facts can change match scores/cache identity;
+this feature does not add profile-aware scoring or interview generation.
 
 ### Company intel (`company_intel.json`)
 
@@ -598,7 +631,7 @@ tests are intentionally opt-in.
 - **No dependency lockfile.** Dependencies are installed ad hoc; there is no `requirements.txt` or `pyproject.toml`. Pin them for reproducibility.
 - **Personal data is gitignored.** `master_cv.json`, `applications.db`, and `applications/` are not version-controlled. Back them up yourself.
 - **PDF layout is fragile.** The CV PDF uses hard-coded dimensions (A4 mediabox, fixed sidebar width). Large deviations in content length or diacritics may need layout tuning.
-- **Anti-hallucination is prompt-enforced, not code-enforced.** Output correctness depends on the LLM following the prompt. Always review generated documents before submitting.
+- **Checks are not a correctness guarantee.** Source projection limits writer input; deterministic and independent semantic checks reject detected violations before publication. Semantic checks can still miss errors. Always review generated CVs and letters before submitting.
 - **ATS optimization is heuristic.** "ATS-optimized" means following well-known parser heuristics (literal keyword matching, clean text, standard headings) — it does not guarantee passage through any specific ATS vendor.
 - **Cover letter scope.** The cover letter generator assumes a generic "Dear Hiring Manager" salutation; it cannot infer a specific recruiter's name.
 

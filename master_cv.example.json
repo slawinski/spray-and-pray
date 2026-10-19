@@ -8,23 +8,35 @@
     "website": "https://janedoe.com",
     "location": "New York, USA"
   },
-  "summary": "Software Engineer with X years of experience in...",
+  "summary": "Software engineer with earlier mechanical design experience.",
   "skills": {
     "languages": ["JavaScript", "Python"],
     "frameworks_and_libraries": ["React", "FastAPI"],
     "tools_and_infrastructure": ["Docker", "Git"],
-    "soft_skills": ["Mentoring", "Public Speaking"]
+    "soft_skills": ["Mentoring", "Public Speaking"],
+    "mechanical": ["SolidWorks", "Finite element analysis"]
   },
   "experience": [
     {
+      "id": "software",
       "title": "Senior Software Engineer",
       "company": "Tech Corp",
       "location": "Remote",
       "start_date": "01/2020",
       "end_date": "Present",
       "achievements": [
-        "Led the development of..."
+        "Automated reporting with Python.",
+        "Built React dashboards."
       ]
+    },
+    {
+      "id": "mechanical",
+      "title": "Mechanical Design Engineer",
+      "company": "Example Pumps",
+      "location": "Boston, USA",
+      "start_date": "06/2014",
+      "end_date": "03/2019",
+      "achievements": ["Designed pump assemblies."]
     }
   ],
   "speaking_and_community": [
@@ -36,14 +48,38 @@
       "end_date": "Present",
       "activities": ["Gave talks on..."],
       "talks": ["Talk title (2023)"]
+    },
+    {
+      "organization": "Mechanical Society",
+      "role": "Volunteer",
+      "activities": ["Organized a design workshop."]
     }
   ],
   "education": [
     {
-      "degree": "B.S. in Computer Science",
+      "id": "msc-it",
+      "degree": "MSc in Mechanical Engineering",
       "university": "State University",
-      "start_date": "2015",
-      "end_date": "2019"
+      "start_date": "2012",
+      "end_date": "2014"
+    },
+    {
+      "id": "msc-expanded",
+      "degree": "MSc in Mechanical Engineering",
+      "university": "State University",
+      "start_date": "09/2012",
+      "end_date": "06/2014",
+      "specialization": "Machine design",
+      "thesis": "Fatigue analysis of pump components"
+    },
+    {
+      "id": "bsc",
+      "degree": "BSc in Mechanical Engineering",
+      "university": "State University",
+      "start_date": "09/2008",
+      "end_date": "06/2012",
+      "specialization": "Manufacturing",
+      "thesis": "Design of an assembly fixture"
     }
   ],
   "certifications": [
@@ -59,6 +95,71 @@
       "proficiency": "Native"
     }
   ],
-  "hobbies": ["Hiking", "Photography"],
-  "disclaimer": "I give consent for my personal data included in my application to be processed for the purposes of the recruitment process..."
+  "hobbies": ["Hiking", "Photography", "Model engines"],
+  "disclaimer": "I give consent for my personal data included in my application to be processed for the purposes of the recruitment process...",
+  "profile_shared": {
+    "personal_info": ["name", "email", "phone", "linkedin", "github", "website", "location"],
+    "languages": [{"language": "English", "proficiency": "Native"}],
+    "disclaimer": "I give consent for my personal data included in my application to be processed for the purposes of the recruitment process..."
+  },
+  "profiles": {
+    "it": {
+      "headline": "Software Engineer",
+      "summary": "Software engineer building web applications and reporting tools.",
+      "roles": {
+        "software": {
+          "detail": "detailed",
+          "achievements": ["Automated reporting with Python.", "Built React dashboards."]
+        }
+      },
+      "skills": {
+        "languages": ["JavaScript", "Python"],
+        "frameworks_and_libraries": ["React", "FastAPI"],
+        "tools_and_infrastructure": ["Docker", "Git"],
+        "soft_skills": ["Mentoring", "Public Speaking"]
+      },
+      "education": ["msc-it"],
+      "speaking_and_community": [{
+        "organization": "Local Tech Meetup",
+        "url": "https://example.com/meetup",
+        "role": "Speaker",
+        "start_date": "2021",
+        "end_date": "Present",
+        "activities": ["Gave talks on..."],
+        "talks": ["Talk title (2023)"]
+      }],
+      "certifications": [{
+        "name": "AWS Certified Solutions Architect",
+        "issuer": "Amazon Web Services",
+        "issue_date": "05/2021"
+      }],
+      "hobbies": ["Hiking", "Photography"]
+    },
+    "mechanical_engineering": {
+      "headline": "Mechanical Engineer with Software Experience",
+      "summary": "Mechanical engineer with earlier pump-design experience and recent software delivery experience.",
+      "roles": {
+        "software": {
+          "detail": "brief",
+          "achievements": ["Automated reporting with Python."]
+        },
+        "mechanical": {
+          "detail": "detailed",
+          "achievements": ["Designed pump assemblies."]
+        }
+      },
+      "skills": {
+        "languages": ["Python"],
+        "mechanical": ["SolidWorks", "Finite element analysis"]
+      },
+      "education": ["msc-expanded", "bsc"],
+      "speaking_and_community": [{
+        "organization": "Mechanical Society",
+        "role": "Volunteer",
+        "activities": ["Organized a design workshop."]
+      }],
+      "certifications": [],
+      "hobbies": ["Hiking", "Model engines"]
+    }
+  }
 }
