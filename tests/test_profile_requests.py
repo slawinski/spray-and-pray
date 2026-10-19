@@ -110,6 +110,20 @@ def test_popup_both_flows_require_and_send_shared_selection():
             }
         }
         assert.equal(requests.length, 4);
+        let finishExtraction;
+        let extractionStarted;
+        const started = new Promise(resolve => {extractionStarted = resolve;});
+        context.chrome.scripting.executeScript = () => {
+            extractionStarted();
+            return new Promise(resolve => {finishExtraction = resolve;});
+        };
+        elements['cv-profile'].value = 'it';
+        const pending = elements['extract-btn'].click();
+        await started;
+        elements['cv-profile'].value = 'mechanical_engineering';
+        finishExtraction([{result: {company: 'Example', role: 'Engineer', jd: 'Synthetic vacancy'}}]);
+        await pending;
+        assert.equal(requests.at(-1).cv_profile, 'it');
     })().catch(error => {console.error(error); process.exitCode = 1;});
     """
     popup = Path(__file__).resolve().parent.parent / "extension" / "popup.js"

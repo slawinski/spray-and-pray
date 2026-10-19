@@ -38,8 +38,8 @@ def _factual_text(markdown: str, document_type: str) -> tuple[str, str]:
                 # Only unambiguous first-person claims get literal checks.
                 # Vacancy needs and less explicit phrasing go to the semantic check.
                 for sentence in re.split(r"(?<=[.!?])\s+", plain):
-                    if re.search(r"\b(?:I|my|we|pracowałem|pracowałam|korzystam|używam|posiadam)\b",
-                                 sentence, re.IGNORECASE):
+                    if re.search(r"\b(?:I|(?i:my|we|pracowałem|pracowałam|korzystam|używam|posiadam))\b",
+                                 sentence):
                         factual.append(sentence)
                     if re.search(r"\b(?:I (?:worked|served|was)|my (?:role|work)|pracowałem|pracowałam)\b",
                                  sentence, re.IGNORECASE):

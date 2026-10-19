@@ -62,6 +62,13 @@ def test_shared_employer_degree_and_vacancy_subject_are_not_excluded_claims(mark
     assert check.validate(markdown, prepared(), document_type) is None
 
 
+def test_polish_conjunction_is_not_an_english_first_person_claim():
+    check, client = validator('{"passed": true, "violations": []}')
+    markdown = "## Candidate\nSzanowni Państwo,\nPaństwa zespół wykorzystuje CATIA V5 i rozwija turbiny."
+    assert check.validate(markdown, prepared(), "cover_letter", "pl") is None
+    assert len(client.requests) == 1
+
+
 @pytest.mark.parametrize("quote,reason", [
     ("I made turbines lighter", "Paraphrases the excluded turbine achievement."),
     ("I am a mechanical engineer at EDC", "Fabricated employment in the IT profile."),
