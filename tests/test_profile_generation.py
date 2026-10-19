@@ -164,6 +164,29 @@ def test_later_letter_allowed_without_cv(generation):
     assert g.db.get_application(app_id)[8] == path
 
 
+def test_cv_only_metadata_takes_effect_on_regeneration_not_saved_documents(generation):
+    g = generation
+    source = json.loads(g.master.read_text())
+    source["profiles"]["mechanical_engineering"].pop("cv_role_detail", None)
+    g.master.write_text(json.dumps(source))
+    app_id = tracker.track("Acme", "Engineer", str(g.jd), cv_profile="mechanical_engineering",
+                           with_cover_letter=True)
+    letter_before = g.letter.call_args.args[0]
+    pdf = Path(g.db.get_application(app_id)[4])
+    before = (pdf.read_bytes(), pdf.with_suffix(".md").read_bytes())
+    source["profiles"]["mechanical_engineering"]["cv_role_detail"] = {"software": "ledger"}
+    g.master.write_text(json.dumps(source))
+    assert (pdf.read_bytes(), pdf.with_suffix(".md").read_bytes()) == before
+    tracker.reoptimize(app_id)
+    cv_context = g.cv.call_args.args[0]
+    assert cv_context.facts["experience"][0]["achievements"] == []
+    assert cv_context.rules["role_detail"]["software"] == "ledger"
+    assert g.checker.call_args.args[1] == cv_context
+    tracker.generate_cover_letter(app_id)
+    assert g.letter.call_args.args[0] == letter_before
+    assert g.checker.call_args.args[1] == letter_before
+
+
 def test_migrated_application_regenerates_as_it_after_enrichment(generation, monkeypatch):
     g = generation
     monkeypatch.setattr(g.db, "DB_PATH", g.master.parent / "legacy.db")

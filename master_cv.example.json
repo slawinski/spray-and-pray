@@ -138,6 +138,7 @@
     "mechanical_engineering": {
       "headline": "Mechanical Engineer with Software Experience",
       "summary": "Mechanical engineer with earlier pump-design experience and recent software delivery experience.",
+      "cv_role_detail": {"software": "ledger"},
       "roles": {
         "software": {
           "detail": "brief",

@@ -11,6 +11,8 @@
 * ``profile_shared`` requires explicit personal-info field names, exact language
   entry snapshots, and the exact source disclaimer string (or null to omit it).
 * Roles use ``detailed``/``brief`` detail rules and exact achievement strings.
+  Mechanical ``cv_role_detail`` overrides may mark selected IDs as ``ledger``:
+  CVs retain identities only; cover letters keep the original role selections.
   Source ordering is retained, not inferred from titles or rewritten dates.
   Education IDs identify complete views: keep the existing IT MSc record and
   add expanded engineering records beside it, never overwrite the IT view.
@@ -138,8 +140,10 @@ def _snapshots(master: dict, section: str, selectors: Any) -> tuple[list, list]:
     return source, _select(source, selectors, section)
 
 
-def _prepare(master: dict, profile: str, policy: dict, roles: dict, education: dict) -> ProfileContext:
-    policy = _keys(policy, _REQUIRED, _OPTIONAL, f"profiles.{profile}")
+def _prepare(master: dict, profile: str, policy: dict, roles: dict, education: dict,
+             document_type: str) -> ProfileContext:
+    optional = _OPTIONAL | ({"cv_role_detail"} if profile == "mechanical_engineering" else set())
+    policy = _keys(policy, _REQUIRED, optional, f"profiles.{profile}")
     headline = _text(policy["headline"], f"profiles.{profile}.headline")
     summary = policy["summary"]
     _require(isinstance(summary, (str, dict)) and bool(summary),
@@ -162,6 +166,10 @@ def _prepare(master: dict, profile: str, policy: dict, roles: dict, education: d
 
     role_policy = _mapping(policy["roles"], f"profiles.{profile}.roles")
     _require(role_policy.keys() <= roles.keys(), f"profiles.{profile}.roles contains an unknown role ID")
+    cv_detail = _mapping(policy.get("cv_role_detail", {}), f"profiles.{profile}.cv_role_detail")
+    _require(cv_detail.keys() <= role_policy.keys(), "cv_role_detail must reference selected role IDs")
+    _require(all(value == "ledger" for value in cv_detail.values()),
+             "cv_role_detail values must be ledger")
     facts["experience"] = []
     detail = {}
     for role_id, role in roles.items():
@@ -174,8 +182,12 @@ def _prepare(master: dict, profile: str, policy: dict, roles: dict, education: d
             selection = _keys(role_policy[role_id], {"detail", "achievements"}, set(), f"roles.{role_id}")
             _require(selection["detail"] in ("detailed", "brief"), f"roles.{role_id}.detail must be detailed or brief")
             selected = _select(achievements, selection["achievements"], f"roles.{role_id}.achievements")
+            role_detail = selection["detail"]
+            if document_type == "cv" and role_id in cv_detail:
+                role_detail = "ledger"
+                selected = []
             facts["experience"].append({**identity, "achievements": selected})
-            detail[role_id] = selection["detail"]
+            detail[role_id] = role_detail
         else:
             excluded["identities"].append(identity)
         excluded["achievements"].extend(
@@ -216,20 +228,23 @@ def _prepare(master: dict, profile: str, policy: dict, roles: dict, education: d
     return ProfileContext(profile, facts, {"role_detail": detail}, excluded)
 
 
-def resolve_profile(master: dict, profile: str) -> ProfileContext:
+def resolve_profile(master: dict, profile: str, *, document_type: str = "cv") -> ProfileContext:
     """Return an independent prepared context, or raise ProfileError (no fallback).
 
     Every supplied policy is validated, including policies not requested here.
     A profile may be absent until candidate-approved facts/positioning exist.
+    CV-only overrides never alter the cover_letter view or canonical master.
     """
     profile = validate_profile_name(profile)
+    _require(document_type in ("cv", "cover_letter"), "document_type must be cv or cover_letter")
     master = _mapping(master, "master")
     policies = _mapping(master.get("profiles"), "profiles (prepared metadata required)")
     _require(bool(policies) and policies.keys() <= _NAMES, "profiles contains missing or unknown profile metadata")
     _require(profile in policies, f"profile {profile!r} is not prepared in this master")
     roles = _indexed(master.get("experience"), "experience")
     education = _indexed(master.get("education"), "education")
-    contexts = {name: _prepare(master, name, policy, roles, education) for name, policy in policies.items()}
+    contexts = {name: _prepare(master, name, policy, roles, education, document_type)
+                for name, policy in policies.items()}
     context = contexts[profile]
     context.excluded["sections"]["positioning"] = [
         {"headline": other.facts["headline"], "summary": other.facts["summary"]}
