@@ -4,11 +4,16 @@ import sqlite3
 import logging
 from pathlib import Path
 
+from cv_optimizer.profiles import validate_profile_name
+
 logger = logging.getLogger(__name__)
 
 DB_PATH = Path("applications.db")
 
 _INTERVIEW_PATTERN = re.compile(r"^interview (\d+)$")
+_APPLICATION_COLUMNS = (
+    "id, company, role, jd_path, cv_path, job_url, created_at, source, cover_letter_path"
+)
 
 
 def status_rank(status: str) -> int:
@@ -325,7 +330,27 @@ def init_db() -> None:
             """
         )
     _migrate_autoincrement()
+    _migrate_application_profiles()
     logger.info("Database initialised at %s", DB_PATH)
+
+
+def _migrate_application_profiles() -> None:
+    """Backfill legacy selections only when first adding the profile column."""
+    with _connect() as conn:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(applications)")}
+        # Reads may initialize inside an importer's existing write transaction.
+        # Once migrated, do not acquire another connection's writer lock.
+        if {"cv_profile", "cv_profile_revision"} <= columns:
+            return
+        conn.execute("BEGIN IMMEDIATE")
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(applications)")}
+        if "cv_profile" not in columns:
+            conn.execute("ALTER TABLE applications ADD COLUMN cv_profile TEXT")
+            conn.execute("UPDATE applications SET cv_profile = 'it'")
+        if "cv_profile_revision" not in columns:
+            conn.execute(
+                "ALTER TABLE applications ADD COLUMN cv_profile_revision INTEGER NOT NULL DEFAULT 0"
+            )
 
 
 def _migrate_autoincrement() -> None:
@@ -342,8 +367,17 @@ def _migrate_autoincrement() -> None:
     logger.info("Migrating applications table to AUTOINCREMENT...")
     with _connect() as conn:
         conn.execute("PRAGMA foreign_keys=OFF")
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(applications)")}
+        profile_definitions = ""
+        profile_columns = ""
+        if "cv_profile" in columns:
+            profile_definitions += ", cv_profile TEXT"
+            profile_columns += ", cv_profile"
+        if "cv_profile_revision" in columns:
+            profile_definitions += ", cv_profile_revision INTEGER NOT NULL DEFAULT 0"
+            profile_columns += ", cv_profile_revision"
         conn.executescript(
-            """
+            f"""
             CREATE TABLE applications_new (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 company    TEXT NOT NULL,
@@ -354,9 +388,10 @@ def _migrate_autoincrement() -> None:
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 source     TEXT,
                 cover_letter_path TEXT
+                {profile_definitions}
             );
-            INSERT INTO applications_new (id, company, role, jd_path, cv_path, job_url, created_at, source, cover_letter_path)
-                SELECT id, company, role, jd_path, cv_path, job_url, created_at, source, cover_letter_path FROM applications;
+            INSERT INTO applications_new ({_APPLICATION_COLUMNS}{profile_columns})
+                SELECT {_APPLICATION_COLUMNS}{profile_columns} FROM applications;
             DROP TABLE applications;
             ALTER TABLE applications_new RENAME TO applications;
             """
@@ -372,6 +407,7 @@ def insert_application(
     cv_path: str = None,
     job_url: str = None,
     source: str = None,
+    cv_profile: str | None = None,
 ) -> int:
     """Inserts a new application and returns its id.
 
@@ -379,12 +415,14 @@ def insert_application(
     'auto:serpapi'). It participates in duplicate detection and is shown in
     the TUI, so it MUST be persisted.
     """
+    if cv_profile is not None:
+        cv_profile = validate_profile_name(cv_profile)
     init_db()
     with _connect() as conn:
         cursor = conn.execute(
-            "INSERT INTO applications (company, role, jd_path, cv_path, job_url, source) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (company, role, jd_path, cv_path, job_url, source),
+            "INSERT INTO applications (company, role, jd_path, cv_path, job_url, source, cv_profile) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (company, role, jd_path, cv_path, job_url, source, cv_profile),
         )
         new_id = cursor.lastrowid
     logger.info("Inserted application %d — %s @ %s (source=%s)", new_id, role, company, source)
@@ -467,7 +505,7 @@ def get_application(application_id: int) -> tuple | None:
     init_db()
     with _connect() as conn:
         row = conn.execute(
-            "SELECT * FROM applications WHERE id = ?",
+            f"SELECT {_APPLICATION_COLUMNS} FROM applications WHERE id = ?",
             (application_id,),
         ).fetchone()
     return row
@@ -478,9 +516,54 @@ def list_applications() -> list[tuple]:
     init_db()
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT * FROM applications ORDER BY created_at DESC"
+            f"SELECT {_APPLICATION_COLUMNS} FROM applications ORDER BY created_at DESC"
         ).fetchall()
     return rows
+
+
+def _application_profile(row: tuple | None, application_id: int) -> tuple[str | None, int]:
+    if row is None:
+        raise ValueError(f"Application {application_id} does not exist")
+    profile, revision = row
+    if profile is not None:
+        profile = validate_profile_name(profile)
+    return profile, revision
+
+
+def get_application_profile(application_id: int) -> tuple[str | None, int]:
+    """Return selection and revision; None means an explicit choice is needed."""
+    init_db()
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT cv_profile, cv_profile_revision FROM applications WHERE id = ?",
+            (application_id,),
+        ).fetchone()
+    return _application_profile(row, application_id)
+
+
+def set_application_profile(application_id: int, profile: str) -> tuple[str, int]:
+    """Select a known profile, invalidating ready paths only on a real change.
+
+    Returns the stored (profile, revision). Cancellation must not call this
+    setter. Existing files and status history are never changed.
+    """
+    profile = validate_profile_name(profile)
+    init_db()
+    with _connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT cv_profile, cv_profile_revision FROM applications WHERE id = ?",
+            (application_id,),
+        ).fetchone()
+        current, revision = _application_profile(row, application_id)
+        if current != profile:
+            revision += 1
+            conn.execute(
+                "UPDATE applications SET cv_profile = ?, cv_profile_revision = ?, "
+                "cv_path = NULL, cover_letter_path = NULL WHERE id = ?",
+                (profile, revision, application_id),
+            )
+    return profile, revision
 
 
 def _normalize_source(source: str | None) -> str:
@@ -517,6 +600,11 @@ def list_applications_with_status() -> list[dict]:
     with _connect() as conn:
         for app in apps:
             app_id, company, role, jd_path, cv_path, job_url, created_at, source, cover_letter_path = app
+            profile_row = conn.execute(
+                "SELECT cv_profile, cv_profile_revision FROM applications WHERE id = ?",
+                (app_id,),
+            ).fetchone()
+            cv_profile, cv_profile_revision = _application_profile(profile_row, app_id)
             history_rows = conn.execute(
                 "SELECT status, transitioned_at FROM status_history "
                 "WHERE application_id = ? ORDER BY transitioned_at ASC",
@@ -531,6 +619,8 @@ def list_applications_with_status() -> list[dict]:
                 "jd_path": jd_path,
                 "cv_path": cv_path,
                 "cover_letter_path": cover_letter_path,
+                "cv_profile": cv_profile,
+                "cv_profile_revision": cv_profile_revision,
                 "job_url": job_url,
                 "source": source,
                 "created_at": created_at,
