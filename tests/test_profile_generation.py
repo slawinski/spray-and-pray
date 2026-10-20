@@ -164,6 +164,29 @@ def test_later_letter_allowed_without_cv(generation):
     assert g.db.get_application(app_id)[8] == path
 
 
+def test_cv_only_metadata_takes_effect_on_regeneration_not_saved_documents(generation):
+    g = generation
+    source = json.loads(g.master.read_text())
+    source["profiles"]["mechanical_engineering"].pop("cv_role_detail", None)
+    g.master.write_text(json.dumps(source))
+    app_id = tracker.track("Acme", "Engineer", str(g.jd), cv_profile="mechanical_engineering",
+                           with_cover_letter=True)
+    letter_before = g.letter.call_args.args[0]
+    pdf = Path(g.db.get_application(app_id)[4])
+    before = (pdf.read_bytes(), pdf.with_suffix(".md").read_bytes())
+    source["profiles"]["mechanical_engineering"]["cv_role_detail"] = {"software": "ledger"}
+    g.master.write_text(json.dumps(source))
+    assert (pdf.read_bytes(), pdf.with_suffix(".md").read_bytes()) == before
+    tracker.reoptimize(app_id)
+    cv_context = g.cv.call_args.args[0]
+    assert cv_context.facts["experience"][0]["achievements"] == []
+    assert cv_context.rules["role_detail"]["software"] == "ledger"
+    assert g.checker.call_args.args[1] == cv_context
+    tracker.generate_cover_letter(app_id)
+    assert g.letter.call_args.args[0] == letter_before
+    assert g.checker.call_args.args[1] == letter_before
+
+
 def test_migrated_application_regenerates_as_it_after_enrichment(generation, monkeypatch):
     g = generation
     monkeypatch.setattr(g.db, "DB_PATH", g.master.parent / "legacy.db")
@@ -432,3 +455,30 @@ def test_real_pdf_render_after_positive_check(generation, monkeypatch):
     for path in (app[4], app[8]):
         assert Path(path).read_bytes().startswith(b"%PDF-")
         assert Path(path).stat().st_size > 1000
+
+
+def test_tracker_publishes_real_ledger_pdf_with_prepared_cv_context(generation, monkeypatch):
+    import fitz
+    from cv_optimizer.generator import PDFGenerator
+    from cv_optimizer.optimizer import CVOptimizer
+    from cv_optimizer.profiles import resolve_profile
+    from test_cv_ledger import many_role_source, source_markdown, normalized_text
+
+    g = generation
+    source = many_role_source()
+    g.master.write_text(json.dumps(source))
+    cv = CVOptimizer("http://fake", "fake", "fake")
+    client = FakeClient(source_markdown(resolve_profile(source, "mechanical_engineering")))
+    cv.client = client
+    monkeypatch.setattr(tracker, "CVOptimizer", lambda **kw: cv)
+    monkeypatch.setattr(tracker, "PDFGenerator", PDFGenerator)
+    app_id = tracker.track("Synthetic Works", "Engineer", str(g.jd), cv_profile="mechanical_engineering")
+    path = Path(g.db.get_application(app_id)[4])
+    assert path.with_suffix(".md").read_text().count("> **") == 7
+    assert "IT achievement sentinel" not in client.requests[0]["messages"][1]["content"]
+    assert g.checker.call_args.args[1].rules["role_detail"]["role-0"] == "ledger"
+    with fitz.open(path) as doc:
+        text = normalized_text(doc)
+        assert "IT achievement sentinel" not in text
+        assert all(role["title"] in text for role in source["experience"])
+        assert "Designed engineering fixture 7." in text

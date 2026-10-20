@@ -67,9 +67,11 @@ def _literal_violations(markdown: str, context: ProfileContext, document_type: s
 
     allowed_roles = context.facts.get("experience", [])
     allowed_titles = {role.get("title", role.get("role")) for role in allowed_roles}
-    # Each role header starts a block. Never combine dates from separate jobs.
-    blocks = re.split(r"(?m)(?=^###\s)", employment)
-    cv_titles = {match.casefold().strip() for match in re.findall(r"(?m)^###\s+(.+)$", employment)}
+    # Headers and ledger rows start separate jobs; never combine their dates.
+    blocks = re.split(r"(?m)(?=^###\s|^>[ \t]*[^\s>])", employment)
+    titles = re.findall(r"(?m)^###\s+(.+)$", employment)
+    titles.extend(re.findall(r"(?m)^>[ \t]*([^|\n]+)\|", employment))
+    cv_titles = {title.casefold().strip() for title in titles}
     for role in context.excluded.get("identities", []):
         title = role.get("title", role.get("role", ""))
         if document_type == "cv":

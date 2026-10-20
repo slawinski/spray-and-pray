@@ -108,12 +108,34 @@ def test_validator_rejects_raw_master():
     assert client.requests == []
 
 
-def test_excluded_title_is_not_a_keyword_ban_on_approved_titles():
+@pytest.mark.parametrize("entry", [
+    "### Software Engineer\nEDC | 2020-present",
+    "> **Software Engineer** | EDC | 2020-present",
+])
+def test_excluded_title_is_not_a_keyword_ban_on_approved_titles(entry):
     context = prepared()
     context.excluded["identities"][0]["title"] = "Engineer"
     check, _ = validator('{"passed": true, "violations": []}')
-    assert check.validate("# Candidate\n## Experience\n### Software Engineer\nEDC | 2020-present",
+    assert check.validate("# Candidate\n## Experience\n" + entry,
                           context, "cv").warnings == ()
+
+
+@pytest.mark.parametrize("section", ["Experience", "Doświadczenie"])
+def test_excluded_ledger_title_warns_without_matching_employment_identity(section):
+    check, _ = validator('{"passed": true, "violations": []}')
+    markdown = (f"# Candidate\n## {section}\n"
+                "> **Life Cycle Data Engineer** | Other Company | 2020-present")
+    result = check.validate(markdown, prepared(), "cv")
+    assert any("excluded employment title" in warning for warning in result.warnings)
+    assert "warnings" in result.summary
+
+
+def test_ledger_identity_check_does_not_combine_separate_employments():
+    check, _ = validator('{"passed": true, "violations": []}')
+    markdown = ("# Candidate\n## Experience\n"
+                "> **Software Engineer** | EDC | Remote | 2020-present\n>\n"
+                "> **Analyst** | Other Company | Remote | 2015-2019")
+    assert check.validate(markdown, prepared(), "cv").warnings == ()
 
 
 def test_empty_document_is_not_approved():

@@ -29,6 +29,12 @@ The approved headline/summary can be engineering-led without claiming that the
 latest employment title changed. Respect role_detail: relevance, not recency,
 determines detail; retain selected recent IT jobs briefly and keep CV experience
 in truthful reverse chronology. Do not fabricate achievements for brief entries.
+For CV roles marked `ledger`, retain each exact title, company, supplied location
+and date range as an identity-only blockquote paragraph in the single Experience
+section. Flag achievement bullets or descriptive prose for these roles, including
+achievements moved elsewhere. Ledger rows must not merge employments, omit selected
+roles, or move engineering ahead of newer IT employment. This CV-only rule does not
+change cover-letter selections or the treatment of ordinary brief/detailed roles.
 
 A cover letter's Re:/subject line names the vacancy, NOT the candidate's employment.
 An application to a mechanical vacancy is not itself a claim of mechanical work.

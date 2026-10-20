@@ -74,6 +74,14 @@ body {
 .main-column ul { padding-left: 20px; margin-top: 15px; }
 .main-column li { margin-bottom: 3px; }
 
+.main-column blockquote { margin: 0; padding: 0; }
+.main-column blockquote p {
+    margin: 4px 0;
+    font-size: 10.5pt;
+    line-height: 1.35;
+}
+.main-column blockquote strong { font-size: 10.5pt; color: #222; }
+
 /* Sidebar Column Styles */
 .sidebar-column {
     font-size: 9.5pt;

@@ -520,6 +520,13 @@ eligibility rather than maintaining separate biographies:
   string in that role. `skills` maps source category names to exact source values;
   `education` lists stable IDs for complete education views. Source order is
   retained, so keep experience in truthful reverse chronology.
+- Mechanical profiles may add `"cv_role_detail": {"software": "ledger"}` using
+  their selected role IDs. Each ledger role keeps its historical title, company,
+  supplied location and dates as a compact, wrapping identity row in Experience,
+  with **zero achievements or descriptive prose**. This override applies only to
+  CV generation; the original `roles` selections still govern cover letters.
+  Add every IT role intended for the ledger explicitly—ordinary `brief` roles
+  keep their existing presentation. Overrides on the IT profile are not allowed.
 - Optional `speaking_and_community` and `certifications` selectors are exact
   source-entry snapshots; `hobbies` selectors are exact strings. Omission selects
   nothing. Newly added facts are not automatically eligible for either profile.
@@ -531,7 +538,18 @@ presentation (attendance dates omitted as before). Engineering selects the two
 expanded records, including supplied dates, specializations, and theses. IT
 excludes historical mechanical employment entirely, not just its bullets, and
 mechanical-only skills. Engineering selects detailed historical engineering work
-and brief recent IT roles with explicitly chosen source achievements.
+and recent IT roles as identity-only CV ledger rows. The example retains the
+original brief IT achievement selections for mechanical cover letters; no career
+facts are deleted. Both role types remain in global reverse chronology, including
+when IT and engineering employments alternate. Ledger rows use Markdown
+blockquote paragraphs (`> **Title** | Company | Location | Dates`), separated by
+blank quoted lines, inside the single Experience section. PDF rendering gives
+them compact spacing at normal body text size, with natural wrapping.
+
+Adding the override does not rewrite saved Markdown or PDFs. New generation or
+explicit regeneration uses it. Existing policies without `cv_role_detail` retain
+their original behavior. Content checks remain advisory; this introduces no page
+limit, content-blocking check or automatic rewrite loop.
 
 When editing selected source text, update its exact selector too, including
 language, community, and certification snapshots. Duplicate IDs, ambiguous or

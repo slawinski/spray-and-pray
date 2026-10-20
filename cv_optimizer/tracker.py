@@ -175,7 +175,7 @@ def _generate_document(app_id: int, master_cv_path: str, document_type: str,
 
     actual_cv = master_cv_path or settings.master_cv_path
     with open(actual_cv, "r", encoding="utf-8") as f:
-        context = resolve_profile(json.load(f), profile)
+        context = resolve_profile(json.load(f), profile, document_type=document_type)
 
     jd_source = Path(jd_path)
     job_description = PDFExtractor.extract_text(str(jd_source))

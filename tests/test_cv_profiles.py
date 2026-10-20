@@ -34,6 +34,7 @@ def test_it_projection_and_education_view(source):
 
 
 def test_engineering_brief_roles_preserve_dates_attribution_and_source_order(source):
+    source["profiles"]["mechanical_engineering"].pop("cv_role_detail", None)
     context = resolve_profile(source, "mechanical_engineering")
     roles = context.facts["experience"]
     assert [r["id"] for r in roles] == ["software", "mechanical"]
@@ -44,6 +45,45 @@ def test_engineering_brief_roles_preserve_dates_attribution_and_source_order(sou
     assert roles[0]["achievements"] == [source["experience"][0]["achievements"][0]]
     assert [e["id"] for e in context.facts["education"]] == ["msc-expanded", "bsc"]
     assert context.facts["education"] == source["education"][1:]
+
+
+def test_cv_ledger_override_preserves_source_it_and_letter_context(source):
+    source["profiles"]["mechanical_engineering"].pop("cv_role_detail", None)
+    original = deepcopy(source)
+    before_it = resolve_profile(source, "it")
+    before_engineering = resolve_profile(source, "mechanical_engineering")
+    source["profiles"]["mechanical_engineering"]["cv_role_detail"] = {"software": "ledger"}
+    context = resolve_profile(source, "mechanical_engineering")
+    assert context.rules == {"role_detail": {"software": "ledger", "mechanical": "detailed"}}
+    for role, expected in zip(context.facts["experience"], before_engineering.facts["experience"]):
+        assert {k: v for k, v in role.items() if k != "achievements"} == {
+            k: v for k, v in expected.items() if k != "achievements"}
+    assert context.facts["experience"][0]["achievements"] == []
+    assert context.facts["experience"][1] == before_engineering.facts["experience"][1]
+    assert {"role_id": "software", "value": "Automated reporting with Python."} in context.excluded["achievements"]
+    assert resolve_profile(source, "it") == before_it
+    assert resolve_profile(source, "mechanical_engineering", document_type="cover_letter") == before_engineering
+    assert source["experience"] == original["experience"]
+
+
+@pytest.mark.parametrize("profile,overrides", [
+    ("it", {"software": "ledger"}),
+    ("mechanical_engineering", {"missing": "ledger"}),
+    ("mechanical_engineering", {"software": "brief"}),
+    ("mechanical_engineering", []),
+])
+def test_invalid_cv_role_overrides_follow_strict_policy_contract(source, profile, overrides):
+    source["profiles"][profile]["cv_role_detail"] = overrides
+    with pytest.raises(ProfileError):
+        resolve_profile(source, "it")
+
+
+def test_cv_override_must_reference_a_selected_role(source):
+    policy = source["profiles"]["mechanical_engineering"]
+    policy["cv_role_detail"] = {"software": "ledger"}
+    del policy["roles"]["software"]
+    with pytest.raises(ProfileError):
+        resolve_profile(source, "mechanical_engineering")
 
 
 def test_unselected_new_facts_and_unknown_fields_never_leak(source):
