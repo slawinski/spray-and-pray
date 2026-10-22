@@ -14,7 +14,6 @@ PROFILE_LABELS = {"it": "IT", "mechanical_engineering": "Mechanical Engineering"
 
 
 class ResizeGuard(Static, can_focus=True):
-    """An overlay, not a screen: preserve forms and their screen callbacks."""
     DEFAULT_CSS = """
     ResizeGuard {
         display: none; layer: overlay; dock: top; width: 100%; height: 100%;
@@ -89,7 +88,6 @@ def dialog(body, actions, *, id):
 
 
 class ResponsiveModal(ModalScreen):
-    """Only geometry changes on resize; inputs and dismissal callbacks stay live."""
     BINDINGS = [("escape", "cancel", "Cancel")]
     dialog_height = 12
 
@@ -133,9 +131,6 @@ class ProfileModal(ResponsiveModal):
             id="profile-modal",
         )
         yield ResizeGuard()
-
-    def action_cancel(self) -> None:
-        self.dismiss(None)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "confirm":

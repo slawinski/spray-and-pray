@@ -1,5 +1,3 @@
-"""Terminal-cell budgets, independent of widgets and data loading."""
-
 from dataclasses import dataclass
 
 
@@ -22,7 +20,6 @@ def column_widths(width: int, company: int, role: int) -> list[tuple[str, int]]:
     spare = max(0, width - 2 - sum(size + 2 for _, size in columns))
     sizes = [16, 24]
     targets = [max(24, company), max(36, role)]
-    # Give surplus to identity first, in a 2:3 ratio, until content fits.
     while spare and any(sizes[i] < targets[i] for i in (0, 1)):
         for i in (0, 1, 1, 0, 1):
             if spare and sizes[i] < targets[i]:
@@ -36,7 +33,6 @@ def column_widths(width: int, company: int, role: int) -> list[tuple[str, int]]:
                 break
             columns.append((name, size))
             spare -= size + 2
-    # Even short identity strings benefit from roomy columns.
     columns[0] = ("Company", columns[0][1] + spare * 2 // 5)
     columns[1] = ("Role", columns[1][1] + spare - spare * 2 // 5)
     return columns

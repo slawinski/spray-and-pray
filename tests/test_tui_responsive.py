@@ -1,7 +1,8 @@
 import asyncio
 from unittest.mock import Mock
 
-from textual.widgets import DataTable, Static
+import pytest
+from textual.widgets import DataTable, Input, Static
 
 from cv_optimizer.tui.app import CvDashboard
 from cv_optimizer.tui.screens.modals import ResizeGuard
@@ -69,6 +70,74 @@ def test_live_resize_selection_details_and_no_queries(temp_db, monkeypatch):
             await pilot.press("escape")
             assert app._selected_app()["id"] == selected["id"]
             queries.assert_not_called()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("size", [(160, 50), (40, 12)])
+def test_malformed_url_refresh_highlight_details_and_resize(temp_db, size):
+    first = temp_db.insert_application("A", "Engineer", job_url="https://example.com/job")
+    malformed = temp_db.insert_application("B", "Engineer", job_url="https://[")
+    last = temp_db.insert_application("C", "Engineer", job_url="https://[", source="referral")
+
+    async def run():
+        app = CvDashboard()
+        async with app.run_test(size=size) as pilot:
+            table = app.query_one(DataTable)
+            app.action_refresh()
+            await pilot.pause()
+            assert table.row_count == 3
+            assert "DB error" not in app.latest_message
+            for app_id in (first, malformed, last):
+                table.move_cursor(row=table.get_row_index(str(app_id)))
+                await pilot.pause()
+                assert app._selected_app()["id"] == app_id
+            table.move_cursor(row=table.get_row_index(str(malformed)))
+            await pilot.pause()
+            await pilot.press("enter")
+            details = app.screen
+            for dimensions in [(40, 12), (160, 50)]:
+                await pilot.resize_terminal(*dimensions)
+                await pilot.pause()
+                content = str(details.query_one("#text-content", Static).render())
+                assert "Source: —" in content and "URL: https://[" in content
+                assert app._selected_app()["id"] == malformed
+                assert table.row_count == 3
+            await pilot.press("escape")
+            await pilot.resize_terminal(200, 50)
+            await pilot.pause()
+            assert table.get_cell(str(first), "Source").plain == "example.com"
+            assert table.get_cell(str(malformed), "Source").plain == "—"
+            assert table.get_cell(str(last), "Source").plain == "referral"
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("focus", ["tab", "mouse"])
+def test_ordinary_filter_focus_survives_shrink_and_action_letter_typing(temp_db, focus):
+    temp_db.insert_application("Company", "Engineer")
+
+    async def run():
+        app = CvDashboard()
+        async with app.run_test(size=(80, 24)) as pilot:
+            field = app.query_one("#filter-input", Input)
+            if focus == "tab":
+                await pilot.press("tab")
+            else:
+                await pilot.click("#filter-input")
+            assert app.focused is field
+            await pilot.press("C")
+            await pilot.resize_terminal(40, 12)
+            await pilot.pause()
+            assert app.query_one("#filter-bar").display
+            assert app.focused is field
+            await pilot.press("e", "s", "m", "r")
+            assert field.value == "Cesmr"
+            assert app.filter_text == "Cesmr"
+            assert len(app.screen_stack) == 1
+            await pilot.press("escape")
+            assert app.focused is app.query_one(DataTable)
+            assert not app.query_one("#filter-bar").display
 
     asyncio.run(run())
 

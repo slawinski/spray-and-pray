@@ -74,6 +74,15 @@ def _identity(text: str, width: int) -> Text:
     return value
 
 
+def _source_name(app: dict) -> str:
+    if app.get("source"):
+        return app["source"]
+    try:
+        return urlparse(app.get("job_url") or "").hostname or "—"
+    except ValueError:
+        return "—"
+
+
 def _readiness_compact(score: int | None) -> str:
     """Compact readiness display for narrow columns (score only, colored)."""
     if score is None:
@@ -89,6 +98,9 @@ class ApplicationTable(DataTable):
 
 class FilterInput(Input):
     BINDINGS = [("escape", "leave_filter", "Return to list")]
+
+    def on_focus(self) -> None:
+        self.app.dashboard.add_class("filter-open")
 
     def action_leave_filter(self) -> None:
         self.app.leave_filter()
@@ -139,7 +151,7 @@ class CvDashboard(App):
         self.mode = layout_mode(80, 24)
         self._schema = None
         self._identity_widths = (24, 36)
-        self.operation_message = ""
+        self.operation_messages: dict[str, str] = {}
         self.latest_message = ""
 
     def compose(self) -> ComposeResult:
@@ -173,7 +185,7 @@ class CvDashboard(App):
 
     def _adapt_layout(self) -> None:
         self.mode = layout_mode(self.size.width, self.size.height)
-        dashboard = self.screen_stack[0]
+        dashboard = self.dashboard
         dashboard.set_class(self.mode.short, "short")
         dashboard.set_class(self.mode.inspector, "with-inspector")
         inspector = dashboard.query_one("#inspector")
@@ -290,11 +302,13 @@ class CvDashboard(App):
                     "Role": Text(app["role"], no_wrap=True, overflow="ellipsis"),
                     "Status": _status_rich(app["latest_status"]), "Match": _match_rich(match_score),
                     "Readiness": _readiness_compact(self.readiness.get(app["id"])),
-                    "Source": Text(app.get("source") or urlparse(app.get("job_url") or "").hostname or "—"),
+                    "Source": Text(_source_name(app)),
                     "Created": created, "#": str(idx + 1),
-                    "Docs": " ".join(_checkmark(app.get(path), app["id"] in pending)
-                                     for path, pending in [("jd_path", set()), ("cv_path", self.regenerating_ids),
-                                                           ("cover_letter_path", self.generating_cl_ids)]),
+                    "Docs": " ".join((
+                        _checkmark(app.get("jd_path")),
+                        _checkmark(app.get("cv_path"), app["id"] in self.regenerating_ids),
+                        _checkmark(app.get("cover_letter_path"), app["id"] in self.generating_cl_ids),
+                    )),
                 }
                 table.add_row(*(values[name] for name, _ in schema), key=str(app["id"]))
         self._render_status()
@@ -338,8 +352,12 @@ class CvDashboard(App):
         message = self.operation_message or self.latest_message or "applications"
         self.dashboard.query_one("#status-bar", Static).update(f"{count} · {message}")
 
-    def _status(self, message: str) -> None:
-        self.operation_message = message
+    @property
+    def operation_message(self) -> str:
+        return " · ".join(self.operation_messages.values())
+
+    def _status(self, message: str, group: str) -> None:
+        self.operation_messages[group] = message
         self._render_status()
         for screen in self.screen_stack[1:]:
             if isinstance(screen, TextScreen) and screen.title_text == "Operation status":
@@ -352,19 +370,18 @@ class CvDashboard(App):
             if isinstance(screen, TextScreen) and screen.title_text == "Operation status":
                 screen.query_one("#text-content", Static).update(self.operation_content())
 
-    def _finish_operation(self, message: str) -> None:
-        self.operation_message = ""
+    def _finish_operation(self, message: str, group: str) -> None:
+        self.operation_messages.pop(group, None)
         self._notify(message)
 
     def _document_ready(self, message: str, warnings: list[str]) -> None:
         note = " ".join(warnings)
         try:
-            self.call_from_thread(self._finish_operation, (f"[yellow]⚠ {note}[/] " if note else "") + message)
+            self.call_from_thread(self._finish_operation, (f"[yellow]⚠ {note}[/] " if note else "") + message, "default")
         except Exception:
             logger.warning("Document completion notification failed", exc_info=True)
 
     def _selected_app(self) -> dict | None:
-        """Resolve identity from the mounted row key, never a result offset."""
         table = self.dashboard.query_one("#apps-table", DataTable)
         if not table.row_count:
             return None
@@ -402,12 +419,12 @@ class CvDashboard(App):
         if not app["jd_path"] or not Path(app["jd_path"]).exists():
             self._notify(f"No JD file found for application #{app['id']}")
             return
-        self._status("[bold blue]⟳[/] Scoring selected application…")
+        self._status("[bold blue]⟳[/] Scoring selected application…", "scoring")
         self._score_one(app["id"], app["company"], app["role"])
 
     def action_score_all_missing(self) -> None:
         """Backfill Match Scores for all applications missing one."""
-        self._status("[bold blue]⟳[/] Scoring applications missing a Match…")
+        self._status("[bold blue]⟳[/] Scoring applications missing a Match…", "scoring")
         self._score_all()
 
     @work(exclusive=True, thread=True, group="scoring")
@@ -421,9 +438,10 @@ class CvDashboard(App):
                 f"[bold green]✓[/] {company} — {role}: "
                 f"{outcome['score']} {outcome['label']}"
                 + (" (cached)" if outcome["cached"] else ""),
+                "scoring",
             )
         except Exception as e:
-            self.call_from_thread(self._finish_operation, f"[red]✗[/] Match scoring failed: {e}")
+            self.call_from_thread(self._finish_operation, f"[red]✗[/] Match scoring failed: {e}", "scoring")
         finally:
             self.call_from_thread(self.refresh_apps)
 
@@ -432,7 +450,7 @@ class CvDashboard(App):
         from cv_optimizer.matching import MatchService
 
         def progress(message: str) -> None:
-            self.call_from_thread(self._status, f"[bold blue]⟳[/] {message}")
+            self.call_from_thread(self._status, f"[bold blue]⟳[/] {message}", "scoring")
 
         try:
             result = MatchService().score_missing_applications(progress=progress)
@@ -442,13 +460,13 @@ class CvDashboard(App):
                     note += f" · {result['skipped_no_jd']} skipped (no JD)"
                 if result["errors"]:
                     note += f" · {len(result['errors'])} failed"
-                self.call_from_thread(self._finish_operation, note)
+                self.call_from_thread(self._finish_operation, note, "scoring")
             else:
                 self.call_from_thread(
-                    self._finish_operation, "No applications missing a Match Score."
+                    self._finish_operation, "No applications missing a Match Score.", "scoring"
                 )
         except Exception as e:
-            self.call_from_thread(self._finish_operation, f"[red]✗[/] Match scoring failed: {e}")
+            self.call_from_thread(self._finish_operation, f"[red]✗[/] Match scoring failed: {e}", "scoring")
         finally:
             self.call_from_thread(self.refresh_apps)
 
@@ -465,11 +483,11 @@ class CvDashboard(App):
             self._notify("[yellow]Discovery already running…[/]")
             return
         self.discovering = True
-        self._status("[bold blue]Discovering jobs…[/]")
+        self._status("[bold blue]Discovering jobs…[/]", "discovery")
         self._run_discovery()
 
     def _discovery_progress(self, message: str) -> None:
-        self.call_from_thread(self._status, f"[bold blue]⟳[/] {message}")
+        self.call_from_thread(self._status, f"[bold blue]⟳[/] {message}", "discovery")
 
     @work(exclusive=True, thread=True, group="discovery")
     def _run_discovery(self) -> None:
@@ -481,7 +499,7 @@ class CvDashboard(App):
             lock = DiscoveryLock()
             if not lock.acquire():
                 self.call_from_thread(
-                    self._finish_operation, "[yellow]Discovery already in progress.[/]"
+                    self._finish_operation, "[yellow]Discovery already in progress.[/]", "discovery"
                 )
                 return
             try:
@@ -495,11 +513,12 @@ class CvDashboard(App):
                 self.call_from_thread(
                     self._finish_operation,
                     f"[bold green]✓[/] {result.imported} new 85%+ job matches added",
+                    "discovery",
                 )
             else:
-                self.call_from_thread(self._finish_operation, "No new 85%+ matches.")
+                self.call_from_thread(self._finish_operation, "No new 85%+ matches.", "discovery")
         except Exception as e:
-            self.call_from_thread(self._finish_operation, f"[red]✗[/] Discovery failed: {e}")
+            self.call_from_thread(self._finish_operation, f"[red]✗[/] Discovery failed: {e}", "discovery")
         finally:
             self.discovering = False
             self.call_from_thread(self.refresh_apps)
@@ -569,7 +588,7 @@ class CvDashboard(App):
             f"CV profile: {PROFILE_LABELS.get(app.get('cv_profile'), 'Not selected')}\n"
             + (self._match_detail(app) or "Match: —\n")
             + f"Readiness: {readiness if readiness is not None else '—'}\n"
-            + f"Source: {app.get('source') or urlparse(app.get('job_url') or '').hostname or '—'}\n"
+            + f"Source: {_source_name(app)}\n"
             + f"Created: {app.get('created_at') or '—'}\n"
             + self._discovery_detail(app)
             + f"URL: {app.get('job_url') or 'N/A'}\n"
@@ -840,7 +859,7 @@ class CvDashboard(App):
                 return
             self.regenerating_ids.add(app["id"])
             self.call_from_thread(self.render_table)
-            self.call_from_thread(self._status, "[bold yellow]⟳[/] Regenerating CV...")
+            self.call_from_thread(self._status, "[bold yellow]⟳[/] Regenerating CV...", "default")
             warnings = []
             reoptimize(app["id"], on_warning=warnings.append)
             self.regenerating_ids.discard(app["id"])
@@ -849,14 +868,14 @@ class CvDashboard(App):
         except Exception as e:
             self.regenerating_ids.discard(app["id"])
             self.call_from_thread(self.render_table)
-            self.call_from_thread(self._finish_operation, f"[red]✗[/] CV regeneration failed: {e}")
+            self.call_from_thread(self._finish_operation, f"[red]✗[/] CV regeneration failed: {e}", "default")
 
     @work(exclusive=True, thread=True)
     def _generate_cover_letter(self, app: dict) -> None:
         try:
             self.generating_cl_ids.add(app["id"])
             self.call_from_thread(self.render_table)
-            self.call_from_thread(self._status, "[bold yellow]⟳[/] Generating cover letter...")
+            self.call_from_thread(self._status, "[bold yellow]⟳[/] Generating cover letter...", "default")
             warnings = []
             generate_cover_letter(app["id"], on_warning=warnings.append)
             self.generating_cl_ids.discard(app["id"])
@@ -865,7 +884,7 @@ class CvDashboard(App):
         except Exception as e:
             self.generating_cl_ids.discard(app["id"])
             self.call_from_thread(self.render_table)
-            self.call_from_thread(self._finish_operation, f"[red]✗[/] Cover letter generation failed: {e}")
+            self.call_from_thread(self._finish_operation, f"[red]✗[/] Cover letter generation failed: {e}", "default")
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
         if event.state == WorkerState.ERROR:
