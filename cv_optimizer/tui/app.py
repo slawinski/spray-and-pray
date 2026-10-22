@@ -68,37 +68,10 @@ def _checkmark(path: str | None, regenerating: bool = False) -> str:
     return "[green]✓[/]" if path else "[dim]—[/]"
 
 
-def _source_name(url: str | None, source: str | None = None) -> str:
-    if source:
-        return f"[bold yellow]{source}[/]"
-    if not url:
-        return "[dim]—[/]"
-    try:
-        hostname = urlparse(url).hostname or ""
-        # Strip leading "www." and known prefixes for cleaner display
-        hostname = hostname.removeprefix("www.")
-        # Map known long hostnames to shorter labels
-        known = {
-            "job-boards.greenhouse.io": "greenhouse.io",
-            "boards.greenhouse.io": "greenhouse.io",
-        }
-        return known.get(hostname, hostname)
-    except Exception:
-        return "[dim]—[/]"
-
 def _identity(text: str, width: int) -> Text:
     value = Text(text.replace("\n", " "), no_wrap=True)
     value.truncate(max(1, width), overflow="ellipsis")
     return value
-
-
-def _readiness_bar(score: int | None) -> str:
-    if score is None:
-        return "[dim]—[/]"
-    filled = max(1, round(score / 10))
-    empty = 10 - filled
-    color = "green" if score >= 70 else ("yellow" if score >= 40 else "red")
-    return f"[{color}]{'█' * filled}{'░' * empty}[/] {score:3d}"
 
 
 def _readiness_compact(score: int | None) -> str:
@@ -111,7 +84,7 @@ def _readiness_compact(score: int | None) -> str:
 
 class ApplicationTable(DataTable):
     def on_resize(self) -> None:
-        self.app.call_after_refresh(self.app.render_table)
+        self.app.call_after_refresh(self.app._reflow_table)
 
 
 class FilterInput(Input):
@@ -166,6 +139,8 @@ class CvDashboard(App):
         self.mode = layout_mode(80, 24)
         self._schema = None
         self._identity_widths = (24, 36)
+        self.operation_message = ""
+        self.latest_message = ""
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -209,7 +184,7 @@ class CvDashboard(App):
         dashboard.query_one("#shortcut-bar", Static).update(hints)
         for screen in self.screen_stack:
             self._size_guard(screen)
-        self.call_after_refresh(self.render_table)
+        self.call_after_refresh(self._reflow_table)
 
     def _size_guard(self, screen) -> None:
         guards = screen.query(ResizeGuard)
@@ -271,14 +246,29 @@ class CvDashboard(App):
             ]
         self.filtered_by_id = {a["id"]: a for a in self.filtered}
 
+    def _column_schema(self):
+        width = self.dashboard.query_one("#apps-table", DataTable).size.width
+        if self.mode.compact:
+            return [("Application", max(1, width - 4))]
+        return column_widths(width, *self._identity_widths)
+
+    def _reflow_table(self) -> None:
+        if not self.screen_stack:
+            return
+        if self._column_schema() != self._schema:
+            self.render_table()
+        else:
+            self._restore_cursor()
+
     def render_table(self, select_id: int | None = None) -> None:
+        if not self.screen_stack:
+            return
         table = self.dashboard.query_one("#apps-table", DataTable)
         selected = self._selected_app()
         if select_id is None and selected:
             select_id = selected["id"]
         anchor = table.scroll_y
-        width = max(1, table.size.width - 2)
-        schema = [("Application", max(1, width - 2))] if self.mode.compact else column_widths(table.size.width, *self._identity_widths)
+        schema = self._column_schema()
         table.clear(columns=True)
         table.show_header = not self.mode.compact
         for name, size in schema:
@@ -307,7 +297,7 @@ class CvDashboard(App):
                                                            ("cover_letter_path", self.generating_cl_ids)]),
                 }
                 table.add_row(*(values[name] for name, _ in schema), key=str(app["id"]))
-        self._status(f"{len(self.filtered)} applications")
+        self._render_status()
         table.scroll_to(y=anchor, animate=False)
         if select_id is not None:
             for idx, app in enumerate(self.filtered):
@@ -318,8 +308,11 @@ class CvDashboard(App):
         self._update_inspector()
 
     def _restore_cursor(self) -> None:
+        if not self.screen_stack:
+            return
         table = self.dashboard.query_one("#apps-table", DataTable)
         table.move_cursor(row=table.cursor_row, scroll=True)
+        self._render_status()
 
     def _update_inspector(self) -> None:
         app = self._selected_app()
@@ -332,22 +325,41 @@ class CvDashboard(App):
                     screen.query_one("#text-content", Static).update(self.detail_content(record))
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
-        if event.data_table.id != "apps-table":
+        if not self.screen_stack or event.data_table.id != "apps-table":
             return
         selected = self._selected_app()
         if selected and event.row_key.value == str(selected["id"]):
             self._update_inspector()
+            self._render_status()
+
+    def _render_status(self) -> None:
+        table = self.dashboard.query_one("#apps-table", DataTable)
+        count = f"{table.cursor_row + 1 if table.row_count else 0}/{len(self.filtered)}"
+        message = self.operation_message or self.latest_message or "applications"
+        self.dashboard.query_one("#status-bar", Static).update(f"{count} · {message}")
 
     def _status(self, message: str) -> None:
-        self.dashboard.query_one("#status-bar", Static).update(message)
+        self.operation_message = message
+        self._render_status()
+        for screen in self.screen_stack[1:]:
+            if isinstance(screen, TextScreen) and screen.title_text == "Operation status":
+                screen.query_one("#text-content", Static).update(self.operation_content())
 
     def _notify(self, message: str) -> None:
-        self.dashboard.query_one("#status-bar", Static).update(f"[yellow]{message}[/]")
+        self.latest_message = message
+        self._render_status()
+        for screen in self.screen_stack[1:]:
+            if isinstance(screen, TextScreen) and screen.title_text == "Operation status":
+                screen.query_one("#text-content", Static).update(self.operation_content())
+
+    def _finish_operation(self, message: str) -> None:
+        self.operation_message = ""
+        self._notify(message)
 
     def _document_ready(self, message: str, warnings: list[str]) -> None:
         note = " ".join(warnings)
         try:
-            self.call_from_thread(self._notify, (f"[yellow]⚠ {note}[/] " if note else "") + message)
+            self.call_from_thread(self._finish_operation, (f"[yellow]⚠ {note}[/] " if note else "") + message)
         except Exception:
             logger.warning("Document completion notification failed", exc_info=True)
 
@@ -390,18 +402,13 @@ class CvDashboard(App):
         if not app["jd_path"] or not Path(app["jd_path"]).exists():
             self._notify(f"No JD file found for application #{app['id']}")
             return
-        self.run_worker(
-            self._score_one,
-            app["id"], app["company"], app["role"],
-            exclusive=True, thread=True, group="scoring",
-        )
+        self._status("[bold blue]⟳[/] Scoring selected application…")
+        self._score_one(app["id"], app["company"], app["role"])
 
     def action_score_all_missing(self) -> None:
         """Backfill Match Scores for all applications missing one."""
-        self._notify("[bold blue]⟳[/] Scoring applications missing a Match…")
-        self.run_worker(
-            self._score_all, exclusive=True, thread=True, group="scoring"
-        )
+        self._status("[bold blue]⟳[/] Scoring applications missing a Match…")
+        self._score_all()
 
     @work(exclusive=True, thread=True, group="scoring")
     def _score_one(self, app_id: int, company: str, role: str) -> None:
@@ -410,13 +417,13 @@ class CvDashboard(App):
         try:
             outcome = MatchService().score_application(app_id)
             self.call_from_thread(
-                self._notify,
+                self._finish_operation,
                 f"[bold green]✓[/] {company} — {role}: "
                 f"{outcome['score']} {outcome['label']}"
                 + (" (cached)" if outcome["cached"] else ""),
             )
         except Exception as e:
-            self.call_from_thread(self._notify, f"[red]✗[/] Match scoring failed: {e}")
+            self.call_from_thread(self._finish_operation, f"[red]✗[/] Match scoring failed: {e}")
         finally:
             self.call_from_thread(self.refresh_apps)
 
@@ -435,13 +442,13 @@ class CvDashboard(App):
                     note += f" · {result['skipped_no_jd']} skipped (no JD)"
                 if result["errors"]:
                     note += f" · {len(result['errors'])} failed"
-                self.call_from_thread(self._notify, note)
+                self.call_from_thread(self._finish_operation, note)
             else:
                 self.call_from_thread(
-                    self._notify, "No applications missing a Match Score."
+                    self._finish_operation, "No applications missing a Match Score."
                 )
         except Exception as e:
-            self.call_from_thread(self._notify, f"[red]✗[/] Match scoring failed: {e}")
+            self.call_from_thread(self._finish_operation, f"[red]✗[/] Match scoring failed: {e}")
         finally:
             self.call_from_thread(self.refresh_apps)
 
@@ -459,9 +466,7 @@ class CvDashboard(App):
             return
         self.discovering = True
         self._status("[bold blue]Discovering jobs…[/]")
-        self.run_worker(
-            self._run_discovery, exclusive=True, thread=True, group="discovery"
-        )
+        self._run_discovery()
 
     def _discovery_progress(self, message: str) -> None:
         self.call_from_thread(self._status, f"[bold blue]⟳[/] {message}")
@@ -476,7 +481,7 @@ class CvDashboard(App):
             lock = DiscoveryLock()
             if not lock.acquire():
                 self.call_from_thread(
-                    self._notify, "[yellow]Discovery already in progress.[/]"
+                    self._finish_operation, "[yellow]Discovery already in progress.[/]"
                 )
                 return
             try:
@@ -488,13 +493,13 @@ class CvDashboard(App):
 
             if result.imported > 0:
                 self.call_from_thread(
-                    self._notify,
+                    self._finish_operation,
                     f"[bold green]✓[/] {result.imported} new 85%+ job matches added",
                 )
             else:
-                self.call_from_thread(self._notify, "No new 85%+ matches.")
+                self.call_from_thread(self._finish_operation, "No new 85%+ matches.")
         except Exception as e:
-            self.call_from_thread(self._notify, f"[red]✗[/] Discovery failed: {e}")
+            self.call_from_thread(self._finish_operation, f"[red]✗[/] Discovery failed: {e}")
         finally:
             self.discovering = False
             self.call_from_thread(self.refresh_apps)
@@ -505,7 +510,6 @@ class CvDashboard(App):
 
     def action_refresh(self) -> None:
         self.refresh_apps()
-        self._notify("[bold green]✓[/] Refreshed")
 
     def action_focus_filter(self) -> None:
         self.dashboard.add_class("filter-open")
@@ -539,7 +543,12 @@ class CvDashboard(App):
         self.push_screen(ActionsScreen(self.available_actions(), self._selected_app() is not None), dispatch)
 
     def action_operation_status(self) -> None:
-        self.push_screen(TextScreen("Operation status", str(self.dashboard.query_one("#status-bar", Static).render())))
+        self.push_screen(TextScreen("Operation status", self.operation_content()))
+
+    def operation_content(self) -> str:
+        current = Text.from_markup(self.operation_message).plain if self.operation_message else "No operation in progress."
+        latest = Text.from_markup(self.latest_message).plain if self.latest_message else "No completion or error yet."
+        return f"Current\n{current}\n\nLatest completion / error\n{latest}"
 
     def action_browser_sankey(self) -> None:
         from cv_optimizer.sankey import generate_sankey_html
@@ -830,33 +839,33 @@ class CvDashboard(App):
                 self.call_from_thread(self._notify, f"No JD file found for application #{app['id']}")
                 return
             self.regenerating_ids.add(app["id"])
-            self.call_from_thread(self.render_table, app["id"])
-            self.call_from_thread(self._notify, "[bold yellow]⟳[/] Regenerating CV...")
+            self.call_from_thread(self.render_table)
+            self.call_from_thread(self._status, "[bold yellow]⟳[/] Regenerating CV...")
             warnings = []
             reoptimize(app["id"], on_warning=warnings.append)
             self.regenerating_ids.discard(app["id"])
-            self.call_from_thread(self.refresh_apps, app["id"])
+            self.call_from_thread(self.refresh_apps)
             self._document_ready(f"[bold green]✓[/] CV regenerated for {app['company']} — {app['role']}", warnings)
         except Exception as e:
             self.regenerating_ids.discard(app["id"])
-            self.call_from_thread(self.render_table, app["id"])
-            self.call_from_thread(self._notify, f"[red]✗[/] CV regeneration failed: {e}")
+            self.call_from_thread(self.render_table)
+            self.call_from_thread(self._finish_operation, f"[red]✗[/] CV regeneration failed: {e}")
 
     @work(exclusive=True, thread=True)
     def _generate_cover_letter(self, app: dict) -> None:
         try:
             self.generating_cl_ids.add(app["id"])
-            self.call_from_thread(self.render_table, app["id"])
-            self.call_from_thread(self._notify, "[bold yellow]⟳[/] Generating cover letter...")
+            self.call_from_thread(self.render_table)
+            self.call_from_thread(self._status, "[bold yellow]⟳[/] Generating cover letter...")
             warnings = []
             generate_cover_letter(app["id"], on_warning=warnings.append)
             self.generating_cl_ids.discard(app["id"])
-            self.call_from_thread(self.refresh_apps, app["id"])
+            self.call_from_thread(self.refresh_apps)
             self._document_ready(f"[bold green]✓[/] Cover letter generated for {app['company']} — {app['role']}", warnings)
         except Exception as e:
             self.generating_cl_ids.discard(app["id"])
-            self.call_from_thread(self.render_table, app["id"])
-            self.call_from_thread(self._notify, f"[red]✗[/] Cover letter generation failed: {e}")
+            self.call_from_thread(self.render_table)
+            self.call_from_thread(self._finish_operation, f"[red]✗[/] Cover letter generation failed: {e}")
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
         if event.state == WorkerState.ERROR:

@@ -41,6 +41,10 @@ def test_live_resize_selection_details_and_no_queries(temp_db, monkeypatch):
                 assert app.filter_text == "company"
                 assert app.focused is table
                 assert table.scroll_y > 0
+                row_height = 3 if width < 80 else 1
+                selected_top = table.cursor_row * row_height - table.scroll_y + int(table.show_header)
+                assert selected_top >= 0
+                assert selected_top + row_height <= table.size.height
                 assert table.max_scroll_x == 0, (width, height, app.size, table.size, app.mode, app._schema)
                 assert app.query_one("#inspector").display == (width >= 120 and height >= 18)
                 if width < 80:
@@ -65,5 +69,44 @@ def test_live_resize_selection_details_and_no_queries(temp_db, monkeypatch):
             await pilot.press("escape")
             assert app._selected_app()["id"] == selected["id"]
             queries.assert_not_called()
+
+    asyncio.run(run())
+
+
+def test_thousand_record_navigation_and_resize_smoke(temp_db, monkeypatch):
+    import time
+
+    seed(temp_db, 1000)
+
+    async def run():
+        app = CvDashboard()
+        start = time.perf_counter()
+        async with app.run_test(size=(160, 50)) as pilot:
+            load_seconds = time.perf_counter() - start
+            table = app.query_one(DataTable)
+            assert table.row_count == 1000
+            await pilot.press("ctrl+end")
+            table.move_cursor(row=999)
+            await pilot.pause()
+            selected = app._selected_app()["id"]
+            reloads = Mock(side_effect=AssertionError("resize reloaded data"))
+            for name in ["list_applications_with_status", "get_latest_matches", "get_latest_readiness_batch"]:
+                monkeypatch.setattr(temp_db, name, reloads)
+            starts = Mock(side_effect=AssertionError("resize launched service"))
+            for name in ["_regenerate", "_generate_cover_letter", "_score_one", "_run_discovery"]:
+                monkeypatch.setattr(app, name, starts)
+            start = time.perf_counter()
+            for size in [(40, 12), (80, 24), (160, 12), (160, 50)]:
+                await pilot.resize_terminal(*size)
+                await pilot.pause()
+                assert app._selected_app()["id"] == selected
+                assert table.scroll_y > 0
+                assert table.max_scroll_x == 0
+            resize_seconds = time.perf_counter() - start
+            await pilot.press("up", "up", "down")
+            assert table.cursor_row == 998
+            reloads.assert_not_called()
+            starts.assert_not_called()
+            print(f"1000-record smoke: initial load {load_seconds:.3f}s; four live resizes {resize_seconds:.3f}s")
 
     asyncio.run(run())
