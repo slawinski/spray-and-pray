@@ -76,10 +76,8 @@ def test_profile_change_warning_invalidation_and_cursor(temp_db, tmp_path):
     async def run():
         app = CvDashboard()
         async with app.run_test(size=(80, 24)) as pilot:
-            app.current_page = 1
-            app.render_table()
             table = app.query_one("#apps-table", DataTable)
-            table.move_cursor(row=2)
+            table.move_cursor(row=22)
             selected_id = app._selected_app()["id"]
             before = temp_db.get_application(selected_id)
             await pilot.press("v")
@@ -100,7 +98,7 @@ def test_profile_change_warning_invalidation_and_cursor(temp_db, tmp_path):
             await choose(pilot, "mechanical_engineering")
             await pilot.click("#yes")
             await pilot.pause()
-            assert app.current_page == 1 and table.cursor_row == 2
+            assert table.cursor_row == 22
             selected = app._selected_app()
             assert selected["id"] == selected_id
             assert selected["cv_path"] is None and selected["cover_letter_path"] is None

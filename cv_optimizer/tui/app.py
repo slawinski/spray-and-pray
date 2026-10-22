@@ -137,9 +137,7 @@ class CvDashboard(App):
         Binding("ctrl+g", "generate_cl", "Gen CL"),
         Binding("P", "prepare", "Prepare"),
         Binding("L", "lessons", "Lessons"),
-        Binding("n", "next_page", "Next"),
         Binding("S", "sankey", "Sankey"),
-        Binding("p", "prev_page", "Prev"),
         Binding("T", "set_source", "Source"),
         Binding("u", "open_url", "URL"),
         Binding("D", "delete_application", "Delete"),
@@ -148,8 +146,6 @@ class CvDashboard(App):
         Binding("escape", "dismiss", "Dismiss"),
     ]
 
-    page_size = 20
-    current_page = var(0)
     filter_text = var("")
 
     def __init__(self) -> None:
@@ -159,6 +155,10 @@ class CvDashboard(App):
         self.regenerating_ids: set[int] = set()
         self.generating_cl_ids: set[int] = set()
         self.discovering: bool = False
+        self.matches: dict = {}
+        self.readiness: dict = {}
+        self.discovery_details: dict = {}
+        self.filtered_by_id: dict = {}
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -178,15 +178,23 @@ class CvDashboard(App):
         self.refresh_apps()
 
     def refresh_apps(self, select_id: int | None = None) -> None:
+        selected = self._selected_app()
+        select_id = select_id if select_id is not None else selected["id"] if selected else None
+        old_index = self.query_one("#apps-table", DataTable).cursor_row
         try:
-            self.applications = db.list_applications_with_status()
+            applications = db.list_applications_with_status()
+            matches, readiness = {}, {}
+            ids = [a["id"] for a in applications]
+            for start in range(0, len(ids), 500):
+                batch = ids[start:start + 500]
+                matches.update(db.get_latest_matches(batch))
+                readiness.update(db.get_latest_readiness_batch(batch))
+            self.applications = applications
+            self.matches, self.readiness = matches, readiness
+            self.discovery_details.clear()
             self._apply_filter()
-            if select_id is not None:
-                # Keep the page that holds the selected app so the cursor
-                # stays put after an in-place row update (status, source, ...).
-                self.current_page = self._page_containing(select_id)
-            else:
-                self.current_page = 0
+            if select_id not in self.filtered_by_id and self.filtered:
+                select_id = self.filtered[min(old_index, len(self.filtered) - 1)]["id"]
             self.render_table(select_id=select_id)
         except Exception as e:
             self._notify(f"DB error: {e}")
@@ -201,52 +209,37 @@ class CvDashboard(App):
                 a for a in self.applications
                 if text in a["company"].lower() or text in a["role"].lower()
             ]
-
-    def _page_containing(self, app_id: int) -> int:
-        """Index of the page that holds app_id in the filtered list (0 if absent)."""
-        for idx, app in enumerate(self.filtered):
-            if app["id"] == app_id:
-                return idx // self.page_size
-        return 0
+        self.filtered_by_id = {a["id"]: a for a in self.filtered}
 
     def render_table(self, select_id: int | None = None) -> None:
         table = self.query_one("#apps-table", DataTable)
+        selected = self._selected_app()
+        if select_id is None and selected:
+            select_id = selected["id"]
+        anchor = table.scroll_y
         table.clear()
-
-        start = self.current_page * self.page_size
-        end = start + self.page_size
-        page = self.filtered[start:end]
-
-        # Batch queries — never per-row lookups.
-        page_ids = [app["id"] for app in page]
-        matches = db.get_latest_matches(page_ids)
-        readiness = db.get_latest_readiness_batch(page_ids)
-
-        for idx, app in enumerate(page):
+        for idx, app in enumerate(self.filtered):
             created = app["created_at"][:10] if app["created_at"] else ""
-            match_row = matches.get(app["id"])
+            match_row = self.matches.get(app["id"])
             match_score = match_row["score"] if match_row else None
             table.add_row(
-                str(start + idx + 1),
+                str(idx + 1),
                 _truncate(app["company"], 15),
                 _truncate(app["role"], 28),
                 _match_rich(match_score),
                 _status_rich(app["latest_status"]),
-                _readiness_compact(readiness.get(app["id"])),
+                _readiness_compact(self.readiness.get(app["id"])),
                 _source_name(app.get("job_url"), app.get("source")),
                 created,
                 _checkmark(app["jd_path"]),
                 _checkmark(app["cv_path"], app["id"] in self.regenerating_ids),
                 _checkmark(app.get("cover_letter_path"), app["id"] in self.generating_cl_ids),
+                key=str(app["id"]),
             )
-
-        total = len(self.filtered)
-        pages = max(1, (total + self.page_size - 1) // self.page_size)
-        shown = f"{start + 1}–{min(end, total)}" if total else "0"
-        self._status(f"Page {self.current_page + 1}/{pages} — Showing {shown} of {total} applications")
-
+        self._status(f"{len(self.filtered)} applications")
+        table.scroll_to(y=anchor, animate=False)
         if select_id is not None:
-            for idx, app in enumerate(page):
+            for idx, app in enumerate(self.filtered):
                 if app["id"] == select_id:
                     table.move_cursor(row=idx)
                     break
@@ -265,18 +258,12 @@ class CvDashboard(App):
             logger.warning("Document completion notification failed", exc_info=True)
 
     def _selected_app(self) -> dict | None:
-        """The application under the table cursor, accounting for the
-        current page. The table only renders `page_size` rows per page, so
-        cursor_row must be offset by the page start."""
+        """Resolve identity from the mounted row key, never a result offset."""
         table = self.query_one("#apps-table", DataTable)
-        row = table.cursor_row
-        if row is None:
+        if not table.row_count:
             return None
-        start = self.current_page * self.page_size
-        index = start + row
-        if index >= len(self.filtered):
-            return None
-        return self.filtered[index]
+        key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
+        return self.filtered_by_id.get(int(key.value))
 
     def action_delete_application(self) -> None:
         app = self._selected_app()
@@ -464,7 +451,7 @@ class CvDashboard(App):
     def _match_detail(self, app: dict) -> str:
         """Match breakdown: score, confidence, strengths, transferable
         evidence, gaps — framework transfer visibly separated from direct."""
-        match_row = db.get_latest_matches([app["id"]]).get(app["id"])
+        match_row = self.matches.get(app["id"])
         if not match_row:
             return ""
         lines = [
@@ -498,7 +485,9 @@ class CvDashboard(App):
 
     def _discovery_detail(self, app: dict) -> str:
         """Discovery metadata for auto-imported applications."""
-        job = db.get_job_posting_by_application(app["id"])
+        if app["id"] not in self.discovery_details:
+            self.discovery_details[app["id"]] = db.get_job_posting_by_application(app["id"])
+        job = self.discovery_details[app["id"]]
         if not job:
             return ""
         lines = ["Discovery:"]
@@ -755,17 +744,6 @@ class CvDashboard(App):
         if event.state == WorkerState.ERROR:
             self._notify(f"[red]✗[/] Regeneration failed")
 
-    def action_next_page(self) -> None:
-        total_pages = max(1, (len(self.filtered) + self.page_size - 1) // self.page_size)
-        if self.current_page < total_pages - 1:
-            self.current_page += 1
-            self.render_table()
-
-    def action_prev_page(self) -> None:
-        if self.current_page > 0:
-            self.current_page -= 1
-            self.render_table()
-
     def action_dismiss(self) -> None:
         if len(self.screen_stack) > 1:
             self.pop_screen()
@@ -778,10 +756,10 @@ class CvDashboard(App):
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "filter-input":
+            selected = self._selected_app()
             self.filter_text = event.value
             self._apply_filter()
-            self.current_page = 0
-            self.render_table()
+            self.render_table(select_id=selected["id"] if selected and selected["id"] in self.filtered_by_id else None)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         self.action_toggle_detail()
