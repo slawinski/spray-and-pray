@@ -83,23 +83,37 @@ class ActionsScreen(ModalScreen[str]):
         self.dismiss(event.option.id)
 
 
-class ProfileModal(ModalScreen[str]):
+def dialog(body, actions, *, id):
+    return Vertical(ScrollableContainer(*body, classes="dialog-body"),
+                    Horizontal(*actions, classes="dialog-actions"), id=id, classes="dialog")
+
+
+class ResponsiveModal(ModalScreen):
+    """Only geometry changes on resize; inputs and dismissal callbacks stay live."""
+    BINDINGS = [("escape", "cancel", "Cancel")]
+    dialog_height = 12
+
+    def on_mount(self) -> None:
+        self.reflow()
+
+    def on_resize(self) -> None:
+        self.call_after_refresh(self.reflow)
+
+    def reflow(self) -> None:
+        self.query_one(".dialog").styles.height = min(self.app.size.height, self.dialog_height)
+        for overlay in self.query("SelectOverlay"):
+            overlay.styles.max_height = max(3, min(8, self.app.size.height - 4))
+        self.app._size_guard(self)
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
+class ProfileModal(ResponsiveModal):
     """None is cancellation; a blank selection cannot be confirmed."""
 
     BINDINGS = [("escape", "cancel", "Cancel")]
-    DEFAULT_CSS = """
-    ProfileModal #profile-modal {
-        width: 50;
-        max-width: 100%;
-        height: auto;
-        border: thick $primary;
-        padding: 1 2;
-        background: $surface;
-    }
-    ProfileModal Horizontal { height: 3; align: center middle; }
-    ProfileModal Button { margin: 0 1; min-width: 10; }
-    ProfileModal Label { margin-bottom: 1; }
-    """
+    dialog_height = 10
 
     def __init__(self, app_id: int, current_profile: str | None) -> None:
         super().__init__()
@@ -107,17 +121,18 @@ class ProfileModal(ModalScreen[str]):
         self.current_profile = current_profile
 
     def compose(self) -> ComposeResult:
-        yield Vertical(
+        yield dialog([
             Label(f"CV profile for Application #{self.app_id}"),
             Select([(label, name) for name, label in PROFILE_LABELS.items()],
                    id="profile-select", prompt="Select a profile...",
                    value=self.current_profile if self.current_profile else Select.NULL),
-            Horizontal(
+            ], [
                 Button("Confirm", id="confirm", variant="primary"),
                 Button("Cancel", id="cancel"),
-            ),
+            ],
             id="profile-modal",
         )
+        yield ResizeGuard()
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -142,7 +157,8 @@ def _next_interview(history: list[dict]) -> int:
     return max(nums) + 1 if nums else 1
 
 
-class StatusModal(ModalScreen[str]):
+class StatusModal(ResponsiveModal):
+    dialog_height = 10
     def __init__(self, app_id: int, current_status: str) -> None:
         super().__init__()
         self.app_id = app_id
@@ -164,20 +180,22 @@ class StatusModal(ModalScreen[str]):
         if self.current_status not in {opt[0] for opt in options}:
             options.append((self.current_status, self.current_status))
 
-        yield Vertical(
+        yield dialog([
             Label(f"Change status for Application #{self.app_id}"),
             Select(options, id="status-select", prompt="Select new status...", value=self.current_status),
-            Horizontal(
+            ], [
                 Button("Confirm", id="confirm", variant="primary"),
                 Button("Cancel", id="cancel"),
-            ),
+            ],
             id="status-modal",
         )
+        yield ResizeGuard()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "confirm":
             select = self.query_one("#status-select", Select)
-            self.dismiss(select.value)
+            if not select.is_blank():
+                self.dismiss(select.value)
         else:
             self.dismiss(None)
 
@@ -185,45 +203,48 @@ class StatusModal(ModalScreen[str]):
         self.current_status = str(event.value) if event.value else self.current_status
 
 
-class SankeyScreen(ModalScreen[None]):
-    def compose(self) -> ComposeResult:
-        from cv_optimizer.sankey import generate_sankey
+class SankeyScreen(TextScreen):
+    def __init__(self):
+        from cv_optimizer.sankey import build_sankey_flows, render_sankey
 
-        yield ScrollableContainer(
-            Static(generate_sankey(), id="sankey-content"),
-            id="sankey-container",
-        )
+        flows = build_sankey_flows(db.get_all_transitions())
+        # Preserve the terminal renderer's total and node-count semantics.
+        # Only replace the fixed-width edge/separator presentation.
+        original = render_sankey(flows)
+        if flows:
+            edges = [f"{source} → {target}: {count}"
+                     for (source, target), count in sorted(flows.items(), key=lambda item: (item[0][0], -item[1]))]
+            totals = original.splitlines()[-2:]
+            content = "\n\n".join(edges + totals)
+        else:
+            content = original
+        super().__init__("Application funnel", content)
 
-    def on_mount(self) -> None:
-        self.query_one("#sankey-container").border_title = "Application Funnel"
-        self.query_one("#sankey-container").border_subtitle = "Press escape to close"
 
-    def key_escape(self) -> None:
-        self.dismiss(None)
-
-
-class ConfirmModal(ModalScreen[bool]):
+class ConfirmModal(ResponsiveModal):
+    dialog_height = 24
     def __init__(self, title: str, message: str) -> None:
         super().__init__()
         self.modal_title = title
         self.modal_message = message
 
     def compose(self) -> ComposeResult:
-        yield Vertical(
-            Label(self.modal_title, id="confirm-title"),
-            Label(self.modal_message, id="confirm-message"),
-            Horizontal(
+        yield dialog([
+            Label(self.modal_title, id="confirm-title", markup=False),
+            Label(self.modal_message, id="confirm-message", markup=False),
+            ], [
                 Button("Yes", id="yes", variant="primary"),
                 Button("No", id="no"),
-            ),
+            ],
             id="confirm-modal",
         )
+        yield ResizeGuard()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.dismiss(event.button.id == "yes")
 
 
-class SourceModal(ModalScreen[str]):
+class SourceModal(ResponsiveModal):
     """Lets the user override the JD source for an application."""
 
     def __init__(self, app_id: int, company: str, current_source: str | None) -> None:
@@ -234,19 +255,23 @@ class SourceModal(ModalScreen[str]):
 
     def compose(self) -> ComposeResult:
         current_label = f"Current: {self.current_source}" if self.current_source else "Current: auto-detect"
-        yield Vertical(
-            Label(f"Set source for {self.company} (App #{self.app_id})"),
-            Label(current_label, id="current-source"),
+        yield dialog([
+            Label(f"Source · {self.company} (#{self.app_id})", markup=False),
+            Label(current_label, id="current-source", markup=False),
             Horizontal(
                 Button("Referral", id="referral", variant="primary"),
                 Button("Recruiter", id="recruiter", variant="primary"),
             ),
-            Horizontal(
-                Button("Clear (auto-detect)", id="clear"),
+            ], [
+                Button("Clear", id="clear"),
                 Button("Cancel", id="cancel"),
-            ),
+            ],
             id="confirm-modal",
         )
+        yield ResizeGuard()
+
+    def action_cancel(self) -> None:
+        self.dismiss(self.current_source)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "referral":
@@ -259,8 +284,9 @@ class SourceModal(ModalScreen[str]):
             self.dismiss(self.current_source)  # cancel — keep current
 
 
-class EditModal(ModalScreen[dict]):
+class EditModal(ResponsiveModal):
     """Corrects company/role/job URL (e.g. after a bad auto-import scrape)."""
+    dialog_height = 20
 
     def __init__(self, app_id: int, company: str, role: str, job_url: str | None) -> None:
         super().__init__()
@@ -270,7 +296,7 @@ class EditModal(ModalScreen[dict]):
         self.job_url = job_url
 
     def compose(self) -> ComposeResult:
-        yield Vertical(
+        yield dialog([
             Label(f"Edit Application #{self.app_id}"),
             Label("Company"),
             Input(value=self.company, id="edit-company"),
@@ -278,12 +304,13 @@ class EditModal(ModalScreen[dict]):
             Input(value=self.role, id="edit-role"),
             Label("Job URL (empty = clear)"),
             Input(value=self.job_url or "", id="edit-url"),
-            Horizontal(
+            ], [
                 Button("Save", id="save", variant="primary"),
                 Button("Cancel", id="cancel"),
-            ),
+            ],
             id="edit-modal",
         )
+        yield ResizeGuard()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "save":

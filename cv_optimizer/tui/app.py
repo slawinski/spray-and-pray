@@ -230,7 +230,7 @@ class CvDashboard(App):
         if self.size.width < 40 or self.size.height < 12:
             return action == "quit"
         if len(self.screen_stack) > 1:
-            return False
+            return action in {"focus_next", "focus_previous"}
         return True
 
     def refresh_apps(self, select_id: int | None = None) -> None:
@@ -446,10 +446,8 @@ class CvDashboard(App):
             self.call_from_thread(self.refresh_apps)
 
     def action_sankey(self) -> None:
-        from cv_optimizer.sankey import generate_sankey_html
-        self._notify("[bold blue]⟳[/] Opening Sankey in browser...")
-        generate_sankey_html()
-        self._notify("[bold green]✓[/] Sankey opened in browser")
+        from cv_optimizer.tui.screens.modals import SankeyScreen
+        self.push_screen(SankeyScreen())
 
     def action_discover_jobs(self) -> None:
         """Launch discovery in a background worker; the UI stays responsive."""
