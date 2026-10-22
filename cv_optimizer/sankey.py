@@ -117,7 +117,7 @@ def _node_counts(flows: dict[tuple[str, str], int]) -> dict[str, int]:
     return counts
 
 
-def render_sankey(flows: dict[tuple[str, str], int]) -> str:
+def render_sankey(flows: dict[tuple[str, str], int], *, compact: bool = False) -> str:
     """Render flows as an ASCII Sankey table for the terminal.
 
     Sorted by source alphabetically, then weight descending.
@@ -144,14 +144,17 @@ def render_sankey(flows: dict[tuple[str, str], int]) -> str:
 
     lines: list[str] = []
     header = "Application Funnel (Sankey)"
-    separator = "═" * 38
+    separator = "" if compact else "═" * 38
 
     lines.append(header)
     lines.append(separator)
 
     for (src, tgt), weight in sorted_flows:
-        padded_src = src.ljust(max_source_len)
-        lines.append(f"{padded_src} ──[ {weight} ]──▶  {tgt}")
+        if compact:
+            lines.append(f"{src} → {tgt}: {weight}\n")
+        else:
+            padded_src = src.ljust(max_source_len)
+            lines.append(f"{padded_src} ──[ {weight} ]──▶  {tgt}")
 
     # Per-status application counts (node values), sorted canonically
     node_counts = _node_counts(flows)

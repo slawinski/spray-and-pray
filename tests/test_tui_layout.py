@@ -21,3 +21,9 @@ def test_columns_fit_measured_budget(width):
     if "Readiness" in columns:
         assert columns["Company"] >= 24 and columns["Role"] >= 36
     assert columns["Company"] >= 16 and columns["Role"] >= 24
+
+
+def test_secondary_columns_preserve_identity_floors():
+    columns = dict(column_widths(160, 24, 36))
+    assert list(columns)[4:] == ["Readiness", "Source", "Created", "Docs", "#"]
+    assert columns["Company"] >= 24 and columns["Role"] >= 36

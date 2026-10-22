@@ -26,6 +26,8 @@ def test_batches_cache_and_failed_refresh(temp_db, monkeypatch):
             assert [len(c.args[0]) for c in matches.call_args_list] == [500, 500, 1]
             table.move_cursor(row=57)
             target = app._selected_app()["id"]
+            assert "57" in table.get_cell(str(target), "Match")
+            assert app.matches[1000]["score"] == 0
             app.render_table()
             app.query_one(Input).value = "Company"
             await pilot.pause()

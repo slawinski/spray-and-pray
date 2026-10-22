@@ -24,6 +24,16 @@ def test_actions_and_filter_at_minimum(temp_db):
             assert options.highlighted == options.option_count - 1
             await pilot.press("escape")
             assert app._selected_app()["id"] == selected
+            for key, action in [("e", "edit_application"), ("s", "change_status")]:
+                await pilot.press(key)
+                assert app.screen.app_id == selected
+                await pilot.press("escape", "?")
+                options = app.screen.query_one(OptionList)
+                options.highlighted = next(i for i in range(options.option_count)
+                                           if options.get_option_at_index(i).id == action)
+                await pilot.press("enter")
+                assert app.screen.app_id == selected
+                await pilot.press("escape")
             await pilot.press("/")
             field = app.query_one("#filter-input", Input)
             assert app.focused is field and field.region.height == 3
@@ -41,5 +51,26 @@ def test_actions_and_filter_at_minimum(temp_db):
             await pilot.press("enter")
             assert app.screen.app_id == app._selected_app()["id"]
             await pilot.press("escape")
+
+    asyncio.run(run())
+
+
+def test_empty_results_disable_selected_actions(temp_db):
+    temp_db.insert_application("Company", "Engineer")
+
+    async def run():
+        app = CvDashboard()
+        async with app.run_test(size=(40, 12)) as pilot:
+            await pilot.press("/")
+            field = app.query_one(Input)
+            field.value = "no match"
+            await pilot.press("enter", "?")
+            assert app._selected_app() is None
+            options = app.screen.query_one(OptionList)
+            assert options.get_option("edit_application").disabled
+            for action in ["refresh", "focus_filter", "sankey", "quit"]:
+                assert not options.get_option(action).disabled
+            await pilot.press("escape")
+            assert "No application selected" in str(app.query_one("#inspector-content").render())
 
     asyncio.run(run())

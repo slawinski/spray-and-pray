@@ -208,17 +208,7 @@ class SankeyScreen(TextScreen):
         from cv_optimizer.sankey import build_sankey_flows, render_sankey
 
         flows = build_sankey_flows(db.get_all_transitions())
-        # Preserve the terminal renderer's total and node-count semantics.
-        # Only replace the fixed-width edge/separator presentation.
-        original = render_sankey(flows)
-        if flows:
-            edges = [f"{source} → {target}: {count}"
-                     for (source, target), count in sorted(flows.items(), key=lambda item: (item[0][0], -item[1]))]
-            totals = original.splitlines()[-2:]
-            content = "\n\n".join(edges + totals)
-        else:
-            content = original
-        super().__init__("Application funnel", content)
+        super().__init__("Application funnel", render_sankey(flows, compact=True))
 
 
 class ConfirmModal(ResponsiveModal):

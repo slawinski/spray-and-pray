@@ -59,9 +59,7 @@ def test_selected_app_beyond_twentieth_row(tmp_path, monkeypatch):
 
 
 def test_status_change_preserves_deep_cursor(tmp_path, monkeypatch):
-    """Regression: updating a status re-renders the table, which used to
-    reset the page to 0 and drop the cursor onto the top row. The cursor
-    must stay on the updated application's row, on the same page."""
+    """Updating a status must not drop a deep cursor onto the first record."""
     import cv_optimizer.db as db
     from cv_optimizer import tracker
 
@@ -110,8 +108,7 @@ def test_status_change_preserves_deep_cursor(tmp_path, monkeypatch):
 
 
 def test_refresh_preserves_active_filter(tmp_path, monkeypatch):
-    """refresh_apps(select_id=...) must re-apply the active filter text so
-    the page computation and rendered list stay consistent."""
+    """Refresh must re-apply active filter text and retain the selected ID."""
     import cv_optimizer.db as db
     from cv_optimizer import tracker
 

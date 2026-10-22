@@ -7,6 +7,15 @@ from cv_optimizer.tui.app import CvDashboard
 from cv_optimizer.tui.screens.modals import ConfirmModal
 
 
+async def tab_to(pilot, app, widget_id):
+    for _ in range(12):
+        if app.focused is not None and app.focused.id == widget_id:
+            assert 0 <= app.focused.region.y < app.focused.region.bottom <= app.size.height
+            return
+        await pilot.press("tab")
+    raise AssertionError(f"Keyboard could not reach {widget_id}")
+
+
 def test_edit_keyboard_and_live_resize(temp_db, temp_apps_dir):
     app_id = temp_db.insert_application("Original", "Engineer")
 
@@ -16,7 +25,7 @@ def test_edit_keyboard_and_live_resize(temp_db, temp_apps_dir):
             await pilot.press("e")
             modal = app.screen
             company = modal.query_one("#edit-company", Input)
-            company.focus()
+            await tab_to(pilot, app, "edit-company")
             await pilot.press("home", "shift+end")
             await pilot.press("q", "s", "e", "/", "?")
             assert company.value == "qse/?"
@@ -41,6 +50,10 @@ def test_edit_keyboard_and_live_resize(temp_db, temp_apps_dir):
             assert record["company"] == "qse/?" and record["role"] == "New"
             await pilot.press("e", "escape")
             assert len(app.screen_stack) == 1
+            await pilot.press("e")
+            await tab_to(pilot, app, "cancel")
+            await pilot.press("enter")
+            assert len(app.screen_stack) == 1
 
     asyncio.run(run())
 
@@ -55,7 +68,7 @@ def test_select_last_option_and_cancel_at_minimum(temp_db, key, select_id):
         async with app.run_test(size=(40, 12)) as pilot:
             await pilot.press(key)
             select = app.screen.query_one(Select)
-            select.focus()
+            await tab_to(pilot, app, select_id)
             await pilot.press("enter", "end")
             overlay = select.query_one("SelectOverlay")
             assert overlay.region.bottom <= 12 and overlay.region.y >= 0
@@ -65,6 +78,21 @@ def test_select_last_option_and_cancel_at_minimum(temp_db, key, select_id):
             assert len(app.screen_stack) == 1
             assert temp_db.get_application_profile(app_id) == ("it", 0)
             assert temp_db.get_latest_status(app_id) == "draft"
+            await pilot.press(key)
+            await tab_to(pilot, app, "cancel")
+            await pilot.press("enter")
+            assert len(app.screen_stack) == 1
+            await pilot.press(key)
+            await tab_to(pilot, app, select_id)
+            await pilot.press("enter", "end", "enter")
+            await tab_to(pilot, app, "confirm")
+            await pilot.press("enter")
+            if key == "v":
+                await tab_to(pilot, app, "yes")
+                await pilot.press("enter")
+                assert temp_db.get_application_profile(app_id) == ("mechanical_engineering", 1)
+            else:
+                assert temp_db.get_latest_status(app_id) == "interview 1"
 
     asyncio.run(run())
 
@@ -80,7 +108,11 @@ def test_source_clear_cancel_and_long_confirmation(temp_db):
             assert len(app.screen_stack) == 1
             assert temp_db.list_applications_with_status()[0]["source"] == "referral"
             await pilot.press("T")
-            app.screen.query_one("#clear", Button).focus()
+            await tab_to(pilot, app, "cancel")
+            await pilot.press("enter")
+            assert temp_db.list_applications_with_status()[0]["source"] == "referral"
+            await pilot.press("T")
+            await tab_to(pilot, app, "clear")
             await pilot.press("enter")
             assert temp_db.list_applications_with_status()[0]["source"] is None
             outcomes = []
@@ -91,7 +123,7 @@ def test_source_clear_cancel_and_long_confirmation(temp_db):
             await pilot.press("end")
             assert body.scroll_y > 0
             no = app.screen.query_one("#no", Button)
-            no.focus()
+            await tab_to(pilot, app, "no")
             assert no.region.bottom <= 12
             await pilot.press("enter")
             assert outcomes == [False]

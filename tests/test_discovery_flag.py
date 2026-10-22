@@ -67,6 +67,7 @@ def test_tui_hides_discover_binding_and_guards_action(tmp_path, monkeypatch):
     importlib.reload(app_mod)
     try:
         assert "discover_jobs" not in [b.action for b in app_mod.CvDashboard.BINDINGS]
+        assert "discover_jobs" not in [a[0] for a in app_mod.CvDashboard().available_actions()]
 
         async def run():
             from textual.widgets import Static
@@ -92,6 +93,7 @@ def test_tui_shows_discover_binding_when_enabled(monkeypatch):
     importlib.reload(app_mod)
     try:
         assert "discover_jobs" in [b.action for b in app_mod.CvDashboard.BINDINGS]
+        assert "discover_jobs" in [a[0] for a in app_mod.CvDashboard().available_actions()]
     finally:
         importlib.reload(app_mod)
 
