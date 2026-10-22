@@ -32,7 +32,8 @@ def test_first_document_selection_cancel_and_continue(temp_db, tmp_path, monkeyp
         app = CvDashboard()
         async with app.run_test(size=(80, 24)) as pilot:
             await pilot.press("enter")
-            assert "Not selected" in str(app.query_one("#detail-panel", Static).render())
+            assert "Not selected" in str(app.screen.query_one("#text-content", Static).render())
+            await pilot.press("escape")
             await pilot.press(action)
             assert app.screen.query_one("#profile-select", Select).is_blank()
             await pilot.click("#confirm")  # blank cannot confirm
@@ -106,7 +107,7 @@ def test_profile_change_warning_invalidation_and_cursor(temp_db, tmp_path):
             assert cv.read_bytes() == b"old CV" and letter.read_bytes() == b"old letter"
             assert temp_db.get_latest_status(selected_id) == "draft"
             await pilot.press("enter")
-            assert "Mechanical Engineering" in str(app.query_one("#detail-panel", Static).render())
+            assert "Mechanical Engineering" in str(app.screen.query_one("#text-content", Static).render())
             other = next(a for a in app.applications if a["id"] != selected_id)
             assert other["cv_profile"] == "it" and other["cv_path"] == str(cv)
 

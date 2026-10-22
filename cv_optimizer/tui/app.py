@@ -7,10 +7,12 @@ from datetime import datetime
 from pathlib import Path
 
 from urllib.parse import urlparse
+from rich.cells import cell_len
+from rich.text import Text
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal
+from textual.containers import Horizontal, VerticalScroll
 from textual.reactive import var
 from textual.widgets import DataTable, Footer, Header, Input, Label, Static
 from textual import work
@@ -20,6 +22,8 @@ from cv_optimizer import db
 from cv_optimizer.config import settings
 from cv_optimizer.tracker import _build_app_dir, track, reoptimize, update_status, _validate_status, remove_application, generate_cover_letter, edit_application
 from cv_optimizer.tui.screens.modals import ConfirmModal, SourceModal, StatusModal, EditModal, ProfileModal, PROFILE_LABELS
+from cv_optimizer.tui.screens.modals import TextScreen, ResizeGuard
+from cv_optimizer.tui.layout import layout_mode, column_widths
 
 logger = logging.getLogger(__name__)
 
@@ -33,21 +37,6 @@ STATUS_COLORS = {
     "withdrawn": "orange3",
     "ghosted": "grey37",
 }
-
-COLUMNS = [
-    ("#", 4),
-    ("Company", 15),
-    ("Role", 28),
-    ("Match", 5),
-    ("Status", 14),
-    ("Readiness", 5),
-    ("Source", 16),
-    ("Created", 10),
-    ("JD", 3),
-    ("CV", 3),
-    ("CL", 3),
-]
-
 
 def _status_rich(status: str) -> str:
     base = status.split()[0] if status.split()[0] in STATUS_COLORS else "applied"
@@ -97,8 +86,10 @@ def _source_name(url: str | None, source: str | None = None) -> str:
     except Exception:
         return "[dim]—[/]"
 
-def _truncate(text: str, max_len: int) -> str:
-    return text if len(text) <= max_len else text[:max_len - 1] + "…"
+def _identity(text: str, width: int) -> Text:
+    value = Text(text.replace("\n", " "), no_wrap=True)
+    value.truncate(max(1, width), overflow="ellipsis")
+    return value
 
 
 def _readiness_bar(score: int | None) -> str:
@@ -116,6 +107,11 @@ def _readiness_compact(score: int | None) -> str:
         return "[dim]—[/]"
     color = "green" if score >= 70 else ("yellow" if score >= 40 else "red")
     return f"[{color}]{score:3d}[/]"
+
+
+class ApplicationTable(DataTable):
+    def on_resize(self) -> None:
+        self.app.call_after_refresh(self.app.render_table)
 
 
 class CvDashboard(App):
@@ -159,23 +155,65 @@ class CvDashboard(App):
         self.readiness: dict = {}
         self.discovery_details: dict = {}
         self.filtered_by_id: dict = {}
+        self.mode = layout_mode(80, 24)
+        self._schema = None
+        self._identity_widths = (24, 36)
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         with Horizontal(id="filter-bar"):
             yield Input(placeholder="Filter by company or role...", id="filter-input")
-        yield DataTable(id="apps-table")
-        yield Static(id="detail-panel")
+        with Horizontal(id="body"):
+            yield ApplicationTable(id="apps-table")
+            with VerticalScroll(id="inspector"):
+                yield Static(id="inspector-content", markup=False)
         yield Static(id="status-bar")
         yield Footer()
+        yield ResizeGuard()
 
     def on_mount(self) -> None:
         table = self.query_one("#apps-table", DataTable)
         table.cursor_type = "row"
         table.zebra_stripes = True
-        table.add_columns(*[c[0] for c in COLUMNS])
         self.query_one("#status-bar", Static).update("Loading...")
+        self._adapt_layout()
         self.refresh_apps()
+        table.focus()
+
+    def on_resize(self) -> None:
+        if self.is_mounted:
+            self.call_after_refresh(self._adapt_layout)
+
+    def _adapt_layout(self) -> None:
+        self.mode = layout_mode(self.size.width, self.size.height)
+        dashboard = self.screen_stack[0]
+        dashboard.set_class(self.mode.short, "short")
+        dashboard.set_class(self.mode.inspector, "with-inspector")
+        inspector = dashboard.query_one("#inspector")
+        inspector.styles.width = max(36, min(52, int(self.size.width * .32)))
+        for screen in self.screen_stack:
+            self._size_guard(screen)
+        self.call_after_refresh(self.render_table)
+
+    def _size_guard(self, screen) -> None:
+        guards = screen.query(ResizeGuard)
+        if not guards:
+            return
+        guard = guards.first()
+        undersize = self.size.width < 40 or self.size.height < 12
+        if undersize and not guard.display:
+            guard.previous_focus = screen.focused
+            guard.display = True
+            guard.focus()
+        elif not undersize and guard.display:
+            guard.display = False
+            if guard.previous_focus is not None and guard.previous_focus.is_mounted:
+                screen.set_focus(guard.previous_focus)
+
+    def check_action(self, action, parameters):
+        if self.size.width < 40 or self.size.height < 12:
+            return action == "quit"
+        return True
 
     def refresh_apps(self, select_id: int | None = None) -> None:
         selected = self._selected_app()
@@ -191,6 +229,10 @@ class CvDashboard(App):
                 readiness.update(db.get_latest_readiness_batch(batch))
             self.applications = applications
             self.matches, self.readiness = matches, readiness
+            self._identity_widths = (
+                max((cell_len(a["company"]) for a in applications), default=24),
+                max((cell_len(a["role"]) for a in applications), default=36),
+            )
             self.discovery_details.clear()
             self._apply_filter()
             if select_id not in self.filtered_by_id and self.filtered:
@@ -217,25 +259,36 @@ class CvDashboard(App):
         if select_id is None and selected:
             select_id = selected["id"]
         anchor = table.scroll_y
-        table.clear()
+        width = max(1, table.size.width - 2)
+        schema = [("Application", max(1, width - 2))] if self.mode.compact else column_widths(table.size.width, *self._identity_widths)
+        table.clear(columns=True)
+        table.show_header = not self.mode.compact
+        for name, size in schema:
+            table.add_column(name, width=size, key=name)
+        self._schema = schema
         for idx, app in enumerate(self.filtered):
             created = app["created_at"][:10] if app["created_at"] else ""
             match_row = self.matches.get(app["id"])
             match_score = match_row["score"] if match_row else None
-            table.add_row(
-                str(idx + 1),
-                _truncate(app["company"], 15),
-                _truncate(app["role"], 28),
-                _match_rich(match_score),
-                _status_rich(app["latest_status"]),
-                _readiness_compact(self.readiness.get(app["id"])),
-                _source_name(app.get("job_url"), app.get("source")),
-                created,
-                _checkmark(app["jd_path"]),
-                _checkmark(app["cv_path"], app["id"] in self.regenerating_ids),
-                _checkmark(app.get("cover_letter_path"), app["id"] in self.generating_cl_ids),
-                key=str(app["id"]),
-            )
+            if self.mode.compact:
+                cell = _identity(app["company"], schema[0][1])
+                cell.append("\n").append(_identity(app["role"], schema[0][1]))
+                cell.append("\n").append(Text.from_markup(_status_rich(app["latest_status"])))
+                cell.append(" · Match ").append(Text.from_markup(_match_rich(match_score)))
+                table.add_row(cell, height=3, key=str(app["id"]))
+            else:
+                values = {
+                    "Company": Text(app["company"], no_wrap=True, overflow="ellipsis"),
+                    "Role": Text(app["role"], no_wrap=True, overflow="ellipsis"),
+                    "Status": _status_rich(app["latest_status"]), "Match": _match_rich(match_score),
+                    "Readiness": _readiness_compact(self.readiness.get(app["id"])),
+                    "Source": Text(app.get("source") or urlparse(app.get("job_url") or "").hostname or "—"),
+                    "Created": created, "#": str(idx + 1),
+                    "Docs": " ".join(_checkmark(app.get(path), app["id"] in pending)
+                                     for path, pending in [("jd_path", set()), ("cv_path", self.regenerating_ids),
+                                                           ("cover_letter_path", self.generating_cl_ids)]),
+                }
+                table.add_row(*(values[name] for name, _ in schema), key=str(app["id"]))
         self._status(f"{len(self.filtered)} applications")
         table.scroll_to(y=anchor, animate=False)
         if select_id is not None:
@@ -243,6 +296,29 @@ class CvDashboard(App):
                 if app["id"] == select_id:
                     table.move_cursor(row=idx)
                     break
+        self.call_after_refresh(self._restore_cursor)
+        self._update_inspector()
+
+    def _restore_cursor(self) -> None:
+        table = self.query_one("#apps-table", DataTable)
+        table.move_cursor(row=table.cursor_row, scroll=True)
+
+    def _update_inspector(self) -> None:
+        app = self._selected_app()
+        content = self.detail_content(app) if app else "No application selected. / Filter · ? Actions"
+        self.query_one("#inspector-content", Static).update(content)
+        for screen in self.screen_stack[1:]:
+            if isinstance(screen, TextScreen) and screen.application_id is not None:
+                record = self.filtered_by_id.get(screen.application_id)
+                if record:
+                    screen.query_one("#text-content", Static).update(self.detail_content(record))
+
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        if event.data_table.id != "apps-table":
+            return
+        selected = self._selected_app()
+        if selected and event.row_key.value == str(selected["id"]):
+            self._update_inspector()
 
     def _status(self, message: str) -> None:
         self.query_one("#status-bar", Static).update(message)
@@ -422,31 +498,26 @@ class CvDashboard(App):
         app = self._selected_app()
         if app is None:
             return
-        panel = self.query_one("#detail-panel", Static)
-        if panel.has_class("visible"):
-            panel.remove_class("visible")
-            panel.update("")
-        else:
-            last_updated = ""
-            if app["history"]:
-                last_updated = app["history"][-1]["transitioned_at"]
-            history_str = " -> ".join(h["status"] for h in app["history"]) if app["history"] else "none"
-            match_block = self._match_detail(app)
-            discovery_block = self._discovery_detail(app)
-            panel.update(
-                f"Application #{app['id']} — {app['company']} — {app['role']}\n"
-                + f"CV profile: {PROFILE_LABELS.get(app.get('cv_profile'), 'Not selected')}\n"
-                + match_block
-                + f"Status: {app['latest_status']} (last updated: {last_updated})\n"
-                + f"Readiness: {_readiness_bar(db.get_latest_readiness(app['id']))}\n"
-                + discovery_block
-                + f"URL: {app['job_url'] or 'N/A'}\n"
-                + f"JD: {app['jd_path'] or 'N/A'}\n"
-                + f"CV: {app['cv_path'] or 'N/A'}\n"
-                + f"CL: {app.get('cover_letter_path') or 'N/A'}\n"
-                + f"Status History: {history_str}"
-            )
-            panel.add_class("visible")
+        self.push_screen(TextScreen("Application details", self.detail_content(app), application_id=app["id"]))
+
+    def detail_content(self, app: dict) -> str:
+        history = " → ".join(h["status"] for h in app["history"]) or "none"
+        readiness = self.readiness.get(app["id"])
+        return (
+            f"Application #{app['id']}\n{app['company']}\n{app['role']}\n\n"
+            f"Status: {app['latest_status']}\n"
+            f"CV profile: {PROFILE_LABELS.get(app.get('cv_profile'), 'Not selected')}\n"
+            + (self._match_detail(app) or "Match: —\n")
+            + f"Readiness: {readiness if readiness is not None else '—'}\n"
+            + f"Source: {app.get('source') or urlparse(app.get('job_url') or '').hostname or '—'}\n"
+            + f"Created: {app.get('created_at') or '—'}\n"
+            + self._discovery_detail(app)
+            + f"URL: {app.get('job_url') or 'N/A'}\n"
+            + f"JD: {app.get('jd_path') or 'Not available'}\n"
+            + f"CV: {app.get('cv_path') or 'Not available'}\n"
+            + f"CL: {app.get('cover_letter_path') or 'Not available'}\n"
+            + f"Status History: {history}"
+        )
 
     def _match_detail(self, app: dict) -> str:
         """Match breakdown: score, confidence, strengths, transferable
@@ -533,10 +604,6 @@ class CvDashboard(App):
                 try:
                     db.set_application_profile(app["id"], result)
                     self.refresh_apps(select_id=app["id"])
-                    panel = self.query_one("#detail-panel", Static)
-                    if panel.has_class("visible"):
-                        panel.remove_class("visible")
-                        self.action_toggle_detail()
                     self._notify(f"[bold green]✓[/] CV profile set to {PROFILE_LABELS[result]}")
                 except Exception as e:
                     self._notify(f"[red]✗[/] {e}")
@@ -749,10 +816,7 @@ class CvDashboard(App):
             self.pop_screen()
             return
 
-        panel = self.query_one("#detail-panel", Static)
-        if panel.has_class("visible"):
-            panel.remove_class("visible")
-            panel.update("")
+        self.query_one("#apps-table", DataTable).focus()
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "filter-input":

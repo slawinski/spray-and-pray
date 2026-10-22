@@ -12,6 +12,50 @@ BASE_STATUSES = ["draft", "applied", "ghosted", "withdrawn", "rejected", "offer"
 PROFILE_LABELS = {"it": "IT", "mechanical_engineering": "Mechanical Engineering"}
 
 
+class ResizeGuard(Static, can_focus=True):
+    """An overlay, not a screen: preserve forms and their screen callbacks."""
+    DEFAULT_CSS = """
+    ResizeGuard {
+        display: none; layer: overlay; dock: top; width: 100%; height: 100%;
+        background: $background; content-align: center middle;
+    }
+    """
+    previous_focus = None
+
+    def __init__(self):
+        super().__init__("Resize to at least 40 × 12\nq Quit", markup=False)
+
+    def on_key(self, event) -> None:
+        event.stop()
+        event.prevent_default()
+        if event.key == "q":
+            self.app.exit()
+
+
+class TextScreen(ModalScreen[None]):
+    BINDINGS = [("escape", "cancel", "Close")]
+
+    def __init__(self, title: str, content: str, *, application_id: int | None = None):
+        super().__init__()
+        self.title_text, self.content_text = title, content
+        self.application_id = application_id
+
+    def compose(self) -> ComposeResult:
+        with Vertical(classes="text-screen"):
+            yield Label(self.title_text, markup=False)
+            with ScrollableContainer(id="text-scroll"):
+                yield Static(self.content_text, id="text-content", markup=False)
+            yield Label("↑↓ Scroll · Esc Close")
+        yield ResizeGuard()
+
+    def on_mount(self) -> None:
+        self.query_one("#text-scroll").focus()
+        self.app._size_guard(self)
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
 class ProfileModal(ModalScreen[str]):
     """None is cancellation; a blank selection cannot be confirmed."""
 

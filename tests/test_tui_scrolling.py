@@ -11,7 +11,8 @@ def test_batches_cache_and_failed_refresh(temp_db, monkeypatch):
                     latest_status="draft", history=[], jd_path=None, cv_path=None)
                for i in range(1001)]
     load = Mock(return_value=records)
-    matches = Mock(side_effect=lambda ids: {i: {"score": i % 100} for i in ids})
+    matches = Mock(side_effect=lambda ids: {i: {"score": i % 100, "label": "Match",
+                                               "confidence": "high", "assessment_json": "{}"} for i in ids})
     readiness = Mock(return_value={})
     monkeypatch.setattr(temp_db, "list_applications_with_status", load)
     monkeypatch.setattr(temp_db, "get_latest_matches", matches)
