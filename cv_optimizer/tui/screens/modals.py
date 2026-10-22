@@ -4,7 +4,8 @@ from pathlib import Path
 from textual.app import ComposeResult
 from textual.containers import Horizontal, ScrollableContainer, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Select, Static
+from textual.widgets import Button, Input, Label, Select, Static, OptionList
+from textual.widgets.option_list import Option
 
 from cv_optimizer import db
 
@@ -54,6 +55,32 @@ class TextScreen(ModalScreen[None]):
 
     def action_cancel(self) -> None:
         self.dismiss(None)
+
+
+class ActionsScreen(ModalScreen[str]):
+    BINDINGS = [("escape", "cancel", "Close")]
+
+    def __init__(self, commands, has_selection):
+        super().__init__()
+        self.commands, self.has_selection = commands, has_selection
+
+    def compose(self) -> ComposeResult:
+        with Vertical(classes="text-screen"):
+            yield Label("Actions · Esc Close")
+            yield OptionList(*(Option(f"{key or '·'}  {label}" + (" · selected" if required else ""),
+                                      id=action, disabled=required and not self.has_selection)
+                               for action, key, label, required in self.commands), id="actions-list")
+        yield ResizeGuard()
+
+    def on_mount(self) -> None:
+        self.query_one(OptionList).focus()
+        self.app._size_guard(self)
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        self.dismiss(event.option.id)
 
 
 class ProfileModal(ModalScreen[str]):

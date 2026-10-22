@@ -8,9 +8,10 @@ Header { height: 1; }
 .with-inspector #inspector { display: block; }
 #inspector-content { height: auto; }
 .short Header, .short #filter-bar { display: none; }
-.short #filter-bar:focus-within { display: block; }
+.short.filter-open #filter-bar { display: block; }
 #status-bar { height: 1; background: $panel; padding: 0 1; }
-Footer { height: 1; }
+#shortcut-bar { height: 1; background: $panel; }
+#actions-list { height: 1fr; border: none; }
 ModalScreen { align: center middle; }
 .text-screen { width: 90%; max-width: 100; height: 90%; border: solid $primary; background: $surface; padding: 0 1; }
 #text-scroll { height: 1fr; overflow-x: hidden; }

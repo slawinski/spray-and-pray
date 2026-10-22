@@ -14,7 +14,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
 from textual.reactive import var
-from textual.widgets import DataTable, Footer, Header, Input, Label, Static
+from textual.widgets import DataTable, Header, Input, Label, Static
 from textual import work
 from textual.worker import Worker, WorkerState
 
@@ -22,7 +22,7 @@ from cv_optimizer import db
 from cv_optimizer.config import settings
 from cv_optimizer.tracker import _build_app_dir, track, reoptimize, update_status, _validate_status, remove_application, generate_cover_letter, edit_application
 from cv_optimizer.tui.screens.modals import ConfirmModal, SourceModal, StatusModal, EditModal, ProfileModal, PROFILE_LABELS
-from cv_optimizer.tui.screens.modals import TextScreen, ResizeGuard
+from cv_optimizer.tui.screens.modals import TextScreen, ResizeGuard, ActionsScreen
 from cv_optimizer.tui.layout import layout_mode, column_widths
 
 logger = logging.getLogger(__name__)
@@ -114,6 +114,13 @@ class ApplicationTable(DataTable):
         self.app.call_after_refresh(self.app.render_table)
 
 
+class FilterInput(Input):
+    BINDINGS = [("escape", "leave_filter", "Return to list")]
+
+    def action_leave_filter(self) -> None:
+        self.app.leave_filter()
+
+
 class CvDashboard(App):
     CSS_PATH = "dashboard.tcss"
 
@@ -140,6 +147,7 @@ class CvDashboard(App):
         Binding("m", "score_match", "Score Match"),
         Binding("M", "score_all_missing", "Score All"),
         Binding("escape", "dismiss", "Dismiss"),
+        Binding("?", "actions", "Actions"),
     ]
 
     filter_text = var("")
@@ -162,13 +170,13 @@ class CvDashboard(App):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         with Horizontal(id="filter-bar"):
-            yield Input(placeholder="Filter by company or role...", id="filter-input")
+            yield FilterInput(placeholder="Filter by company or role...", id="filter-input")
         with Horizontal(id="body"):
             yield ApplicationTable(id="apps-table")
             with VerticalScroll(id="inspector"):
                 yield Static(id="inspector-content", markup=False)
         yield Static(id="status-bar")
-        yield Footer()
+        yield Static(id="shortcut-bar", markup=False)
         yield ResizeGuard()
 
     def on_mount(self) -> None:
@@ -179,6 +187,10 @@ class CvDashboard(App):
         self._adapt_layout()
         self.refresh_apps()
         table.focus()
+
+    @property
+    def dashboard(self):
+        return self.screen_stack[0]
 
     def on_resize(self) -> None:
         if self.is_mounted:
@@ -191,6 +203,10 @@ class CvDashboard(App):
         dashboard.set_class(self.mode.inspector, "with-inspector")
         inspector = dashboard.query_one("#inspector")
         inspector.styles.width = max(36, min(52, int(self.size.width * .32)))
+        hints = "/ Filter  Enter Detail  ? Actions"
+        if self.size.width >= 80:
+            hints += "  s Status  e Edit  q Quit"
+        dashboard.query_one("#shortcut-bar", Static).update(hints)
         for screen in self.screen_stack:
             self._size_guard(screen)
         self.call_after_refresh(self.render_table)
@@ -213,12 +229,14 @@ class CvDashboard(App):
     def check_action(self, action, parameters):
         if self.size.width < 40 or self.size.height < 12:
             return action == "quit"
+        if len(self.screen_stack) > 1:
+            return False
         return True
 
     def refresh_apps(self, select_id: int | None = None) -> None:
         selected = self._selected_app()
         select_id = select_id if select_id is not None else selected["id"] if selected else None
-        old_index = self.query_one("#apps-table", DataTable).cursor_row
+        old_index = self.dashboard.query_one("#apps-table", DataTable).cursor_row
         try:
             applications = db.list_applications_with_status()
             matches, readiness = {}, {}
@@ -254,7 +272,7 @@ class CvDashboard(App):
         self.filtered_by_id = {a["id"]: a for a in self.filtered}
 
     def render_table(self, select_id: int | None = None) -> None:
-        table = self.query_one("#apps-table", DataTable)
+        table = self.dashboard.query_one("#apps-table", DataTable)
         selected = self._selected_app()
         if select_id is None and selected:
             select_id = selected["id"]
@@ -300,13 +318,13 @@ class CvDashboard(App):
         self._update_inspector()
 
     def _restore_cursor(self) -> None:
-        table = self.query_one("#apps-table", DataTable)
+        table = self.dashboard.query_one("#apps-table", DataTable)
         table.move_cursor(row=table.cursor_row, scroll=True)
 
     def _update_inspector(self) -> None:
         app = self._selected_app()
         content = self.detail_content(app) if app else "No application selected. / Filter · ? Actions"
-        self.query_one("#inspector-content", Static).update(content)
+        self.dashboard.query_one("#inspector-content", Static).update(content)
         for screen in self.screen_stack[1:]:
             if isinstance(screen, TextScreen) and screen.application_id is not None:
                 record = self.filtered_by_id.get(screen.application_id)
@@ -321,10 +339,10 @@ class CvDashboard(App):
             self._update_inspector()
 
     def _status(self, message: str) -> None:
-        self.query_one("#status-bar", Static).update(message)
+        self.dashboard.query_one("#status-bar", Static).update(message)
 
     def _notify(self, message: str) -> None:
-        self.query_one("#status-bar", Static).update(f"[yellow]{message}[/]")
+        self.dashboard.query_one("#status-bar", Static).update(f"[yellow]{message}[/]")
 
     def _document_ready(self, message: str, warnings: list[str]) -> None:
         note = " ".join(warnings)
@@ -335,7 +353,7 @@ class CvDashboard(App):
 
     def _selected_app(self) -> dict | None:
         """Resolve identity from the mounted row key, never a result offset."""
-        table = self.query_one("#apps-table", DataTable)
+        table = self.dashboard.query_one("#apps-table", DataTable)
         if not table.row_count:
             return None
         key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
@@ -492,7 +510,42 @@ class CvDashboard(App):
         self._notify("[bold green]✓[/] Refreshed")
 
     def action_focus_filter(self) -> None:
-        self.query_one("#filter-input", Input).focus()
+        self.dashboard.add_class("filter-open")
+        self.call_after_refresh(self.dashboard.query_one("#filter-input", Input).focus)
+
+    def leave_filter(self) -> None:
+        self.dashboard.query_one("#apps-table", DataTable).focus()
+        self.dashboard.remove_class("filter-open")
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "filter-input":
+            self.leave_filter()
+
+    def action_clear_filter(self) -> None:
+        self.dashboard.query_one("#filter-input", Input).value = ""
+
+    def available_actions(self) -> list[tuple[str, str, str, bool]]:
+        global_actions = {"quit", "refresh", "focus_filter", "discover_jobs", "lessons",
+                          "sankey", "score_all_missing"}
+        commands = [(b.action, b.key, b.description, b.action not in global_actions)
+                    for b in self.BINDINGS if b.action not in {"dismiss", "actions"}]
+        commands.extend([("clear_filter", "", "Clear filter", False),
+                         ("browser_sankey", "", "Browser Sankey", False),
+                         ("operation_status", "", "Operation status", False)])
+        return commands
+
+    def action_actions(self) -> None:
+        def dispatch(action: str | None) -> None:
+            if action:
+                self.call_after_refresh(getattr(self, f"action_{action}"))
+        self.push_screen(ActionsScreen(self.available_actions(), self._selected_app() is not None), dispatch)
+
+    def action_operation_status(self) -> None:
+        self.push_screen(TextScreen("Operation status", str(self.dashboard.query_one("#status-bar", Static).render())))
+
+    def action_browser_sankey(self) -> None:
+        from cv_optimizer.sankey import generate_sankey_html
+        generate_sankey_html()
 
     def action_toggle_detail(self) -> None:
         app = self._selected_app()
@@ -816,7 +869,7 @@ class CvDashboard(App):
             self.pop_screen()
             return
 
-        self.query_one("#apps-table", DataTable).focus()
+        self.leave_filter()
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "filter-input":
