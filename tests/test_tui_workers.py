@@ -69,7 +69,8 @@ def test_generation_completes_behind_live_edit(temp_db, temp_apps_dir, tmp_path,
             service.assert_called_once()
             await pilot.resize_terminal(160, 12)
             await pilot.pause()
-            assert "✓" in table.get_cell(str(first), "Docs")
+            document_column = "CV" if operation == "cv" else "CL"
+            assert "✓" in table.get_cell(str(first), document_column)
             assert app.screen is modal and field.value == unsaved
             await pilot.resize_terminal(40, 12)
             for _ in range(6):

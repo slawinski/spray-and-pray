@@ -287,6 +287,8 @@ class CvDashboard(App):
         self._schema = schema
         for idx, app in enumerate(self.filtered):
             created = app["created_at"][:10] if app["created_at"] else ""
+            cv = _checkmark(app.get("cv_path"), app["id"] in self.regenerating_ids)
+            cl = _checkmark(app.get("cover_letter_path"), app["id"] in self.generating_cl_ids)
             match_row = self.matches.get(app["id"])
             match_score = match_row["score"] if match_row else None
             if self.mode.compact:
@@ -294,7 +296,9 @@ class CvDashboard(App):
                 cell.append("\n").append(_identity(app["role"], schema[0][1]))
                 cell.append("\n").append(Text.from_markup(_status_rich(app["latest_status"])))
                 cell.append(" · Match ").append(Text.from_markup(_match_rich(match_score)))
-                table.add_row(cell, height=3, key=str(app["id"]))
+                cell.append("\nCV ").append(Text.from_markup(cv))
+                cell.append("  CL ").append(Text.from_markup(cl)).append(f"  Added {created or '—'}")
+                table.add_row(cell, height=4, key=str(app["id"]))
             else:
                 values = {
                     "Company": Text(app["company"], no_wrap=True, overflow="ellipsis"),
@@ -302,12 +306,8 @@ class CvDashboard(App):
                     "Status": _status_rich(app["latest_status"]), "Match": _match_rich(match_score),
                     "Readiness": _readiness_compact(self.readiness.get(app["id"])),
                     "Source": Text(_source_name(app)),
-                    "Created": created, "#": str(idx + 1),
-                    "Docs": " ".join((
-                        _checkmark(app.get("jd_path")),
-                        _checkmark(app.get("cv_path"), app["id"] in self.regenerating_ids),
-                        _checkmark(app.get("cover_letter_path"), app["id"] in self.generating_cl_ids),
-                    )),
+                    "Added": created, "#": str(idx + 1),
+                    "CV": cv, "CL": cl, "JD": _checkmark(app.get("jd_path")),
                 }
                 table.add_row(*(values[name] for name, _ in schema), key=str(app["id"]))
         self._render_status()

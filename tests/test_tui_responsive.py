@@ -15,6 +15,45 @@ def seed(db, count=75):
         db.insert_status(app_id, "draft")
 
 
+@pytest.mark.parametrize("size", [(40, 12), (80, 24), (120, 24), (180, 24), (240, 50)])
+def test_document_checks_and_added_date_remain_visible(temp_db, size):
+    cv_only = temp_db.insert_application("CV ready", "Engineer", cv_path="cv.pdf")
+    cl_only = temp_db.insert_application("Letter ready", "Engineer")
+    with temp_db.connect() as conn:
+        conn.execute("UPDATE applications SET cover_letter_path = ? WHERE id = ?", ("letter.pdf", cl_only))
+        conn.execute("UPDATE applications SET created_at = ?", ("2026-10-20T12:34:56",))
+
+    async def run():
+        app = CvDashboard()
+        async with app.run_test(size=size) as pilot:
+            await pilot.pause()
+            table = app.query_one(DataTable)
+            if size[0] < 80:
+                first = table.get_row(str(cv_only))[0].plain
+                second = table.get_row(str(cl_only))[0].plain
+                assert "CV ✓  CL —  Added 2026-10-20" in first
+                assert "CV —  CL ✓  Added 2026-10-20" in second
+            else:
+                assert {"CV", "CL", "Added"} <= {str(key.value) for key in table.columns}
+                for app_id, cv, cl in [(cv_only, "✓", "—"), (cl_only, "—", "✓")]:
+                    assert cv in table.get_cell(str(app_id), "CV")
+                    assert cl in table.get_cell(str(app_id), "CL")
+                    assert table.get_cell(str(app_id), "Added") == "2026-10-20"
+            assert table.max_scroll_x == 0
+            app.regenerating_ids.add(cv_only)
+            app.generating_cl_ids.add(cl_only)
+            app.render_table()
+            await pilot.pause()
+            if size[0] < 80:
+                assert "CV ⟳" in table.get_row(str(cv_only))[0].plain
+                assert "CL ⟳" in table.get_row(str(cl_only))[0].plain
+            else:
+                assert "⟳" in table.get_cell(str(cv_only), "CV")
+                assert "⟳" in table.get_cell(str(cl_only), "CL")
+
+    asyncio.run(run())
+
+
 def test_live_resize_selection_details_and_no_queries(temp_db, monkeypatch):
     seed(temp_db)
 
@@ -43,7 +82,7 @@ def test_live_resize_selection_details_and_no_queries(temp_db, monkeypatch):
                 assert app.filter_text == "company"
                 assert app.focused is table
                 assert table.scroll_y > 0
-                row_height = 3 if width < 80 else 1
+                row_height = 4 if width < 80 else 1
                 selected_top = table.cursor_row * row_height - table.scroll_y + int(table.show_header)
                 assert selected_top >= 0
                 assert selected_top + row_height <= table.size.height
@@ -51,7 +90,7 @@ def test_live_resize_selection_details_and_no_queries(temp_db, monkeypatch):
                 assert app.query_one("#inspector").display == (width >= 180 and height >= 18)
                 if width < 80:
                     row = table.get_row(str(selected["id"]))
-                    assert len(row) == 1 and len(row[0].plain.splitlines()) == 3
+                    assert len(row) == 1 and len(row[0].plain.splitlines()) == 4
                     assert "draft" in row[0].plain and "Match" in row[0].plain
             await pilot.resize_terminal(40, 12)
             await pilot.press("enter")

@@ -17,13 +17,13 @@ def test_independent_size_boundaries(width, height):
 def test_columns_fit_measured_budget(width):
     columns = dict(column_widths(width, 80, 100))
     assert sum(columns.values()) + 2 * len(columns) + 2 <= width
-    assert {"Company", "Role", "Status", "Match"} <= columns.keys()
+    assert {"Company", "Role", "Status", "Match", "Added", "CV", "CL"} <= columns.keys()
     if "Readiness" in columns:
         assert columns["Company"] >= 24 and columns["Role"] >= 36
-    assert columns["Company"] >= 16 and columns["Role"] >= 24
+    assert columns["Company"] >= 12 and columns["Role"] >= 18
 
 
 def test_secondary_columns_preserve_identity_floors():
     columns = dict(column_widths(160, 24, 36))
-    assert list(columns)[4:] == ["Readiness", "Source", "Created", "Docs", "#"]
+    assert list(columns)[4:] == ["Added", "CV", "CL", "Readiness", "Source", "JD", "#"]
     assert columns["Company"] >= 24 and columns["Role"] >= 36

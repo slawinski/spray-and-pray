@@ -339,7 +339,7 @@ Malformed configuration fails loudly with a readable error.
 | `escape` | Cancel dialog / close details / return from filter |
 
 The dashboard supports panes **40 columns × 12 rows** and larger. Below 80
-columns it shows three-line compact records; at 80 columns it uses a fluid
+columns it shows compact records; at 80 columns it uses a fluid
 table. At 180 columns × 18 rows and above, a right-hand inspector follows the
 selected application. Short panes hide the header and show the filter only
 while in use. Taller panes expose more records without pages. Resizing retains
@@ -352,6 +352,12 @@ the available key bindings; scroll it horizontally when they do not all fit.
 `?` provides the full action list and operation feedback. Dialogs retain their
 centered 50-column layout, thick borders, spacing, and centered buttons when
 space permits, becoming compact and scrollable in small panes.
+
+The table always keeps **Added** (date added), **CV**, and **CL** visible.
+CV and CL use separate checkmarks for generated documents, a dash when absent,
+and a rotating arrow while generation is running. Compact records show the
+same document indicators and date on a labelled fourth line. Optional metadata
+yields space before these fields or the company and role columns.
 
 The application table shows a **Match** column (from `match-v2`): `85–100`
 bold green, `70–84` yellow, `55–69` orange, `<55` dim red. Auto-discovered

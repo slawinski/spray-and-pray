@@ -16,9 +16,10 @@ def layout_mode(width: int, height: int) -> LayoutMode:
 
 def column_widths(width: int, company: int, role: int) -> list[tuple[str, int]]:
     """Reserve actual cell padding (two per column) and a scrollbar (two)."""
-    columns = [("Company", 16), ("Role", 24), ("Status", 14), ("Match", 5)]
+    columns = [("Company", 12), ("Role", 18), ("Status", 10), ("Match", 5),
+               ("Added", 10), ("CV", 3), ("CL", 3)]
     spare = max(0, width - 2 - sum(size + 2 for _, size in columns))
-    sizes = [16, 24]
+    sizes = [12, 18]
     targets = [max(24, company), max(36, role)]
     while spare and any(sizes[i] < targets[i] for i in (0, 1)):
         for i in (0, 1, 1, 0, 1):
@@ -27,8 +28,7 @@ def column_widths(width: int, company: int, role: int) -> list[tuple[str, int]]:
                 spare -= 1
     columns[:2] = [("Company", sizes[0]), ("Role", sizes[1])]
     if sizes[0] >= 24 and sizes[1] >= 36:
-        for name, size in [("Readiness", 9), ("Source", 16), ("Created", 10),
-                           ("Docs", 8), ("#", 4)]:
+        for name, size in [("Readiness", 9), ("Source", 16), ("JD", 3), ("#", 4)]:
             if spare < size + 2:
                 break
             columns.append((name, size))

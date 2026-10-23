@@ -70,6 +70,7 @@ Both dimensions matter: a short, wide pane and a tall, narrow pane have differen
 - R14. Long content must remain readable through wrapping or scrolling in details and forms, with confirmation and cancellation controls reachable.
 - R15. Layout changes must not cancel or duplicate background operations, and their progress or completion must remain accessible.
 - R16. Roomy dialogs must retain the original centered 50-column layout, thick borders, spacing, and centered buttons while compacting to fit small panes.
+- R17. Application lists must keep separate CV and CL availability indicators and date added visible, ahead of optional metadata.
 
 **Layout composition**
 
@@ -123,7 +124,7 @@ These describe region placement, not fixed breakpoint values or proportions.
 
 ### Key Technical Decisions
 
-- KTD1. **Use one mounted DataTable with two row presentations.** Desktop uses ordinary columns; compact mode uses one full-width, three-line Rich-text cell per application, without a column header. Both use application IDs as row keys. This retains Textual's cursor, scrolling, and keyboard behavior without maintaining two competing selection models. Governs R2, R3, R4, R8. (session-settled: user-directed — chosen over a fluid table alone: combine wide-pane context with readable narrow records.)
+- KTD1. **Use one mounted DataTable with two row presentations.** Desktop uses ordinary columns; compact mode uses one full-width, four-line Rich-text cell per application, without a column header. Both use application IDs as row keys. The fourth line preserves the R17 fields. This retains Textual's cursor, scrolling, and keyboard behavior without maintaining two competing selection models. Governs R2, R3, R4, R8, R17. (session-settled: user-directed — chosen over a fluid table alone: combine wide-pane context with readable narrow records.)
 - KTD2. **Choose layout from width and height independently.** Use the layout policy below and screen classes changed by resize events, with measured content width controlling column allocation. Do not recompose the App or replace open forms on resize. Governs R1, R2, R4, R8, R12, R13. (session-settled: user-directed — chosen over 60 columns × 15 rows or 80 columns × 24 rows: support real work in tight splits.)
 - KTD3. **Render every filtered result and let DataTable scroll.** Remove page size, page index, page slicing, and n/p pagination bindings. Keep native arrows, Home/End, and Page Up/Down as viewport navigation within one result set. Reuse the existing all-applications load, batching match and readiness lookups in chunks of at most 500 IDs per refresh. Cache these results by ID between refreshes; filtering does not reload application or score data. A new selection may fetch discovery detail under KTD5; resizing performs no SQLite queries. The chunk size avoids extending the existing SQL placeholder lists without bounding them. No data cap or lazy-loading protocol is needed for this solo desktop tracker. Governs R5, R8. (session-settled: user-approved — chosen over viewport-sized pages: avoid resize-dependent page boundaries.)
 - KTD4. **Make selected application ID the action boundary.** Resolve actions through the current row key and the current filtered ID map, never page offsets or stale numerical coordinates. Before rebuilding rows, capture selected ID and visible anchor; restore the selection after layout, then scroll it into view. Refresh keeps the ID when present; deletion selects the next record at the old index, or the preceding final record. Filtering keeps the ID if it still matches, otherwise selects the first match; empty results clear selection and inspector. Ignore obsolete highlight events from a rebuild by checking their row key against the current table cursor and current results. Governs R8, R10.
@@ -149,16 +150,16 @@ Terminal dimensions are columns × rows. These are initial implementation defaul
 In wide mode the inspector's outer width is 32% of the body, clamped to 36–52 columns, with one column between regions.
 The remaining list width is measured after borders and scrollbar reservation, rather than inferred from terminal width.
 At 40×12, compact mode reserves one status line and one footer line, leaving ten list lines when the filter is hidden and seven while its three-line Input is visible.
-Three lines per compact record leave at least two complete navigable records with the filter focused.
+Four lines per compact record leave two complete records with the filter hidden and one complete record while filtering.
 The below-minimum overlay applies over the active screen, including a modal, and blocks mutation shortcuts while allowing resize recovery and quit.
 It must not push/pop screens or dismiss edits.
 
-Desktop columns always include company, role, status, and match.
-Allocate their content minima as 16, 24, 14, and 5 cells, plus actual cell padding and a vertical scrollbar allowance.
-Give remaining cells to company and role in a 2:3 ratio until their content fits, then admit secondary columns in order: readiness, source, created, document indicators, ordinal.
+Desktop columns always include company, role, status, match, Added, CV, and CL per R17.
+Allocate their content minima as 12, 18, 10, 5, 10, 3, and 3 cells, plus actual cell padding and a vertical scrollbar allowance.
+Give remaining cells to company and role in a 2:3 ratio until their content fits, then admit secondary columns in order: readiness, source, JD, ordinal.
 Admit a secondary column only after company has 24 and role has 36 content cells available; preserve these floors as metadata is added.
 Use full original strings and terminal-cell-aware cropping in renderers rather than `_truncate` character counts.
-Compact records place company on line one, role on line two, and status plus match on line three; ellipsize only the two identity lines to the measured cell width.
+Compact records place company on line one, role on line two, status plus match on line three, and labelled CV/CL indicators and Added date on line four; ellipsize only the two identity lines to the measured cell width.
 Details own complete values under R7 and R14.
 
 ### High-Level Technical Design
@@ -385,7 +386,7 @@ If that workload visibly stalls, investigate the measured bottleneck before intr
 
 ## Definition of Done
 
-- R1–R15 are implemented with the original Product Contract and stable IDs intact.
+- R1–R17 are implemented with the revised Product Contract and stable IDs intact.
 - U1–U5 meet their verification outcomes; F1–F3 and AE1–AE9 have behavioral evidence across the supported matrix.
 - No page-state code or tests requiring fixed pages remain; previous wrong-record/profile regressions remain covered under continuous scrolling.
 - Every non-pagination action is keyboard-accessible, dialogs preserve live edits, and all R7 details remain readable at the minimum size.
