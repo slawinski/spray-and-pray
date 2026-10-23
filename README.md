@@ -318,7 +318,7 @@ Malformed configuration fails loudly with a readable error.
 | `q` | Quit |
 | `r` | Refresh |
 | `/` | Reveal and focus filter (Enter/Escape returns without clearing) |
-| `?` | All actions, including Clear filter, Terminal funnel, and Operation status |
+| `?` | All actions, including Reports (server must be running), Clear filter, Terminal funnel, and Operation status |
 | `enter` | Open complete, scrollable application details |
 | `e` | Edit company, role, and job URL |
 | `s` | Change status |
@@ -457,6 +457,89 @@ scripts/uninstall_discovery_launchd.sh
 
 The launch agent runs `<repo>/.venv/bin/python <repo>/cv_optimizer.py discover`.
 
+### 1d. Search Focus Reporting
+
+Start the existing local server, then open **http://localhost:8000/reports**,
+or choose **Reports (server must be running)** from the dashboard's `?` action
+palette. The action opens the URL only; it does not start a server or need a
+selected application. Existing Shift+S browser Sankey and Terminal funnel
+actions are unchanged.
+
+```bash
+uvicorn server:app --host localhost --port 8000
+```
+
+The overview leads with up to three evidence-backed investigation leads and a
+Sankey summary. Navigation opens channel, cohorts, stage loss, targeting, skill
+gaps, aging, opportunity inventory, and full Sankey views. Each report has a
+readable table alongside its native chart. Use ordinary links/buttons with
+Tab and Enter to inspect exact supporting records; evidence headings receive
+focus. Reporting assets are local HTML/CSS/JavaScript/SVG with no CDN or remote
+chart dependencies (the older standalone Plotly Sankey is separate).
+
+**Scope and refresh.** Application reports initially include all recorded
+application dates, profiles and sources. Applied-date bounds are inclusive UTC
+calendar dates based on the first valid applied event, not creation time;
+outcomes after the end date remain part of those applications' histories.
+Profile/source filters and dates persist in the URL across report navigation.
+Inventory always uses a separate **all captured postings** scope, retaining
+the application filters for return navigation. A retrieval time identifies the
+accepted snapshot. Refresh reads fresh local records and atomically replaces
+the bundle, including its evidence. Failed loads mark retained data stale;
+retry or navigate elsewhere. Empty selections, missing optional data and failed
+loads have different states. Reporting never initializes or repairs a missing
+or incompatible database.
+
+**Definitions and limitations:**
+
+- Outcome denominators count distinct records with a recorded applied event;
+  never-applied drafts are separate. Unknown applied dates remain in all-dates
+  scope but are excluded from explicit date ranges. Current status and ever
+  reaching a stage are different measures; equal status timestamps use history
+  ID order. Sankey counts transition occurrences, not applications summed over
+  edges, and excludes draft-only preparation and transient ghosted steps.
+- Automatic `ghosted` means **no recorded outcome**, not confirmed employer
+  ghosting. Aging separates waiting before and after engagement. All durations
+  are **recorded time**: activation, backfilling, undo and deleted history limit
+  historical accuracy. Timezone-free timestamps are interpreted as UTC.
+- Cohorts start on Monday in UTC. A 7/14/30-day interview window is unavailable,
+  not zero, until every cohort member has that much recorded follow-up.
+- Labels normalize Unicode, whitespace and case; exact source and role aliases
+  merge conservatively and retain raw variants. Missing sources stay unknown,
+  never inferred as cold applications. Recruiter groups have selection bias;
+  descriptive incidence is not a causal channel comparison.
+- Targeting separates latest descriptive fit from strictly pre-outcome
+  assessments. Retrospective, tied/unknown timing, missing and invalid inputs
+  remain separate. Comparisons partition scoring/prompt version, model and
+  candidate hash. Reporting score bands (0–39/40–59/60–79/80–100) are fit bands,
+  not interview probabilities or the matching tool's named labels.
+- Skills audit recorded CV evidence, not demonstrated inability or employer
+  rejection reasons. Partial, none and unknown stay distinct. Counts are
+  distinct applications within each cell; overlapping evidence columns need
+  not sum to the row total.
+- Comparison leads require two known groups of at least 10 applications each,
+  five interviews combined, fully observed 30-day follow-up and a difference
+  of at least 10 percentage points in 30-day attainment. Targeting also needs
+  comparable pre-outcome provenance. Descriptive channel concentration needs
+  at least 3 of 5 recorded interviews. Skill leads need 10 valid assessed
+  applications and 5 with partial/none must-have/core evidence (union counted
+  once). These editorial thresholds are not statistical significance or
+  recommended effort allocations. Otherwise the brief says insufficient data.
+- Inventory describes captured postings, not the current market. Freshness and
+  recorded collection errors remain visible; records older than 30 days are
+  not inferred inactive. Salary currencies, pay periods and employment types
+  stay separate; missing units are non-comparable. Absent application links
+  cannot establish source-to-application yield.
+
+**Read-only boundary.** Reporting reads one SQLite transaction (including
+committed WAL data) and closes it before aggregation. Opening, filtering,
+inspecting and refreshing reports do not edit applications, history,
+assessments or discovery records, generate assessments, run discovery, or open
+local files. SQLite may maintain WAL shared-memory bookkeeping; logical data
+and schema are protected, not byte-identical SHM files. Keep the server on
+loopback: reporting rejects explicit foreign browser origins and removes CORS
+allow headers, but has no authentication and permits origin-free local clients.
+
 ### 2. Browser extension
 
 1. Start the server: `uvicorn server:app --host localhost --port 8000`
@@ -476,6 +559,8 @@ uvicorn server:app --host localhost --port 8000 --reload
 
 | Method | Endpoint | Description |
 |---|---|---|
+| `GET` | `/reports` | Local read-only Search Focus Reporting workspace |
+| `GET` | `/api/reports/snapshot` | Fresh evidence bundle; optional `start`, `end`, `profile`, normalized `source` filters |
 | `POST` | `/api/track` | Start CV + cover letter pipeline. Body: `{company, role, jd, cv_profile, url?, source?}`; `cv_profile` must be `"it"` or `"mechanical_engineering"` |
 | `POST` | `/api/cover-letter/{app_id}` | Generate cover letter for an existing application |
 | `GET` | `/api/open/{app_id}` | Reveal CV PDF in Finder |
@@ -657,6 +742,23 @@ must-have still does. Historical `match-v1` rows remain stored and versioned.
 
 ## Testing
 
+Install `pytest` and a compatible `httpx` for FastAPI TestClient tests. Node.js
+must be on PATH for reporting browser-state, rendering and integration checks;
+their Node-backed checks must actually run before shipping (not silently skip).
+No npm dependencies or paid model calls are needed for reporting tests.
+
+```bash
+pip install pytest httpx
+python3 -m pytest tests/test_reporting*.py tests/test_sankey.py -q
+```
+
+Reporting tests use temporary synthetic SQLite databases, with initialization
+and writer failure sentinels installed after fixture setup. Never run mutation
+or concurrency experiments against your personal `applications.db`. HTTP and
+Node DOM-harness checks cover bundle consistency and evidence navigation;
+real-browser desktop/390px keyboard, contrast, offline-assets and refresh/retry
+QA remains a separate check against an isolated fixture-backed server.
+
 ```bash
 python3 -m pytest tests/ -q
 ```
@@ -693,7 +795,7 @@ tests are intentionally opt-in.
 ## Security & privacy
 
 - **Your personal data** (name, phone, email, work history) is sent to the LLM provider in every generation request. Choose a provider you trust; this is the only place data leaves your machine.
-- **CORS is fully open** (`allow_origins=["*"]`) to support the browser extension. Any website can POST to your local API while it's running. This is acceptable for a local single-user tool, but be aware that a malicious page could trigger generations. The server never exposes raw Master CV contents over HTTP — only the LLM pipeline and file-reveal endpoints.
+- **Existing extension endpoints have open CORS** (`allow_origins=["*"]`). Any website can POST to those local endpoints while the server is running; a malicious page could trigger generations. Reporting paths (`/reports`, `/api/reports/snapshot`) reject explicit foreign browser origins and strip CORS allow headers. This is not authentication. The server never exposes raw Master CV contents over HTTP.
 - **No authentication** on the API. Do not expose port 8000 to the network.
 - **Discord webhook** (if configured) receives success/failure summaries, including company/role names.
 

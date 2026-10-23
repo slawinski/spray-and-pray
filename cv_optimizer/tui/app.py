@@ -482,6 +482,10 @@ class CvDashboard(App):
         from cv_optimizer.sankey import generate_sankey_html
         generate_sankey_html()
 
+    def action_reports(self) -> None:
+        webbrowser.open("http://localhost:8000/reports")
+        self._notify("Reports opened in browser; the local server must be running on port 8000.")
+
     def action_terminal_funnel(self) -> None:
         from cv_optimizer.tui.screens.modals import SankeyScreen
         self.push_screen(SankeyScreen())
@@ -563,6 +567,7 @@ class CvDashboard(App):
         commands = [(b.action, b.key, b.description, b.action not in global_actions)
                     for b in self.BINDINGS if b.action not in {"dismiss", "actions"}]
         commands.extend([("clear_filter", "", "Clear filter", False),
+                         ("reports", "", "Reports (server must be running)", False),
                          ("terminal_funnel", "", "Terminal funnel", False),
                          ("operation_status", "", "Operation status", False)])
         return commands
