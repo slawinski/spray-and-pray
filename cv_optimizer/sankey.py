@@ -32,14 +32,17 @@ def build_sankey_flows(
     flows: dict[tuple[str, str], int] = defaultdict(int)
 
     for app_id, chain in apps.items():
-        active = _strip_draft(chain)
-        cleaned = _clean_ghosted(active)
-        deduped = _deduplicate_consecutive(cleaned)
-        logger.debug("app %d chain %s -> %s -> %s", app_id, chain, cleaned, deduped)
+        deduped = clean_chain(chain)
+        logger.debug("app %d chain %s -> %s", app_id, chain, deduped)
         for i in range(len(deduped) - 1):
             flows[(deduped[i], deduped[i + 1])] += 1
 
     return dict(flows)
+
+
+def clean_chain(chain: list[str]) -> list[str]:
+    """Pure shared cleanup for legacy and snapshot reporting consumers."""
+    return _deduplicate_consecutive(_clean_ghosted(_strip_draft(chain)))
 
 
 def _strip_draft(chain: list[str]) -> list[str]:

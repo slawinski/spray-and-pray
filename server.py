@@ -31,6 +31,56 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 templates.env.filters["markdown"] = lambda s: markdown.markdown(s, extensions=["fenced_code", "codehilite"]) if s else ""
 
+
+class ReportingOriginBoundary:
+    """Keep career-history bundles outside the extension's wildcard CORS policy."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope['type'] != 'http' or scope['path'] not in ('/reports', '/api/reports/snapshot'):
+            return await self.app(scope, receive, send)
+        from starlette.responses import JSONResponse
+        from starlette.datastructures import Headers
+        headers = Headers(scope=scope)
+        origin = headers.get('origin')
+        expected = f"{scope['scheme']}://{headers.get('host', '')}"
+        if origin is not None and origin != expected:
+            return await JSONResponse({'detail': 'Reporting is same-origin only.'}, status_code=403,
+                                      headers={'Cache-Control': 'no-store'})(scope, receive, send)
+
+        async def protected_send(message):
+            if message['type'] == 'http.response.start':
+                message['headers'] = [(k, v) for k, v in message['headers']
+                                      if not k.lower().startswith(b'access-control-') and k.lower() != b'cache-control']
+                message['headers'].append((b'cache-control', b'no-store'))
+            await send(message)
+        await self.app(scope, receive, protected_send)
+
+
+app.add_middleware(ReportingOriginBoundary)
+
+
+@app.get('/reports', response_class=HTMLResponse)
+def reporting_shell(request: Request):
+    return templates.TemplateResponse(request=request, name='reports.html', context={})
+
+
+@app.get('/api/reports/snapshot')
+def reporting_snapshot(request: Request):
+    from cv_optimizer.reporting.service import build_snapshot
+    from cv_optimizer.reporting.reader import ReportLoadError
+    allowed = {'start', 'end', 'profile', 'source'}
+    if set(request.query_params) - allowed or any(len(request.query_params.getlist(k)) != 1 for k in request.query_params):
+        raise HTTPException(422, 'Unsupported or repeated filter keys.')
+    try:
+        return build_snapshot(**dict(request.query_params))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except ReportLoadError as exc:
+        raise HTTPException(503, str(exc)) from exc
+
 class TrackRequest(BaseModel):
     company: str
     role: str
