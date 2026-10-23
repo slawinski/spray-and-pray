@@ -10,7 +10,7 @@ class LayoutMode:
 
 
 def layout_mode(width: int, height: int) -> LayoutMode:
-    return LayoutMode(width < 80, height < 18, width >= 120 and height >= 18,
+    return LayoutMode(width < 80, height < 18, width >= 180 and height >= 18,
                       width < 40 or height < 12)
 
 

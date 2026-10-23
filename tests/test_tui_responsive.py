@@ -20,7 +20,7 @@ def test_live_resize_selection_details_and_no_queries(temp_db, monkeypatch):
 
     async def run():
         app = CvDashboard()
-        async with app.run_test(size=(160, 50)) as pilot:
+        async with app.run_test(size=(200, 50)) as pilot:
             table = app.query_one(DataTable)
             app.filter_text = "company"
             app._apply_filter()
@@ -35,7 +35,8 @@ def test_live_resize_selection_details_and_no_queries(temp_db, monkeypatch):
                          "get_job_posting_by_application"):
                 monkeypatch.setattr(temp_db, name, queries)
             for width, height in [(40, 12), (60, 15), (79, 24), (80, 24), (119, 24),
-                                  (120, 18), (160, 12), (120, 17), (160, 50)]:
+                                  (120, 18), (160, 24), (179, 24), (180, 18),
+                                  (200, 12), (180, 17), (200, 50)]:
                 await pilot.resize_terminal(width, height)
                 await pilot.pause()
                 assert app._selected_app()["id"] == selected["id"]
@@ -47,7 +48,7 @@ def test_live_resize_selection_details_and_no_queries(temp_db, monkeypatch):
                 assert selected_top >= 0
                 assert selected_top + row_height <= table.size.height
                 assert table.max_scroll_x == 0, (width, height, app.size, table.size, app.mode, app._schema)
-                assert app.query_one("#inspector").display == (width >= 120 and height >= 18)
+                assert app.query_one("#inspector").display == (width >= 180 and height >= 18)
                 if width < 80:
                     row = table.get_row(str(selected["id"]))
                     assert len(row) == 1 and len(row[0].plain.splitlines()) == 3

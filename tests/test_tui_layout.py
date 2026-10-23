@@ -3,14 +3,14 @@ import pytest
 from cv_optimizer.tui.layout import layout_mode, column_widths
 
 
-@pytest.mark.parametrize("width", [39, 40, 79, 80, 119, 120, 160])
+@pytest.mark.parametrize("width", [39, 40, 79, 80, 120, 160, 179, 180, 200])
 @pytest.mark.parametrize("height", [11, 12, 17, 18, 50])
 def test_independent_size_boundaries(width, height):
     mode = layout_mode(width, height)
     assert mode.undersize == (width < 40 or height < 12)
     assert mode.compact == (width < 80)
     assert mode.short == (height < 18)
-    assert mode.inspector == (width >= 120 and height >= 18)
+    assert mode.inspector == (width >= 180 and height >= 18)
 
 
 @pytest.mark.parametrize("width", [78, 80, 100, 119, 140, 200])

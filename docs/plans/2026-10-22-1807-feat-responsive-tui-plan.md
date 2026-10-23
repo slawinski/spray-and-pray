@@ -46,7 +46,7 @@ Both dimensions matter: a short, wide pane and a tall, narrow pane have differen
 **Pane adaptation**
 
 - R1. All existing TUI workflows must remain usable at terminal sizes of at least 40 columns × 12 rows.
-- R2. Wide panes must display the application table alongside an inspector for the selected application.
+- R2. Full-width panes must display the application table alongside an inspector for the selected application, leaving ordinary split panes list-only.
 - R3. Narrow panes must display compact application records that expose company, role, status, and match score without horizontal scrolling.
 - R4. When there is insufficient width or height for the inspector alongside the list, full application details must open separately without permanently reducing the list's working area.
 - R5. The application list must use continuous scrolling through filtered results rather than fixed pages, with taller panes exposing more records when results are available.
@@ -59,7 +59,7 @@ Both dimensions matter: a short, wide pane and a tall, narrow pane have differen
 
 **Actions and secondary surfaces**
 
-- R9. The footer must prioritize a small set of useful shortcuts and provide access to the complete available action list on demand.
+- R9. The footer must retain the original clickable key bindings for all available actions, with horizontal scrolling when they do not fit.
 - R10. Existing actions must remain keyboard-accessible and operate on the selected application consistently across layouts.
 - R11. Filtering, dialogs, and the funnel view must adapt to the pane, allowing scrolling or separate screens where needed to keep content and controls reachable.
 - R12. Panes smaller than the R1 minimum may show a clear resize prompt while preserving the current application state.
@@ -69,6 +69,7 @@ Both dimensions matter: a short, wide pane and a tall, narrow pane have differen
 - R13. Short panes must reduce surrounding UI so the application list retains usable space.
 - R14. Long content must remain readable through wrapping or scrolling in details and forms, with confirmation and cancellation controls reachable.
 - R15. Layout changes must not cancel or duplicate background operations, and their progress or completion must remain accessible.
+- R16. Roomy dialogs must retain the original centered 50-column layout, thick borders, spacing, and centered buttons while compacting to fit small panes.
 
 **Layout composition**
 
@@ -118,7 +119,7 @@ These describe region placement, not fixed breakpoint values or proportions.
 
 ## Planning Contract
 
-**Product Contract preservation:** Product Contract unchanged. Its deferred technical questions are answered below without changing R1–R15, F1–F3, or AE1–AE9.
+**Product Contract preservation:** User-directed refinement changes R2 and R9 and adds R16: reserve the inspector for full-width panes, restore the complete shortcut footer, and preserve the original modal appearance.
 
 ### Key Technical Decisions
 
@@ -127,7 +128,7 @@ These describe region placement, not fixed breakpoint values or proportions.
 - KTD3. **Render every filtered result and let DataTable scroll.** Remove page size, page index, page slicing, and n/p pagination bindings. Keep native arrows, Home/End, and Page Up/Down as viewport navigation within one result set. Reuse the existing all-applications load, batching match and readiness lookups in chunks of at most 500 IDs per refresh. Cache these results by ID between refreshes; filtering does not reload application or score data. A new selection may fetch discovery detail under KTD5; resizing performs no SQLite queries. The chunk size avoids extending the existing SQL placeholder lists without bounding them. No data cap or lazy-loading protocol is needed for this solo desktop tracker. Governs R5, R8. (session-settled: user-approved — chosen over viewport-sized pages: avoid resize-dependent page boundaries.)
 - KTD4. **Make selected application ID the action boundary.** Resolve actions through the current row key and the current filtered ID map, never page offsets or stale numerical coordinates. Before rebuilding rows, capture selected ID and visible anchor; restore the selection after layout, then scroll it into view. Refresh keeps the ID when present; deletion selects the next record at the old index, or the preceding final record. Filtering keeps the ID if it still matches, otherwise selects the first match; empty results clear selection and inspector. Ignore obsolete highlight events from a rebuild by checking their row key against the current table cursor and current results. Governs R8, R10.
 - KTD5. **Share complete detail content between inspector and a separate detail screen.** Selection highlighting updates the inspector without Enter. Enter opens the full scrollable detail screen in every layout; Escape returns focus to the selected record. Keep R7 fields plus existing match breakdown, discovery metadata, URL, paths, and status history. Add explicit source and creation date, currently absent from the detail panel. Use cached match/readiness values; fetch discovery detail on the first selection of an ID and cache it until the next refresh. Refresh invalidates that cache and reloads the selected detail; resize uses cached content only. Treat company, role, URL, source, and paths as literal text rather than Rich markup. Governs R4, R7, R14.
-- KTD6. **Use a small footer and a pane-sized action list.** Show `/ Filter`, `Enter Detail`, and `? Actions` at the minimum size; add `s Status`, `e Edit`, and `q Quit` only when they fit. Keep every existing non-pagination binding active in dashboard context and show every available action, its key, and its selection requirement in a scrollable action-list screen. Dispatch through the existing action methods after closing the list, preserving selected ID. Hide discovery entirely when disabled, as today. Input and modal focus must consume ordinary typing and Escape before dashboard actions. A custom action list gives tighter 40×12 geometry control than adopting the default command palette. Governs R9, R10, R11. (session-settled: user-approved — chosen over dashboard-only adjustment: dialogs and action discovery must remain usable.)
+- KTD6. **Restore the native interactive Footer and retain the action list.** Derive displayed hints from active bindings rather than maintaining a shortened static list; preserve native click dispatch and horizontal scrolling. The separate action list remains available through `?`, with discovery absent when disabled. Governs R9, R10, R11. (session-settled: user-directed — chosen over the shortened static footer: key shortcuts must remain visible and usable.)
 - KTD7. **Keep modal instances alive and make their content scroll.** Use one shared sizing treatment for existing modal containers: pane-bounded width/height, no minimum wider than the pane, scrollable body, and a separate reachable action row. At short heights remove decorative padding, shorten titles, and use compact buttons; horizontal action groups stack if their measured widths cannot fit. Select menus must scroll within the pane. Escape cancels Status, Confirm, Edit, and Profile with no mutation; Source Escape retains the current source, preserving its existing distinction between clearing and cancelling. Filter focus is explicit: `/` reveals/focuses the mounted filter, Enter returns to the list, and Escape returns without clearing its text; clearing is an explicit action. Governs R8, R11, R14.
 - KTD8. **Connect the terminal funnel and retain browser access.** Make `S` open the existing SankeyScreen, adapting its content to wrapped transition records and counts at narrow widths. Reuse build_sankey_flows and existing counting semantics; do not change aggregation. Preserve the current browser Sankey as a named action in the action list. This repairs the disconnect between the unused terminal screen and the current browser-only shortcut without redesigning the web chart. Governs R10, R11.
 - KTD9. **Keep workers and notifications owned by the App.** Resize changes presentation only, never invokes refresh or worker launch, and never changes worker groups or exclusivity. Store the current operation message and most recent completion/error independently of result counts so list renders cannot erase them. Show a compact status line and provide the complete message in a scrollable status view through the action list. Completion refresh updates backing rows and inspector even while a modal is open, without stealing focus, changing its captured target, or resetting its inputs. Existing worker callbacks must not force selection to a completed application's ID if the user has since navigated elsewhere. Governs R8, R15.
@@ -142,8 +143,8 @@ Terminal dimensions are columns × rows. These are initial implementation defaul
 | Width 40–79, height 12–17 | Compact records | Hidden | No Header; filter shown only while focused; one-line status and footer | Separate screen |
 | Width 40–79, height ≥18 | Compact records | Hidden | Header, filter, status, footer | Separate screen |
 | Width ≥80, height 12–17 | Desktop table | Hidden | Short-height treatment | Separate screen |
-| Width 80–119, height ≥18 | Desktop table | Hidden | Normal controls | Separate screen |
-| Width ≥120, height ≥18 | Desktop table | Right-hand inspector | Normal controls | Separate full detail also available |
+| Width 80–179, height ≥18 | Desktop table | Hidden | Normal controls | Separate screen |
+| Width ≥180, height ≥18 | Desktop table | Right-hand inspector | Normal controls | Separate full detail also available |
 
 In wide mode the inspector's outer width is 32% of the body, clamped to 36–52 columns, with one column between regions.
 The remaining list width is measured after borders and scrollbar reservation, rather than inferred from terminal width.
@@ -257,7 +258,7 @@ Official Textual references were consulted through Context7 and the DataTable re
 **Patterns to follow:** Textual keyed DataTable rows and existing ModalScreen dismissal callbacks.
 
 **Test scenarios:**
-1. Covers AE1. At 160×50 with 75 records, more than 20 desktop rows are visible and long company/role values use surplus width beside the inspector.
+1. Covers AE1. At 200×50 with 75 records, more than 20 desktop rows are visible and long company/role values use surplus width beside the inspector.
 2. Covers AE2 / AE7. At 40×12, each compact record shows all four required fields without horizontal scrolling; Enter exposes complete long names and all R7 fields.
 3. Covers AE3. At 160×12 the inspector is absent and the desktop list remains navigable; Enter opens separate details.
 4. Covers AE4. Select record 57, resize 160×50 → 40×12 → 80×24 → 160×50 in one session, and retain filter, selected ID, visible selection, and list focus.
@@ -363,13 +364,13 @@ There is no release-validator or behavioral skill-evaluation configuration estab
 |---|---|---|
 | 40×12 | Compact minimum, all modal types, filter, action list, details, funnel | Keyboard reaches complete content and every confirm/cancel control; no required horizontal scroll |
 | 60×15 and 79×24 | Tight split and compact boundary | Readable records, filter continuity, complete details |
-| 80×24 and 119×24 | Desktop without inspector | Columns fit actual list region; separate detail accessible |
-| 120×18 and 160×50 | Inspector boundary and fullscreen | Highlight follows selection; more height exposes more records and width improves identity text |
+| 80×24, 160×24, and 179×24 | Desktop without inspector | Columns fit actual list region; separate detail accessible |
+| 180×18 and 200×50 | Inspector boundary and fullscreen | Highlight follows selection; more height exposes more records and width improves identity text |
 | 160×12 and 120×17 | Short/wide and height boundary | Inspector absent; usable list retained |
 | 39×12, 40×11, then 40×12 | Below-minimum recovery | Overlay blocks underlying actions and restores live state |
 | 160×50 → 40×12 → 80×24 → 160×50 | Live resize in one Pilot session | Deep selection, filter, focus, and unsaved modal input survive |
 
-Pure policy tests cover both sides of 40/80/120 columns and 12/18 rows, including combined boundary conditions.
+Pure policy tests cover both sides of 40/80/180 columns and 12/18 rows, including combined boundary conditions.
 Headless Textual tests must inspect widget regions, scroll positions, selected row keys, focus, screen stack, and database effects after layout settles.
 Counting rows in the model alone does not prove that more rows are visible.
 Use live-session terminal resize through Pilot's public resize facility after checking the installed version's API; launching separate sessions at different sizes is not resize-continuity proof.

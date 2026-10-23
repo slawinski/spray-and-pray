@@ -16,6 +16,42 @@ async def tab_to(pilot, app, widget_id):
     raise AssertionError(f"Keyboard could not reach {widget_id}")
 
 
+@pytest.mark.parametrize("key", ["s", "v", "T", "e", "D"])
+def test_classic_dialog_layout_adapts_without_replacing_fields(temp_db, key):
+    temp_db.insert_application("Company", "Engineer", cv_profile="it")
+
+    async def run():
+        app = CvDashboard()
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.press(key)
+            modal = app.screen
+            frame = modal.query_one(".dialog")
+            assert frame.region.width == 50
+            assert frame.region.height < 30
+            assert frame.region.x == (app.size.width - 50) // 2
+            assert frame.styles.border_top[0] == "thick"
+            assert frame.styles.padding.top >= 1
+            buttons = list(modal.query(".dialog-actions Button"))
+            assert buttons[0].region.right < buttons[1].region.x
+            assert frame.region.x < buttons[0].region.x
+            assert buttons[-1].region.right < frame.region.right
+            fields = list(modal.query("Input, Select"))
+            await pilot.resize_terminal(40, 12)
+            await pilot.pause()
+            assert app.screen is modal
+            assert list(modal.query("Input, Select")) == fields
+            assert frame.region.width <= 40 and frame.region.height <= 12
+            for button in buttons:
+                await tab_to(pilot, app, button.id)
+            await pilot.resize_terminal(200, 50)
+            await pilot.pause()
+            assert frame.region.width == 50 and frame.styles.padding.top >= 1
+            await pilot.press("escape")
+            assert len(app.screen_stack) == 1
+
+    asyncio.run(run())
+
+
 def test_edit_keyboard_and_live_resize(temp_db, temp_apps_dir):
     app_id = temp_db.insert_application("Original", "Engineer")
 

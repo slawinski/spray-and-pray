@@ -89,7 +89,6 @@ def dialog(body, actions, *, id):
 
 class ResponsiveModal(ModalScreen):
     BINDINGS = [("escape", "cancel", "Cancel")]
-    dialog_height = 12
 
     def on_mount(self) -> None:
         self.reflow()
@@ -98,7 +97,15 @@ class ResponsiveModal(ModalScreen):
         self.call_after_refresh(self.reflow)
 
     def reflow(self) -> None:
-        self.query_one(".dialog").styles.height = min(self.app.size.height, self.dialog_height)
+        spacious = self.app.size.width >= 50 and self.app.size.height >= 24
+        self.set_class(spacious, "spacious")
+        frame = self.query_one(".dialog")
+        padding = (1 if frame.id == "profile-modal" else 2) if spacious else 0
+        frame.styles.padding = (padding, 2 if spacious else 1)
+        frame.styles.height = "auto"
+        body = frame.query_one(".dialog-body")
+        body.styles.height = "auto"
+        body.styles.max_height = max(1, self.app.size.height - 2 - padding * 2 - 3 - int(spacious))
         for overlay in self.query("SelectOverlay"):
             overlay.styles.max_height = max(3, min(8, self.app.size.height - 4))
         self.app._size_guard(self)
@@ -111,7 +118,6 @@ class ProfileModal(ResponsiveModal):
     """None is cancellation; a blank selection cannot be confirmed."""
 
     BINDINGS = [("escape", "cancel", "Cancel")]
-    dialog_height = 10
 
     def __init__(self, app_id: int, current_profile: str | None) -> None:
         super().__init__()
@@ -153,7 +159,6 @@ def _next_interview(history: list[dict]) -> int:
 
 
 class StatusModal(ResponsiveModal):
-    dialog_height = 10
     def __init__(self, app_id: int, current_status: str) -> None:
         super().__init__()
         self.app_id = app_id
@@ -207,7 +212,6 @@ class SankeyScreen(TextScreen):
 
 
 class ConfirmModal(ResponsiveModal):
-    dialog_height = 24
     def __init__(self, title: str, message: str) -> None:
         super().__init__()
         self.modal_title = title
@@ -241,14 +245,14 @@ class SourceModal(ResponsiveModal):
     def compose(self) -> ComposeResult:
         current_label = f"Current: {self.current_source}" if self.current_source else "Current: auto-detect"
         yield dialog([
-            Label(f"Source · {self.company} (#{self.app_id})", markup=False),
+            Label(f"Set source for {self.company} (App #{self.app_id})", markup=False),
             Label(current_label, id="current-source", markup=False),
             Horizontal(
                 Button("Referral", id="referral", variant="primary"),
                 Button("Recruiter", id="recruiter", variant="primary"),
             ),
             ], [
-                Button("Clear", id="clear"),
+                Button("Clear (auto-detect)", id="clear"),
                 Button("Cancel", id="cancel"),
             ],
             id="confirm-modal",
@@ -271,7 +275,6 @@ class SourceModal(ResponsiveModal):
 
 class EditModal(ResponsiveModal):
     """Corrects company/role/job URL (e.g. after a bad auto-import scrape)."""
-    dialog_height = 20
 
     def __init__(self, app_id: int, company: str, role: str, job_url: str | None) -> None:
         super().__init__()

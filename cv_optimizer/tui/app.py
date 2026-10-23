@@ -14,7 +14,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
 from textual.reactive import var
-from textual.widgets import DataTable, Header, Input, Label, Static
+from textual.widgets import DataTable, Footer, Header, Input, Label, Static
 from textual import work
 from textual.worker import Worker, WorkerState
 
@@ -92,6 +92,8 @@ def _readiness_compact(score: int | None) -> str:
 
 
 class ApplicationTable(DataTable):
+    BINDINGS = [Binding("enter", "select_cursor", "Detail")]
+
     def on_resize(self) -> None:
         self.app.call_after_refresh(self.app._reflow_table)
 
@@ -163,7 +165,7 @@ class CvDashboard(App):
             with VerticalScroll(id="inspector"):
                 yield Static(id="inspector-content", markup=False)
         yield Static(id="status-bar")
-        yield Static(id="shortcut-bar", markup=False)
+        yield Footer(id="shortcut-bar")
         yield ResizeGuard()
 
     def on_mount(self) -> None:
@@ -190,10 +192,7 @@ class CvDashboard(App):
         dashboard.set_class(self.mode.inspector, "with-inspector")
         inspector = dashboard.query_one("#inspector")
         inspector.styles.width = max(36, min(52, int(self.size.width * .32)))
-        hints = "/ Filter  Enter Detail  ? Actions"
-        if self.size.width >= 80:
-            hints += "  s Status  e Edit  q Quit"
-        dashboard.query_one("#shortcut-bar", Static).update(hints)
+        dashboard.query_one(Footer).compact = self.mode.short
         for screen in self.screen_stack:
             self._size_guard(screen)
         self.call_after_refresh(self._reflow_table)
