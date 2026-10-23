@@ -479,6 +479,10 @@ class CvDashboard(App):
             self.call_from_thread(self.refresh_apps)
 
     def action_sankey(self) -> None:
+        from cv_optimizer.sankey import generate_sankey_html
+        generate_sankey_html()
+
+    def action_terminal_funnel(self) -> None:
         from cv_optimizer.tui.screens.modals import SankeyScreen
         self.push_screen(SankeyScreen())
 
@@ -559,7 +563,7 @@ class CvDashboard(App):
         commands = [(b.action, b.key, b.description, b.action not in global_actions)
                     for b in self.BINDINGS if b.action not in {"dismiss", "actions"}]
         commands.extend([("clear_filter", "", "Clear filter", False),
-                         ("browser_sankey", "", "Browser Sankey", False),
+                         ("terminal_funnel", "", "Terminal funnel", False),
                          ("operation_status", "", "Operation status", False)])
         return commands
 
@@ -576,10 +580,6 @@ class CvDashboard(App):
         current = Text.from_markup(self.operation_message).plain if self.operation_message else "No operation in progress."
         latest = Text.from_markup(self.latest_message).plain if self.latest_message else "No completion or error yet."
         return f"Current\n{current}\n\nLatest completion / error\n{latest}"
-
-    def action_browser_sankey(self) -> None:
-        from cv_optimizer.sankey import generate_sankey_html
-        generate_sankey_html()
 
     def action_toggle_detail(self) -> None:
         app = self._selected_app()

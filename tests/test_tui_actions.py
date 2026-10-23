@@ -22,7 +22,7 @@ def test_actions_and_filter_at_minimum(temp_db):
             await pilot.press("?")
             options = app.screen.query_one(OptionList)
             actions = {options.get_option_at_index(i).id for i in range(options.option_count)}
-            assert {"edit_application", "change_status", "browser_sankey", "operation_status", "clear_filter"} <= actions
+            assert {"edit_application", "change_status", "terminal_funnel", "operation_status", "clear_filter"} <= actions
             await pilot.press("end")
             assert options.highlighted == options.option_count - 1
             await pilot.press("escape")

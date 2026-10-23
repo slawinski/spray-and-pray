@@ -318,7 +318,7 @@ Malformed configuration fails loudly with a readable error.
 | `q` | Quit |
 | `r` | Refresh |
 | `/` | Reveal and focus filter (Enter/Escape returns without clearing) |
-| `?` | All actions, including Clear filter, Browser Sankey, and Operation status |
+| `?` | All actions, including Clear filter, Terminal funnel, and Operation status |
 | `enter` | Open complete, scrollable application details |
 | `e` | Edit company, role, and job URL |
 | `s` | Change status |
@@ -328,7 +328,7 @@ Malformed configuration fails loudly with a readable error.
 | `v` | Select or change the application's CV profile |
 | `P` | Prepare mock interview (opens browser) |
 | `L` | Open lesson library (browser) |
-| `S` | Open terminal application funnel |
+| `S` (Shift+S) | Generate and open the interactive Sankey diagram in the browser |
 | Arrows / Home / End / Page Up / Page Down | Navigate continuously through filtered applications |
 | `T` | Set source (e.g. "Referral") |
 | `u` | Open job posting URL |

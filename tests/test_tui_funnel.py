@@ -2,9 +2,26 @@ import asyncio
 from unittest.mock import Mock
 
 import pytest
-from textual.widgets import Static
+from textual.widgets import OptionList, Static
 
 from cv_optimizer.tui.app import CvDashboard
+
+
+@pytest.mark.parametrize("size", [(40, 12), (200, 40)])
+def test_shift_s_opens_browser_sankey_without_a_terminal_modal(temp_db, monkeypatch, size):
+    app_id = temp_db.insert_application("Company", "Engineer")
+    browser = Mock()
+    monkeypatch.setattr("cv_optimizer.sankey.generate_sankey_html", browser)
+
+    async def run():
+        app = CvDashboard()
+        async with app.run_test(size=size) as pilot:
+            await pilot.press("S")
+            browser.assert_called_once_with()
+            assert len(app.screen_stack) == 1
+            assert app._selected_app()["id"] == app_id
+
+    asyncio.run(run())
 
 
 @pytest.mark.parametrize("populated", [False, True])
@@ -22,7 +39,11 @@ def test_terminal_funnel_and_browser_access(temp_db, monkeypatch, populated):
         app = CvDashboard()
         async with app.run_test(size=(40, 12)) as pilot:
             selected = app._selected_app()["id"]
-            await pilot.press("S")
+            await pilot.press("?")
+            options = app.screen.query_one(OptionList)
+            options.highlighted = next(i for i in range(options.option_count)
+                                       if options.get_option_at_index(i).id == "terminal_funnel")
+            await pilot.press("enter")
             text = str(app.screen.query_one("#text-content", Static).render())
             if populated:
                 assert "applied → interview 1: 1" in text
@@ -35,7 +56,7 @@ def test_terminal_funnel_and_browser_access(temp_db, monkeypatch, populated):
             assert app.screen.query_one("#text-scroll").max_scroll_x == 0
             await pilot.press("escape")
             assert app._selected_app()["id"] == selected
-            app.action_browser_sankey()
+            await pilot.press("S")
             browser.assert_called_once()
 
     asyncio.run(run())
