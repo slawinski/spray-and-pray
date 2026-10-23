@@ -1,5 +1,4 @@
-"""TUI pagination regression: row actions must resolve the application
-under the cursor on the CURRENT page, not index 0 of the filtered list."""
+"""Continuous browsing retains the former wrong-record regression coverage."""
 
 import asyncio
 import sys
@@ -8,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
-def test_selected_app_respects_pagination(tmp_path, monkeypatch):
+def test_selected_app_beyond_twentieth_row(tmp_path, monkeypatch):
     import cv_optimizer.db as db
     from cv_optimizer import tracker
 
@@ -37,12 +36,9 @@ def test_selected_app_respects_pagination(tmp_path, monkeypatch):
             app.refresh_apps()
             assert len(app.filtered) == 25
 
-            # Page 2 (rows 20..24). The old bug would resolve cursor row 0
-            # to filtered[0] — the wrong application entirely.
-            app.current_page = 1
-            app.render_table()
             table = app.query_one("#apps-table", DataTable)
-            table.move_cursor(row=0)
+            assert table.row_count == 25
+            table.move_cursor(row=20)
 
             selected = app._selected_app()
             assert selected is not None
@@ -52,12 +48,9 @@ def test_selected_app_respects_pagination(tmp_path, monkeypatch):
             )
             assert selected != app.filtered[0]
 
-            table.move_cursor(row=3)
+            table.move_cursor(row=23)
             assert app._selected_app() == app.filtered[23]
 
-            # Page 1 behaves as before.
-            app.current_page = 0
-            app.render_table()
             table.move_cursor(row=2)
             assert app._selected_app() == app.filtered[2]
             await pilot.pause()
@@ -65,10 +58,8 @@ def test_selected_app_respects_pagination(tmp_path, monkeypatch):
     asyncio.run(run())
 
 
-def test_status_change_preserves_cursor_and_page(tmp_path, monkeypatch):
-    """Regression: updating a status re-renders the table, which used to
-    reset the page to 0 and drop the cursor onto the top row. The cursor
-    must stay on the updated application's row, on the same page."""
+def test_status_change_preserves_deep_cursor(tmp_path, monkeypatch):
+    """Updating a status must not drop a deep cursor onto the first record."""
     import cv_optimizer.db as db
     from cv_optimizer import tracker
 
@@ -95,11 +86,8 @@ def test_status_change_preserves_cursor_and_page(tmp_path, monkeypatch):
         async with app.run_test(size=(120, 40)) as pilot:
             app.refresh_apps()
 
-            # Cursor on row 2 of page 2 (rows 20..24).
-            app.current_page = 1
-            app.render_table()
             table = app.query_one("#apps-table", DataTable)
-            table.move_cursor(row=2)
+            table.move_cursor(row=22)
             target_id = app.filtered[22]["id"]
 
             # Drive the real status-change flow (modal confirms current value;
@@ -109,8 +97,7 @@ def test_status_change_preserves_cursor_and_page(tmp_path, monkeypatch):
             await pilot.click("#confirm")
             await pilot.pause()
 
-            assert app.current_page == 1, "status update must not reset the page"
-            assert table.cursor_row == 2, "cursor must stay on the updated row"
+            assert table.cursor_row == 22, "cursor must stay on the updated row"
             selected = app._selected_app()
             assert selected is not None
             assert selected["id"] == target_id, (
@@ -121,8 +108,7 @@ def test_status_change_preserves_cursor_and_page(tmp_path, monkeypatch):
 
 
 def test_refresh_preserves_active_filter(tmp_path, monkeypatch):
-    """refresh_apps(select_id=...) must re-apply the active filter text so
-    the page computation and rendered list stay consistent."""
+    """Refresh must re-apply active filter text and retain the selected ID."""
     import cv_optimizer.db as db
     from cv_optimizer import tracker
 

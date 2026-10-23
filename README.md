@@ -317,8 +317,10 @@ Malformed configuration fails loudly with a readable error.
 |---|---|
 | `q` | Quit |
 | `r` | Refresh |
-| `/` | Focus filter bar |
-| `enter` | Toggle detail panel |
+| `/` | Reveal and focus filter (Enter/Escape returns without clearing) |
+| `?` | All actions, including Clear filter, Terminal funnel, and Operation status |
+| `enter` | Open complete, scrollable application details |
+| `e` | Edit company, role, and job URL |
 | `s` | Change status |
 | `o` | Open application folder in Finder |
 | `ctrl+r` | Re-generate CV |
@@ -326,19 +328,45 @@ Malformed configuration fails loudly with a readable error.
 | `v` | Select or change the application's CV profile |
 | `P` | Prepare mock interview (opens browser) |
 | `L` | Open lesson library (browser) |
-| `S` | Open Sankey funnel (browser) |
-| `n` / `p` | Next / previous page |
+| `S` (Shift+S) | Generate and open the interactive Sankey diagram in the browser |
+| Arrows / Home / End / Page Up / Page Down | Navigate continuously through filtered applications |
 | `T` | Set source (e.g. "Referral") |
 | `u` | Open job posting URL |
 | `J` | Run automated job discovery (background worker) |
 | `m` | Generate Match Score for the selected application |
 | `M` | Backfill Match Scores for all applications missing one |
 | `D` | Delete application |
-| `escape` | Dismiss modal / detail panel |
+| `escape` | Cancel dialog / close details / return from filter |
+
+The dashboard supports panes **40 columns × 12 rows** and larger. Below 80
+columns it shows compact records; at 80 columns it uses a fluid
+table. At 180 columns × 18 rows and above, a right-hand inspector follows the
+selected application. Short panes hide the header and show the filter only
+while in use. Taller panes expose more records without pages. Resizing retains
+selection, filters, open dialogs, unsaved edits, and background work. Below the
+minimum a resize prompt blocks input without closing the current screen.
+Dialogs keep confirmation controls separate from their scrollable content;
+use Tab/Shift+Tab to reach fields and buttons, and arrows to scroll. Discovery
+is shown only when enabled. The original interactive shortcut footer lists
+the available key bindings; scroll it horizontally when they do not all fit.
+`?` provides the full action list and operation feedback. Dialogs retain their
+centered 50-column layout, thick borders, spacing, and centered buttons when
+space permits, becoming compact and scrollable in small panes.
+
+The table always keeps **Added** (date added), **CV**, and **CL** visible.
+CV and CL use separate checkmarks for generated documents, a dash when absent,
+and a rotating arrow while generation is running. Compact records show the
+same document indicators and date on a labelled fourth line. Optional metadata
+yields space before these fields or the company and role columns.
+
+Application details and the inspector share formatted sections for overview,
+match evidence, documents, job information, discovery, and status history.
+Bold labels and colored headings separate fields; evidence and history use
+individual list entries, and document availability is separated from file paths.
 
 The application table shows a **Match** column (from `match-v2`): `85–100`
 bold green, `70–84` yellow, `55–69` orange, `<55` dim red. Auto-discovered
-applications show their `auto:<provider>` source. The detail panel splits
+applications show their `auto:<provider>` source. The inspector and full details split
 evidence into **Strong** (direct), **Transferable** (framework transfer —
 e.g. "Svelte → React, Vue.js") and **Gaps**, plus discovery metadata
 (posted/discovered dates, location, salary).

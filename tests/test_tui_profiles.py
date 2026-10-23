@@ -32,7 +32,8 @@ def test_first_document_selection_cancel_and_continue(temp_db, tmp_path, monkeyp
         app = CvDashboard()
         async with app.run_test(size=(80, 24)) as pilot:
             await pilot.press("enter")
-            assert "Not selected" in str(app.query_one("#detail-panel", Static).render())
+            assert "Not selected" in str(app.screen.query_one("#text-content", Static).render())
+            await pilot.press("escape")
             await pilot.press(action)
             assert app.screen.query_one("#profile-select", Select).is_blank()
             await pilot.click("#confirm")  # blank cannot confirm
@@ -61,7 +62,8 @@ def test_first_document_selection_cancel_and_continue(temp_db, tmp_path, monkeyp
     asyncio.run(run())
 
 
-def test_profile_change_warning_invalidation_and_cursor(temp_db, tmp_path):
+@pytest.mark.parametrize("size", [(80, 24), (40, 12)])
+def test_profile_change_warning_invalidation_and_cursor(temp_db, tmp_path, size):
     cv = tmp_path / "cv.pdf"
     letter = tmp_path / "letter.pdf"
     cv.write_bytes(b"old CV")
@@ -75,11 +77,9 @@ def test_profile_change_warning_invalidation_and_cursor(temp_db, tmp_path):
 
     async def run():
         app = CvDashboard()
-        async with app.run_test(size=(80, 24)) as pilot:
-            app.current_page = 1
-            app.render_table()
+        async with app.run_test(size=size) as pilot:
             table = app.query_one("#apps-table", DataTable)
-            table.move_cursor(row=2)
+            table.move_cursor(row=22)
             selected_id = app._selected_app()["id"]
             before = temp_db.get_application(selected_id)
             await pilot.press("v")
@@ -94,13 +94,17 @@ def test_profile_change_warning_invalidation_and_cursor(temp_db, tmp_path):
             await choose(pilot, "mechanical_engineering")
             assert "files" in app.screen.modal_message.lower()
             assert "regenerat" in app.screen.modal_message.lower()
+            confirmation = app.screen
+            await pilot.resize_terminal(160, 50)
+            await pilot.resize_terminal(*size)
+            assert app.screen is confirmation
             await pilot.click("#no")
             assert temp_db.get_application_profile(selected_id) == ("it", 0)
             await pilot.press("v")
             await choose(pilot, "mechanical_engineering")
             await pilot.click("#yes")
             await pilot.pause()
-            assert app.current_page == 1 and table.cursor_row == 2
+            assert table.cursor_row == 22
             selected = app._selected_app()
             assert selected["id"] == selected_id
             assert selected["cv_path"] is None and selected["cover_letter_path"] is None
@@ -108,7 +112,7 @@ def test_profile_change_warning_invalidation_and_cursor(temp_db, tmp_path):
             assert cv.read_bytes() == b"old CV" and letter.read_bytes() == b"old letter"
             assert temp_db.get_latest_status(selected_id) == "draft"
             await pilot.press("enter")
-            assert "Mechanical Engineering" in str(app.query_one("#detail-panel", Static).render())
+            assert "Mechanical Engineering" in str(app.screen.query_one("#text-content", Static).render())
             other = next(a for a in app.applications if a["id"] != selected_id)
             assert other["cv_profile"] == "it" and other["cv_path"] == str(cv)
 
