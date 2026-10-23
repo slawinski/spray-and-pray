@@ -1,0 +1,34 @@
+<!doctype html>
+<!-- THESIS: A read-only investigation workspace: conclusions lead to their exact evidence, not a daily task queue.
+OWN-WORLD: Inherit the existing dark graphite, blue links, system typography and restrained borders.
+STORY: Select a population, read qualified leads, inspect a report and the records behind it.
+FIRST VIEWPORT: Compact header and application scope above the decision brief; Sankey summary follows.
+FORM: User-selected overview plus focused reports (sketch B); Operate mode, pinned structure, no randomization. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Search focus · Spray and Pray</title>
+  <link rel="stylesheet" href="/static/reports.css">
+  <script src="/static/reports.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to report</a>
+  <header><div><p class="product">Spray and Pray / Reporting</p><h1>Search focus</h1></div><span class="readonly">Read-only workspace</span></header>
+  <form id="filters" aria-label="Application scope">
+    <fieldset><legend>Application scope</legend>
+      <label>Applied from<input type="date" name="start"></label>
+      <label>Applied through<input type="date" name="end"></label>
+      <label>Profile<select name="profile"><option value="">All profiles</option></select></label>
+      <label>Recorded source<select name="source"><option value="">All sources</option></select></label>
+      <button type="submit">Apply scope</button><button type="button" id="refresh">Refresh records</button>
+    </fieldset>
+  </form>
+  <p id="scope" class="meta">All recorded application dates · all profiles · all sources</p>
+  <div id="load-state" role="status" aria-live="polite"></div>
+  <nav id="navigation" aria-label="Reports"></nav>
+  <main id="content" tabindex="-1"><p>Loading local reporting snapshot…</p></main>
+  <section id="evidence" hidden aria-label="Selected evidence"></section>
+  <footer>Recorded evidence, not a forecast. No application editing, assessment generation or discovery runs.</footer>
+</body>
+</html>
