@@ -50,12 +50,12 @@ def select_assessments(facts, rows, as_of):
         eligible = [a for a in valid if (not outcome or a['at'] < outcome)
                     and a['band'] != 'unknown' and a['valid_json']]
         comparison = eligible[-1] if eligible and not f['interval_anomaly'] else None
-        if f['interval_anomaly'] or raw and not valid or latest and outcome and latest['at'] == outcome and not comparison:
+        if f['interval_anomaly'] or raw and not valid or latest and outcome and latest['at'] == outcome:
             timing = 'timing-unknown'
-        elif comparison:
-            timing = 'pre-outcome' if outcome else 'unresolved'
         elif latest and outcome and latest['at'] > outcome:
             timing = 'retrospective'
+        elif latest and latest['valid_json'] and latest['band'] != 'unknown':
+            timing = 'pre-outcome' if outcome else 'unresolved'
         else:
             timing = 'invalid' if latest else 'unassessed'
         selections[str(f['id'])] = {'descriptive': latest, 'comparison': comparison, 'timing': timing,
@@ -65,7 +65,6 @@ def select_assessments(facts, rows, as_of):
 
 
 def assessment_reports(facts, rows, as_of=None):
-    # Callers normally pass the reader's as_of; fixture callers can infer it from fact ages.
     if as_of is None:
         from datetime import timedelta, datetime, timezone
         as_of = next((f['applied_at'] + timedelta(days=f['age_days']) for f in facts if f['applied_at']), datetime.now(timezone.utc))
@@ -118,17 +117,30 @@ def assessment_reports(facts, rows, as_of=None):
     def skill_groups(buckets, dimension):
         groups = []
         for label, entries in buckets.items():
-            levels = {level: sorted({i for i, r in entries if normalize(r.get('evidence_level')) == level}) for level in LEVELS}
-            levels['unknown'] = sorted({i for i, r in entries if normalize(r.get('evidence_level')) not in LEVELS or normalize(r.get('evidence_level')) == 'unknown'})
-            must = sorted({i for i, r in entries if r.get('priority') == 'must'})
-            core = sorted({i for i, r in entries if r.get('is_core') is True})
-            gap = sorted({i for i, r in entries if (r.get('priority') == 'must' or r.get('is_core') is True)
-                          and r.get('evidence_level') in ('partial', 'none')})
+            levels = {level: set() for level in LEVELS}
+            must, core = set(), set()
+            gap_partial, gap_none = set(), set()
+            for app_id, requirement in entries:
+                raw_level = requirement.get('evidence_level')
+                level = normalize(raw_level)
+                levels[level if level in LEVELS else 'unknown'].add(app_id)
+                is_must = requirement.get('priority') == 'must'
+                is_core = requirement.get('is_core') is True
+                if is_must:
+                    must.add(app_id)
+                if is_core:
+                    core.add(app_id)
+                if is_must or is_core:
+                    if raw_level == 'partial':
+                        gap_partial.add(app_id)
+                    elif raw_level == 'none':
+                        gap_none.add(app_id)
+            gap = sorted(gap_partial | gap_none)
             groups.append(group([dimension, label], label, [i for i, _ in entries],
-                                gap, dimension=dimension, evidence=levels, must_ids=must, core_ids=core,
-                                must_core_ids=sorted(set(must) | set(core)), gap_ids=gap,
-                                gap_partial_ids=sorted({i for i, r in entries if i in gap and r.get('evidence_level') == 'partial' and (r.get('priority') == 'must' or r.get('is_core') is True)}),
-                                gap_none_ids=sorted({i for i, r in entries if i in gap and r.get('evidence_level') == 'none' and (r.get('priority') == 'must' or r.get('is_core') is True)}),
+                                gap, dimension=dimension, evidence={level: sorted(ids) for level, ids in levels.items()},
+                                must_ids=sorted(must), core_ids=sorted(core),
+                                must_core_ids=sorted(must | core), gap_ids=gap,
+                                gap_partial_ids=sorted(gap_partial), gap_none_ids=sorted(gap_none),
                                 raw_variants=sorted({str(r.get('category') if dimension == 'category' else r['requirement']) for _, r in entries}),
                                 requirement_evidence=[{'application_id': i, **r} for i, r in entries]))
         return sorted(groups, key=lambda g: (-len(g['gap_ids']), -g['denominator'], g['key']))

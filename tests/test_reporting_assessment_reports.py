@@ -1,6 +1,8 @@
 import json
 from datetime import timedelta
 
+import pytest
+
 from test_reporting_application_reports import NOW, population
 from cv_optimizer.reporting.assessment_reports import assessment_reports, score_band
 
@@ -43,6 +45,23 @@ def test_bands_and_distinct_skill_evidence():
     assert category['evidence']['partial'] == [1] and category['evidence']['unknown'] == [1]
     assert category['must_ids'] == category['core_ids'] == [1]
     assert reports['skills']['requirements'][0]['label'] == 'react 18'
+
+
+@pytest.mark.parametrize('latest_day,timing', [(11, 'retrospective'), (10, 'timing-unknown')])
+def test_latest_timing_does_not_inherit_older_comparison_timing(latest_day, timing):
+    facts = population([(40, None, [('applied', 0), ('interview 1', 10)])])
+    applied = NOW - timedelta(days=40)
+    rows = [assessment(1, 1, (applied + timedelta(days=2)).isoformat(), score=50, role='backend'),
+            assessment(2, 1, (applied + timedelta(days=latest_day)).isoformat(), score=90, role='frontend')]
+    targeting = assessment_reports(facts, rows)['targeting']
+    selection = targeting['selections']['1']
+    assert selection['descriptive']['id'] == 2
+    assert selection['comparison']['id'] == 1
+    assert selection['timing'] == timing
+    assert {(g['dimension'], g['label']) for g in targeting['groups']} == {('role', 'backend'), ('score', '40–59')}
+    assert {(g['dimension'], g['label'], g['timing']) for g in targeting['descriptive']} == {
+        ('role', f'{timing} · frontend', timing), ('score', f'{timing} · 80–100', timing)}
+    assert all(g['ids'] == [1] for g in targeting['groups'] + targeting['descriptive'])
 
 
 def test_invalid_json_and_missing_fields_are_coverage():

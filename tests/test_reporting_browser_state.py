@@ -10,6 +10,72 @@ def run_node(script):
     assert result.returncode == 0, result.stderr
 
 
+FRONTEND_HARNESS = r"""
+const fs = require('node:fs'), vm = require('node:vm'), assert = require('node:assert/strict');
+const A = {start:'',end:'',profile:'',source:''}, B = {...A,profile:'it'};
+const bundle = (scope,id) => ({scope,snapshot_id:id,retrieved_at:'synthetic',selected_ids:[],
+  never_applied_ids:[],unknown_date_excluded_ids:[],filter_options:{profile:['it'],source:[]},
+  reports:{sankey:{groups:[],current:[],nodes:[],links:[]}},brief:{message:'Insufficient data',leads:[],reasons:[]}});
+const elements = {}, events = {}, requests = [];
+const element = id => elements[id] ||= {innerHTML:'',textContent:'',hidden:false,value:'',
+  addEventListener(t,f){this[t]=f},append(){},focus(){}};
+const fields = Object.fromEntries(['start','end','profile','source'].map(k=>[k,element(k)]));
+element('filters').elements = {namedItem:k=>fields[k]};
+const ctx = {URL,URLSearchParams,console,document:{getElementById:element,createTextNode:t=>t},
+  location:new URL('http://local/reports'),
+  history:{replaceState(_,__,url){ctx.location=new URL(url)},pushState(_,__,url){ctx.location=new URL(url)}},
+  addEventListener:(t,f)=>events[t]=f,fetch:url=>new Promise(resolve=>requests.push({url,resolve}))};
+vm.runInNewContext(fs.readFileSync(process.argv[1],'utf8'),ctx);
+const tick = () => new Promise(resolve=>setImmediate(resolve));
+const respond = (request,data,ok=true) => request.resolve({ok,json:async()=>data});
+const submitB = () => {fields.profile.value='it';elements.filters.submit({preventDefault(){}})};
+"""
+
+
+def test_frontend_retry_restores_accepted_scope_before_links_and_refresh():
+    run_node(FRONTEND_HARNESS + r"""
+    (async()=>{
+      respond(requests[0],bundle(A,'A')); await tick();
+      submitB();
+      respond(requests[1],{detail:'Synthetic failure'},false); await tick();
+      assert.equal(ctx.location.search,'');
+      assert.match(elements.scope.textContent,/profile all/);
+      elements.retry.onclick();
+      assert.equal(new URL(requests[2].url,'http://local').searchParams.get('profile'),'it');
+      respond(requests[2],bundle(B,'B-retry')); await tick();
+      assert.equal(ctx.location.search,'?profile=it');
+      assert.match(elements.scope.textContent,/profile it/);
+      for (const id of ['navigation','content']) {
+        const links = [...elements[id].innerHTML.matchAll(/href="([^"]+)"/g)];
+        assert.ok(links.length);
+        for (const [,href] of links) assert.equal(new URL(href.replaceAll('&amp;','&')).searchParams.get('profile'),'it');
+      }
+      elements.refresh.onclick();
+      assert.equal(new URL(requests[3].url,'http://local').searchParams.get('profile'),'it');
+    })().catch(e=>{console.error(e);process.exitCode=1});
+    """)
+
+
+def test_frontend_back_to_accepted_scope_invalidates_pending_fetch():
+    run_node(FRONTEND_HARNESS + r"""
+    (async()=>{
+      respond(requests[0],bundle(A,'A')); await tick();
+      submitB();
+      ctx.location = new URL('http://local/reports'); events.popstate();
+      assert.equal(requests.length,2);
+      assert.equal(elements['load-state'].innerHTML,'');
+      assert.match(elements.scope.textContent,/profile all/);
+      assert.doesNotMatch(elements.scope.textContent,/STALE/);
+      respond(requests[1],bundle(B,'B-abandoned')); await tick();
+      assert.equal(ctx.location.search,'');
+      assert.match(elements.scope.textContent,/profile all/);
+      assert.equal(fields.profile.value,'');
+      elements.refresh.onclick();
+      assert.equal(new URL(requests[2].url,'http://local').searchParams.get('profile'),'');
+    })().catch(e=>{console.error(e);process.exitCode=1});
+    """)
+
+
 def test_atomic_accept_race_failure_retry_and_url_scope():
     run_node(r"""
     const assert = require('node:assert/strict');

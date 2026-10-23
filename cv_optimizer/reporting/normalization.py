@@ -3,6 +3,11 @@
 import unicodedata
 
 VERSION = 1
+ROLE_ALIASES = {alias: family for family, forms in {
+    'frontend': ['frontend', 'front-end', 'frontend engineer', 'front end engineer'],
+    'backend': ['backend', 'back-end', 'backend engineer', 'back end engineer'],
+    'fullstack': ['fullstack', 'full-stack', 'full stack', 'full stack engineer'],
+}.items() for alias in forms}
 
 
 def normalize(value):
@@ -17,9 +22,4 @@ def source_key(value):
 
 def role_key(value):
     key = normalize(value)
-    aliases = {s: family for family, forms in {
-        'frontend': ['frontend', 'front-end', 'frontend engineer', 'front end engineer'],
-        'backend': ['backend', 'back-end', 'backend engineer', 'back end engineer'],
-        'fullstack': ['fullstack', 'full-stack', 'full stack', 'full stack engineer'],
-    }.items() for s in forms}
-    return aliases.get(key, key)
+    return ROLE_ALIASES.get(key, key)

@@ -45,7 +45,6 @@ def build_brief(reports):
     if valid >= 10:
         for g in skills.get('groups', []):
             if g['label'] != 'unknown' and len(g['gap_ids']) >= 5:
-                # The evidence selection is the tested gap union, not all category demand.
                 selection = {'key': g['key'] + ':gap', 'label': g['label'] + ' · must-have/core partial or none',
                              'ids': g['gap_ids'], 'denominator': len(g['gap_ids']), 'numerator': len(g['gap_ids']),
                              'numerator_ids': g['gap_ids'], 'analytical_subset': 'Distinct must-have/core partial-or-none union'}

@@ -1,4 +1,3 @@
-/* One accepted bundle owns navigation, charts and evidence. No per-record requests. */
 (function (root) {
   'use strict';
   const reportNames = {overview:'Overview', channel:'Channels', cohorts:'Cohorts', stages:'Stage loss',
@@ -7,7 +6,7 @@
   function scopeFromURL(url) { return Object.fromEntries(scopeKeys.map(k => [k, url.searchParams.get(k) || ''])); }
   function routeFromURL(url) {
     const [report, group = '', subset = 'all'] = url.hash.slice(1).split('/');
-    let decoded = ''; try { decoded = decodeURIComponent(group); } catch (_) { /* Unknown selection clears after acceptance. */ }
+    let decoded = ''; try { decoded = decodeURIComponent(group); } catch (_) {}
     return {report: reportNames[report] ? report : 'overview', group: decoded, subset};
   }
   function routeURL(url, report, group = '', subset = 'all') {
@@ -28,7 +27,12 @@
       } catch (error) { if (ticket === sequence) {state.error = error.message; state.stale = !!state.bundle;} }
       finally { if (ticket === sequence) {state.loading = false; changed(state);} }
     }
-    return {state, load};
+    function restoreAccepted() {
+      ++sequence;
+      state.loading = false; state.stale = false; state.error = null; state.requestedScope = state.bundle.scope;
+      changed(state);
+    }
+    return {state, load, restoreAccepted};
   }
   function allGroups(report) {
     return ['groups','comparisons','descriptive','requirements','gap_groups','rejections','current','salary_groups'].flatMap(k => report[k] || []);
@@ -172,11 +176,8 @@
     $('load-state').innerHTML = state.loading ? 'Loading… Previous snapshot is stale until replacement succeeds.' : state.error ?
       `<p class="error">Load failed: ${escape(state.error)} ${state.bundle ? 'Showing stale data in the previous accepted scope.' : 'No snapshot accepted.'}</p><button id="retry">Retry load</button>` : '';
     if ($('retry')) $('retry').onclick = () => store.load(state.requestedScope);
-    const route = routeFromURL(new URL(location.href));
-    $('navigation').innerHTML = Object.entries(reportNames).map(([key, name]) => `<a ${key === route.report ? 'aria-current="page"' : ''} href="${escape(routeURL(location.href,key))}">${name}</a>`).join('');
     const bundle = state.bundle;
-    if (!bundle) return;
-    if (state.error) {
+    if (bundle && !state.loading) {
       const acceptedURL = new URL(location.href);
       for (const key of scopeKeys) {
         if (bundle.scope[key]) acceptedURL.searchParams.set(key,bundle.scope[key]);
@@ -184,6 +185,9 @@
       }
       history.replaceState(null,'',acceptedURL);
     }
+    const route = routeFromURL(new URL(location.href));
+    $('navigation').innerHTML = Object.entries(reportNames).map(([key, name]) => `<a ${key === route.report ? 'aria-current="page"' : ''} href="${escape(routeURL(location.href,key))}">${name}</a>`).join('');
+    if (!bundle) return;
     $('scope').textContent = `Accepted application scope: ${bundle.scope.start || 'all dates'} → ${bundle.scope.end || 'present'} · profile ${bundle.scope.profile || 'all'} · source ${bundle.scope.source || 'all'} · ${bundle.selected_ids.length} applied applications · retrieved ${bundle.retrieved_at}${state.stale ? ' · STALE' : ''}`;
     if (!state.loading && !state.error) {
       for (const key of scopeKeys) {
@@ -199,7 +203,7 @@
       $('load-state').append(document.createTextNode('The previous evidence selection is no longer available; it has been cleared.'));
       route.group = '';
     }
-    $('content').innerHTML = renderReport(bundle, route, link);
+    $('content').innerHTML = presentation(bundle, route, link);
     renderEvidence(bundle, route);
     if (route.group && !changedSnapshot) $('evidence-heading')?.focus();
   }
@@ -207,9 +211,6 @@
     if (route.report === 'overview' && route.group === 'never-applied') return {label:'Never applied · excluded from outcome denominators', ids:bundle.never_applied_ids};
     if (route.report === 'overview' && route.group === 'unknown-date') return {label:'Unknown applied date · excluded by date range', ids:bundle.unknown_date_excluded_ids};
     return allGroups(bundle.reports[route.report] || {}).find(g => g.key === route.group);
-  }
-  function renderReport(bundle, route, link) {
-    return presentation(bundle, route, link);
   }
   function renderEvidence(bundle, route) {
     const selected = findGroup(bundle, route), region = $('evidence');
@@ -228,7 +229,7 @@
   function navigate() {
     const scope = scopeFromURL(new URL(location.href));
     if (!store.state.bundle || JSON.stringify(scope) !== JSON.stringify(store.state.bundle.scope)) store.load(scope);
-    else render();
+    else store.restoreAccepted();
   }
   form.addEventListener('submit', event => {
     event.preventDefault();

@@ -1,4 +1,5 @@
 from test_reporting_application_reports import NOW
+from datetime import timedelta
 from cv_optimizer.reporting.inventory_report import inventory_report
 
 
@@ -22,3 +23,16 @@ def test_inventory_units_missing_freshness_and_errors():
 
 def test_missing_inventory_is_unavailable():
     assert inventory_report({}, NOW)['state'] == 'unavailable'
+
+
+def test_latest_completed_collection_includes_errors_but_not_failed_or_future_runs():
+    runs = [dict(id=i, status=status, completed_at=(NOW - timedelta(days=age)).isoformat(),
+                 errors_json='["source unavailable"]' if status == 'completed_with_errors' else '[]')
+            for i, status, age in [(1, 'completed', 10), (2, 'completed_with_errors', 2),
+                                   (3, 'failed', 1), (4, 'running', 0), (5, 'completed_with_errors', -1)]]
+    report = inventory_report({'job_postings': [], 'discovery_runs': runs}, NOW)
+    assert report['last_completed_at'] == NOW - timedelta(days=2)
+    assert report['freshness_days'] == 2
+    assert report['runs'][1]['status'] == 'completed_with_errors'
+    assert report['runs'][1]['errors'] == ['source unavailable']
+    assert report['runs'][1]['errors_state'] == 'recorded'

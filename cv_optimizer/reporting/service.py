@@ -1,6 +1,7 @@
 """Assemble one allowlisted evidence bundle after closing its read transaction."""
 
 import logging
+from collections import defaultdict
 from datetime import datetime
 from urllib.parse import urlsplit
 from uuid import uuid4
@@ -71,6 +72,9 @@ def build_snapshot(*, start='', end='', profile='', source='', path=None, clock=
         record['assessment'] = reports['targeting'].get('selections', {}).get(str(f['id']))
         applications[str(f['id'])] = record
     postings = {}
+    refs_by_posting = defaultdict(list)
+    for ref in inventory_tables.get('job_source_refs', []):
+        refs_by_posting[ref['job_posting_id']].append(ref)
     for p in inventory_tables.get('job_postings', []):
         record = {k: p.get(k) for k in ('id', 'company', 'role', 'description', 'location_text', 'work_model', 'seniority',
                                        'employment_type', 'salary_min', 'salary_max', 'salary_currency', 'salary_period', 'salary_raw',
@@ -78,7 +82,7 @@ def build_snapshot(*, start='', end='', profile='', source='', path=None, clock=
         record['canonical_url'] = safe_url(p.get('canonical_url'))
         record['source_refs'] = [{k: r.get(k) for k in ('id', 'source', 'external_id', 'first_seen_at', 'last_seen_at')}
                                  | {'source_url': safe_url(r.get('source_url')), 'apply_url': safe_url(r.get('apply_url'))}
-                                 for r in inventory_tables.get('job_source_refs', []) if r['job_posting_id'] == p['id']]
+                                 for r in refs_by_posting[p['id']]]
         postings[str(p['id'])] = record
     return serialize({'snapshot_id': str(uuid4()), 'retrieved_at': as_of, 'as_of': as_of,
                       'scope': selection['scope'], 'filter_options': selection['options'], 'selected_ids': selection['ids'],

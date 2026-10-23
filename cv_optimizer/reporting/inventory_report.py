@@ -33,7 +33,7 @@ def inventory_report(tables, as_of):
         except (TypeError, ValueError):
             errors, state = run.get('errors_json'), 'malformed'
         runs.append({k: run.get(k) for k in ('id', 'status', 'started_at', 'completed_at')} | {'errors': errors, 'errors_state': state})
-    completed = [timestamp(r.get('completed_at')) for r in runs if r['status'] == 'completed']
+    completed = [timestamp(r.get('completed_at')) for r in runs if r['status'] in ('completed', 'completed_with_errors')]
     completed = [at for at in completed if at and at <= as_of]
     last = max(completed) if completed else None
     stale, unknown_freshness = [], []
