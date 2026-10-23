@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
 
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Horizontal, ScrollableContainer, Vertical
 from textual.screen import ModalScreen
@@ -35,7 +36,7 @@ class ResizeGuard(Static, can_focus=True):
 class TextScreen(ModalScreen[None]):
     BINDINGS = [("escape", "cancel", "Close")]
 
-    def __init__(self, title: str, content: str, *, application_id: int | None = None):
+    def __init__(self, title: str, content: str | Text, *, application_id: int | None = None):
         super().__init__()
         self.title_text, self.content_text = title, content
         self.application_id = application_id

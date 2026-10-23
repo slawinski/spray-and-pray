@@ -71,6 +71,7 @@ Both dimensions matter: a short, wide pane and a tall, narrow pane have differen
 - R15. Layout changes must not cancel or duplicate background operations, and their progress or completion must remain accessible.
 - R16. Roomy dialogs must retain the original centered 50-column layout, thick borders, spacing, and centered buttons while compacting to fit small panes.
 - R17. Application lists must keep separate CV and CL availability indicators and date added visible, ahead of optional metadata.
+- R18. The inspector and application-details modal must share readable formatting with prominent company/role, section headings, bold labels, and individual evidence/history entries while preserving complete literal values.
 
 **Layout composition**
 
@@ -386,7 +387,7 @@ If that workload visibly stalls, investigate the measured bottleneck before intr
 
 ## Definition of Done
 
-- R1–R17 are implemented with the revised Product Contract and stable IDs intact.
+- R1–R18 are implemented with the revised Product Contract and stable IDs intact.
 - U1–U5 meet their verification outcomes; F1–F3 and AE1–AE9 have behavioral evidence across the supported matrix.
 - No page-state code or tests requiring fixed pages remain; previous wrong-record/profile regressions remain covered under continuous scrolling.
 - Every non-pagination action is keyboard-accessible, dialogs preserve live edits, and all R7 details remain readable at the minimum size.

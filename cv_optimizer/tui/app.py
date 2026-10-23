@@ -91,6 +91,15 @@ def _readiness_compact(score: int | None) -> str:
     return f"[{color}]{score:3d}[/]"
 
 
+def _detail_field(content: Text, label: str, value: str | Text) -> None:
+    content.append(f"{label}: ", style="bold")
+    content.append(value).append("\n")
+
+
+def _detail_section(content: Text, title: str) -> None:
+    content.append(f"\n{title}\n", style="bold cyan underline")
+
+
 class ApplicationTable(DataTable):
     BINDINGS = [Binding("enter", "select_cursor", "Detail")]
 
@@ -578,35 +587,60 @@ class CvDashboard(App):
             return
         self.push_screen(TextScreen("Application details", self.detail_content(app), application_id=app["id"]))
 
-    def detail_content(self, app: dict) -> str:
-        history = " → ".join(h["status"] for h in app["history"]) or "none"
+    def detail_content(self, app: dict) -> Text:
         readiness = self.readiness.get(app["id"])
-        return (
-            f"Application #{app['id']}\n{app['company']}\n{app['role']}\n\n"
-            f"Status: {app['latest_status']}\n"
-            f"CV profile: {PROFILE_LABELS.get(app.get('cv_profile'), 'Not selected')}\n"
-            + (self._match_detail(app) or "Match: —\n")
-            + f"Readiness: {readiness if readiness is not None else '—'}\n"
-            + f"Source: {_source_name(app)}\n"
-            + f"Created: {app.get('created_at') or '—'}\n"
-            + self._discovery_detail(app)
-            + f"URL: {app.get('job_url') or 'N/A'}\n"
-            + f"JD: {app.get('jd_path') or 'Not available'}\n"
-            + f"CV: {app.get('cv_path') or 'Not available'}\n"
-            + f"CL: {app.get('cover_letter_path') or 'Not available'}\n"
-            + f"Status History: {history}"
-        )
+        content = Text(overflow="fold", no_wrap=False)
+        content.append(f"Application #{app['id']}\n", style="dim")
+        content.append(app["company"] + "\n", style="bold")
+        content.append(app["role"] + "\n")
 
-    def _match_detail(self, app: dict) -> str:
+        _detail_section(content, "Overview")
+        _detail_field(content, "Status", app["latest_status"])
+        _detail_field(content, "CV profile", PROFILE_LABELS.get(app.get("cv_profile"), "Not selected"))
+        match = self.matches.get(app["id"])
+        score = Text.from_markup(_match_rich(match["score"])) if match else Text("—")
+        if match:
+            score.append(f" {match['label']}")
+        _detail_field(content, "Match", score)
+        if match:
+            _detail_field(content, "Confidence", match["confidence"])
+        _detail_field(content, "Readiness", Text.from_markup(_readiness_compact(readiness)))
+        content.append(self._match_detail(app))
+
+        _detail_section(content, "Documents")
+        for label, path, running in (
+            ("JD", app.get("jd_path"), False),
+            ("CV", app.get("cv_path"), app["id"] in self.regenerating_ids),
+            ("CL", app.get("cover_letter_path"), app["id"] in self.generating_cl_ids),
+        ):
+            availability = Text.from_markup(_checkmark(path, running))
+            availability.append(" Generating…" if running else " Available" if path else " Not available")
+            _detail_field(content, label, availability)
+            if path:
+                content.append(f"  {path}\n", style="dim")
+
+        _detail_section(content, "Job information")
+        _detail_field(content, "Source", _source_name(app))
+        _detail_field(content, "Created", app.get("created_at") or "—")
+        _detail_field(content, "URL", app.get("job_url") or "N/A")
+        content.append(self._discovery_detail(app))
+
+        _detail_section(content, "Status History:")
+        for entry in app["history"]:
+            content.append(f"  • {entry['status']}")
+            if entry.get("transitioned_at"):
+                content.append(f"\n    {entry['transitioned_at']}", style="dim")
+            content.append("\n")
+        if not app["history"]:
+            content.append("No status changes yet.\n", style="dim")
+        return content
+
+    def _match_detail(self, app: dict) -> Text:
         """Match breakdown: score, confidence, strengths, transferable
         evidence, gaps — framework transfer visibly separated from direct."""
         match_row = self.matches.get(app["id"])
         if not match_row:
-            return ""
-        lines = [
-            f"Match: {match_row['score']} {match_row['label']} "
-            f"(confidence {match_row['confidence']})",
-        ]
+            return Text()
         try:
             assessment = json.loads(match_row["assessment_json"])
         except (ValueError, TypeError):
@@ -624,30 +658,36 @@ class CvDashboard(App):
                 transferable.append(f"{name} → {evidence}")
             elif level == "none":
                 gaps.append(name)
-        if strengths:
-            lines.append("  Strong: " + "; ".join(strengths[:8]))
-        if transferable:
-            lines.append("  Transferable: " + " | ".join(transferable[:4]))
-        if gaps:
-            lines.append("  Gaps: " + "; ".join(gaps[:8]))
-        return "\n".join(lines) + "\n"
+        content = Text()
+        if strengths or transferable or gaps:
+            _detail_section(content, "Match evidence")
+        for label, items, style in (("Strong", strengths[:8], "bold green"),
+                                    ("Transferable", transferable[:4], "bold yellow"),
+                                    ("Gaps", gaps[:8], "bold red")):
+            if items:
+                content.append(f"{label}:\n", style=style)
+                for item in items:
+                    content.append(f"  • {item}\n")
+        return content
 
-    def _discovery_detail(self, app: dict) -> str:
+    def _discovery_detail(self, app: dict) -> Text:
         """Discovery metadata for auto-imported applications."""
         if app["id"] not in self.discovery_details:
             self.discovery_details[app["id"]] = db.get_job_posting_by_application(app["id"])
         job = self.discovery_details[app["id"]]
         if not job:
-            return ""
-        lines = ["Discovery:"]
+            return Text()
+        content = Text()
+        _detail_section(content, "Discovery")
         posted = (job.get("posted_at") or "")[:10]
         discovered = (job.get("first_seen_at") or "")[:10]
-        lines.append(f"  Posted: {posted or '—'}   Discovered: {discovered or '—'}")
+        _detail_field(content, "Posted", posted or "—")
+        _detail_field(content, "Discovered", discovered or "—")
         if job.get("location_text"):
-            lines.append(f"  Location: {job['location_text']} ({job.get('work_model', 'unknown')})")
+            _detail_field(content, "Location", f"{job['location_text']} ({job.get('work_model', 'unknown')})")
         if job.get("salary_raw"):
-            lines.append(f"  Salary: {job['salary_raw']}")
-        return "\n".join(lines) + "\n"
+            _detail_field(content, "Salary", job["salary_raw"])
+        return content
 
     def action_prepare(self) -> None:
         app = self._selected_app()

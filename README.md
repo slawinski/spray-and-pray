@@ -359,6 +359,11 @@ and a rotating arrow while generation is running. Compact records show the
 same document indicators and date on a labelled fourth line. Optional metadata
 yields space before these fields or the company and role columns.
 
+Application details and the inspector share formatted sections for overview,
+match evidence, documents, job information, discovery, and status history.
+Bold labels and colored headings separate fields; evidence and history use
+individual list entries, and document availability is separated from file paths.
+
 The application table shows a **Match** column (from `match-v2`): `85–100`
 bold green, `70–84` yellow, `55–69` orange, `<55` dim red. Auto-discovered
 applications show their `auto:<provider>` source. The inspector and full details split
