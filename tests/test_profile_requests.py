@@ -131,7 +131,7 @@ def test_popup_both_flows_require_and_send_shared_selection():
     subprocess.run([node, "-e", script, str(popup)], check=True, capture_output=True, text=True)
 
 
-def test_popup_offers_baker_without_changing_it_default():
+def test_popup_offers_baker_without_changing_unselected_default():
     from html.parser import HTMLParser
     class Options(HTMLParser):
         def __init__(self):
@@ -143,4 +143,4 @@ def test_popup_offers_baker_without_changing_it_default():
     parser = Options()
     parser.feed((Path(__file__).resolve().parent.parent / "extension/popup.html").read_text())
     assert "baker" in [option.get("value") for option in parser.options]
-    assert [o["value"] for o in parser.options if "selected" in o] == ["it"]
+    assert [o["value"] for o in parser.options if "selected" in o] == [""]
