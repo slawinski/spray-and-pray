@@ -32,8 +32,10 @@ inflated frequency or batch size (especially daily production), commercial equip
 proficiency, sanitary clearance or credentials unsupported by selected facts.
 Photographs, Instagram, a workshop syllabus and vacancy requirements do not establish
 independent skills or products. The portfolio is a link, not additional evidence.
-Other Employment / Pozostałe zatrudnienie is the employment section: require every
-selected title, employer and dates briefly, with no excluded technical achievements.
+On Baker CVs, Other Employment / Pozostałe zatrudnienie is the employment section:
+require every selected title, employer and dates briefly, with no excluded technical
+achievements. Baker cover letters need not repeat the full career chronology; any
+employment claim such a letter makes must stay source-backed.
 For Baker CVs require selected Home Baking Practice / Domowa praktyka piekarska,
 Workshops / Warsztaty, Other Employment / Pozostałe zatrudnienie, Education / Edukacja
 and a labeled clickable portfolio link when corresponding selected facts exist.
