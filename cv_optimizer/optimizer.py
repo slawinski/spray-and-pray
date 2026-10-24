@@ -58,7 +58,7 @@ class CVOptimizer:
     ) -> str:
         """Performs a single LLM completion and cleans the raw output."""
         system_prompt = SYSTEM_PROMPT + "\n\n" + build_language_instruction(language)
-        heading_instruction = build_cv_heading_instruction(language)
+        heading_instruction = build_cv_heading_instruction(language, context.profile)
         if heading_instruction:
             system_prompt += "\n\n" + heading_instruction
         user_content = (
@@ -93,9 +93,9 @@ class CVOptimizer:
         
         # 2. Aggressively strip common AI meta-commentary at the end
         fluff_patterns = [
-            r'(?i)\n*(Note:?|Note that|I\'ve tailored|I have tailored|Here is the optimized|This CV has been).*$',
-            r'(?i)\n*(Best regards|Sincerely|Good luck|Hope this helps|Please let me know).*$',
-            r'(?i)\n*(I have highlighted|I optimized this|Tailored specifically for).*$'
+            r'(?i)^[ \t]*(Note(?: that)?\b:?|I\'ve tailored|I have tailored|Here is the optimized|This CV has been).*$',
+            r'(?i)^[ \t]*(Best regards|Sincerely|Good luck|Hope this helps|Please let me know).*$',
+            r'(?i)^[ \t]*(I have highlighted|I optimized this|Tailored specifically for).*$'
         ]
         
         for pattern in fluff_patterns:

@@ -30,7 +30,7 @@ def generation(tmp_path, monkeypatch, temp_db, temp_apps_dir):
     monkeypatch.setattr(tracker, "CVOptimizer", lambda **kw: SimpleNamespace(optimize=cv))
     monkeypatch.setattr(tracker, "CoverLetterOptimizer", lambda **kw: SimpleNamespace(generate=letter))
 
-    def render(markdown, path):
+    def render(markdown, path, **kwargs):
         Path(path).write_bytes(b"%PDF-fake\n" + markdown.encode())
 
     renderer = Mock(side_effect=render)
@@ -64,15 +64,16 @@ def test_initial_letter_failure_keeps_published_cv(generation):
     assert g.db.get_latest_status(app_id) == "draft"
 
 
-def test_replacement_renderer_failure_preserves_pair_and_path(generation):
+@pytest.mark.parametrize("profile", ["it", "baker"])
+def test_replacement_renderer_failure_preserves_pair_and_path(generation, profile):
     g = generation
-    app_id = tracker.track("Acme", "Engineer", str(g.jd), cv_profile="it")
+    app_id = tracker.track("Acme", "Engineer", str(g.jd), cv_profile=profile)
     path = Path(g.db.get_application(app_id)[4])
     old_pdf = path.read_bytes()
     old_md = path.with_suffix(".md").read_text()
     g.cv.return_value = "## Summary\nReplacement"
 
-    def fail_render(markdown, staged_path):
+    def fail_render(markdown, staged_path, **kwargs):
         assert Path(staged_path) != path
         assert path.with_suffix(".md").read_text() == old_md
         assert g.db.get_application(app_id)[4] == str(path)
@@ -218,7 +219,7 @@ def test_migrated_application_regenerates_as_it_after_enrichment(generation, mon
     assert Path(g.db.get_application(app_id)[4]).is_file()
 
 
-@pytest.mark.parametrize("profile", ["it", "mechanical_engineering"])
+@pytest.mark.parametrize("profile", ["it", "mechanical_engineering", "baker"])
 @pytest.mark.parametrize("verdict", [
     '{"passed": false, "violations": [{"quote": "PRIVATE EXCERPT", "reason": "PRIVATE REASON"}]}',
     "malformed verdict", TimeoutError("PRIVATE PROVIDER ERROR"),
@@ -313,16 +314,17 @@ def test_tui_pilot_publishes_with_visible_advisory(generation, monkeypatch, key,
 
 @pytest.mark.parametrize("action,column", [(tracker.reoptimize, 4), (tracker.generate_cover_letter, 8)])
 @pytest.mark.parametrize("aba", [False, True])
-def test_tracker_captures_revision_before_writer(generation, action, column, aba):
+@pytest.mark.parametrize("profile", ["it", "baker"])
+def test_tracker_captures_revision_before_writer(generation, action, column, aba, profile):
     g = generation
-    app_id = tracker.track("Acme", "Engineer", str(g.jd), cv_profile="it", with_cover_letter=True)
+    app_id = tracker.track("Acme", "Engineer", str(g.jd), cv_profile=profile, with_cover_letter=True)
     path = Path(g.db.get_application(app_id)[column])
     before = (path.read_bytes(), path.with_suffix(".md").read_bytes())
     def switch(context, jd, language):
-        assert context.profile == "it"
-        g.db.set_application_profile(app_id, "mechanical_engineering")
+        assert context.profile == profile
+        g.db.set_application_profile(app_id, "it" if profile == "baker" else "mechanical_engineering")
         if aba:
-            g.db.set_application_profile(app_id, "it")
+            g.db.set_application_profile(app_id, profile)
         return "stale generated Markdown"
     writer = g.cv if column == 4 else g.letter
     writer.side_effect = switch
@@ -374,19 +376,20 @@ def test_publication_failure_restores_pair_and_database(generation, monkeypatch,
 
 
 @pytest.mark.parametrize("aba", [False, True])
-def test_stale_revision_cannot_publish(generation, aba):
+@pytest.mark.parametrize("profile", ["it", "baker"])
+def test_stale_revision_cannot_publish(generation, aba, profile):
     from cv_optimizer.documents import publish_document
     g = generation
-    app_id = tracker.track("Acme", "Engineer", str(g.jd), cv_profile="it")
+    app_id = tracker.track("Acme", "Engineer", str(g.jd), cv_profile=profile)
     path = Path(g.db.get_application(app_id)[4])
     before = (path.read_bytes(), path.with_suffix(".md").read_bytes())
     def render_and_switch(markdown, staged):
         g.render(markdown, staged)
-        g.db.set_application_profile(app_id, "mechanical_engineering")
+        g.db.set_application_profile(app_id, "it" if profile == "baker" else "mechanical_engineering")
         if aba:
-            g.db.set_application_profile(app_id, "it")
+            g.db.set_application_profile(app_id, profile)
     with pytest.raises(ValueError, match="profile|revision"):
-        publish_document(app_id, "it", 0, "stale", path, render_and_switch, "cv")
+        publish_document(app_id, profile, 0, "stale", path, render_and_switch, "cv")
     assert (path.read_bytes(), path.with_suffix(".md").read_bytes()) == before
     assert g.db.get_application(app_id)[4] is None
     assert not any(p.is_dir() for p in path.parent.iterdir())
@@ -482,3 +485,68 @@ def test_tracker_publishes_real_ledger_pdf_with_prepared_cv_context(generation, 
         assert "IT achievement sentinel" not in text
         assert all(role["title"] in text for role in source["experience"])
         assert "Designed engineering fixture 7." in text
+
+
+@pytest.mark.parametrize("language", ["en", "pl"])
+def test_baker_real_publication_interleaved_and_regenerated(generation, monkeypatch, language):
+    import fitz
+    from cv_optimizer.generator import PDFGenerator
+    from cv_optimizer.cover_letter import CoverLetterPDFGenerator
+    from cv_optimizer.profiles import resolve_profile
+    from test_generator import _make_test_image
+    g = generation
+    photo = g.master.parent / "synthetic.png"
+    _make_test_image(str(photo))
+    monkeypatch.setattr(settings, "candidate_photo_path", str(photo))
+    monkeypatch.setattr(tracker, "PDFGenerator", PDFGenerator)
+    monkeypatch.setattr(tracker, "CoverLetterPDFGenerator", CoverLetterPDFGenerator)
+    g.jd.write_text("Szukamy początkującego piekarza. Oferujemy pracę i szkolenie. Wymagania: obsługa pieców oraz aktualne badania sanitarne."
+                    if language == "pl" else "We are seeking a trainee baker for our team. Commercial ovens and sanitary clearance required.")
+    practice, workshop, employment = (("Domowa praktyka piekarska", "Warsztaty", "Pozostałe zatrudnienie")
+                                      if language == "pl" else ("Home Baking Practice", "Workshops", "Other Employment"))
+    g.cv.return_value = (f"# Jane Doe\n### Aspiring Baker\n## Summary\nHome hobbyist seeking trainee work.\n"
+                         f"## {practice}\nHobby, early 2023. More than 40 bakes, mostly country loaves, up to three per batch. Bread for friends on shared trips.\n"
+                         f"## {workshop}\nBread basics, Example Baking Studio, June 2025, Alex Example.\n"
+                         f"## {employment}\nPrevious career in software and mechanical engineering; now moving into baking.\n"
+                         "## Education\n**State University**\n\nMSc in Mechanical Engineering\n"
+                         "## Portfolio\n[Home baking portfolio](https://example.com/baking)\n\n"
+                         "[Crumb Companion](https://example.com/sourdough-assistant)\n\nBuilt a sourdough assistant with fermentation and hydration calculators.\n")
+    g.letter.return_value = "## Jane Doe\n\n" + ("Szanowni Państwo," if language == "pl" else "Dear Hiring Manager,") + "\n\nHome baking hobbyist seeking trainee work.\n\nJane Doe"
+    baker = tracker.track("Example Bakery", "Trainee", str(g.jd), cv_profile="baker", with_cover_letter=True)
+    tracker.track("Example Software", "Developer", str(g.jd), cv_profile="it")
+    tracker.track("Example Engineering", "Engineer", str(g.jd), cv_profile="mechanical_engineering")
+    tracker.reoptimize(baker)
+    tracker.generate_cover_letter(baker)
+    assert [c.args[0].profile for c in g.cv.call_args_list] == ["baker", "it", "mechanical_engineering", "baker"]
+    assert [c.args[0].profile for c in g.letter.call_args_list] == ["baker", "baker"]
+    source = json.loads(g.master.read_text())
+    for write in (g.cv.call_args_list[0], g.cv.call_args_list[-1], *g.letter.call_args_list):
+        kind = "cover_letter" if write in g.letter.call_args_list else "cv"
+        assert write.args[0] == resolve_profile(source, "baker", document_type=kind)
+        assert write.kwargs["language"] == language
+    assert [c.args[2] for c in g.checker.call_args_list] == ["cv", "cover_letter", "cv", "cv", "cv", "cover_letter"]
+    assert all(c.args[3] == language for c in g.checker.call_args_list)
+    app = g.db.get_application(baker)
+    with fitz.open(app[4]) as doc:
+        text = " ".join(p.get_text() for p in doc)
+        assert all(word in text for word in (practice, workshop, employment, "Previous career", "Crumb Companion", "State University"))
+        assert "Tech Corp" not in text and "Example Pumps" not in text
+        assert not any(p.get_image_info() for p in doc)
+        assert any(l.get("uri") == "https://example.com/baking" for p in doc for l in p.get_links())
+        assert any(l.get("uri") == "https://example.com/sourdough-assistant" for p in doc for l in p.get_links())
+    with fitz.open(app[8]) as doc:
+        assert "Jane Doe" in doc[0].get_text()
+    assert g.db.get_application_profile(baker) == ("baker", 0)
+
+
+def test_unprepared_baker_fails_before_writer_and_keeps_draft(generation):
+    g = generation
+    source = json.loads(g.master.read_text())
+    del source["profiles"]["baker"]
+    g.master.write_text(json.dumps(source))
+    app_id = tracker.track("Bakery", "Trainee", str(g.jd), cv_profile="baker", with_cover_letter=True)
+    assert g.db.get_latest_status(app_id) == "draft"
+    assert g.db.get_application(app_id)[4] is None and g.db.get_application(app_id)[8] is None
+    g.cv.assert_not_called()
+    g.letter.assert_not_called()
+    g.renderer.assert_not_called()

@@ -85,7 +85,7 @@ class TrackRequest(BaseModel):
     company: str
     role: str
     jd: str
-    cv_profile: Literal["it", "mechanical_engineering"]
+    cv_profile: Literal["it", "mechanical_engineering", "baker"]
     url: str = None
     source: str = None
 

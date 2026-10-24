@@ -124,3 +124,47 @@ def test_second_empty_output_fails_without_more_retries(kind):
     with pytest.raises(ValueError, match="empty"):
         writer(kind, client)(prepared(), "JD")
     assert len(client.requests) == 2
+
+
+@pytest.mark.parametrize("kind", ["cv", "cover_letter"])
+@pytest.mark.parametrize("language", ["en", "pl"])
+def test_baker_writers_receive_only_selected_sources_and_limits(kind, language):
+    from pathlib import Path
+    from cv_optimizer.profiles import resolve_profile
+    source = json.loads((Path(__file__).resolve().parent.parent / "master_cv.example.json").read_text())
+    context = resolve_profile(source, "baker", document_type=kind)
+    client = FakeClient("# Jane Example\n## Portfolio\n[Home baking portfolio](https://example.com/baking)")
+    result = writer(kind, client)(context, "Commercial ovens and sanitary clearance required", language)
+    system, user = [item["content"] for item in client.requests[0]["messages"]]
+    assert json.dumps(context.facts, indent=2) in user
+    assert "Built React dashboards" not in user and "excluded" not in user
+    assert "career_summary" in user
+    assert "Tech Corp" not in user and "Example Pumps" not in user
+    assert "linkedin" not in user and "github" not in user
+    assert "bake_count" in user and "sharing_context" in user
+    assert "description" in user and "sourdough-assistant" in user
+    assert all(term in system for term in ("hobby", "workshops" if kind == "cv" else "Workshops", "sanitary clearance", "syllabus", "professional qualification"))
+    assert "[Home baking portfolio](https://example.com/baking)" in result
+    if kind == "cv":
+        assert "Other Employment" in system and "square-bracket" in system
+        if language == "pl":
+            assert "## Domowa praktyka piekarska" in system
+            assert "## Warsztaty" in system and "## Pozostałe zatrudnienie" in system
+    else:
+        from datetime import date
+        assert date.today().isoformat() in system
+        assert "Do not infer measurement" in system
+        assert "700–800 characters" in system
+        assert "copy the selected full name exactly" in system
+
+
+@pytest.mark.parametrize("footer", ["Note: tailored to this job.", "Sincerely, the CV assistant", "I optimized this for you."])
+def test_cv_cleanup_preserves_portfolio_urls_and_descriptions(footer):
+    from cv_optimizer.optimizer import CVOptimizer
+    markdown = ("# Jane Example\n## Portfolio\n"
+                "[Crumb Notes](https://bread.triggernote.example/)\n\n"
+                "Built a sourdough assistant with fermentation calculators.\n\n"
+                "## Languages\nEnglish")
+    optimizer = CVOptimizer("http://fake", "fake", "fake")
+    assert optimizer._clean_output(markdown) == markdown
+    assert optimizer._clean_output(markdown + "\n\n" + footer) == markdown

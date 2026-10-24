@@ -109,7 +109,7 @@ def test_select_last_option_and_cancel_at_minimum(temp_db, key, select_id):
             overlay = select.query_one("SelectOverlay")
             assert overlay.region.bottom <= 12 and overlay.region.y >= 0
             await pilot.press("enter")
-            assert select.value == ("interview 1" if key == "s" else "mechanical_engineering")
+            assert select.value == ("interview 1" if key == "s" else "baker")
             await pilot.press("escape")
             assert len(app.screen_stack) == 1
             assert temp_db.get_application_profile(app_id) == ("it", 0)
@@ -126,7 +126,7 @@ def test_select_last_option_and_cancel_at_minimum(temp_db, key, select_id):
             if key == "v":
                 await tab_to(pilot, app, "yes")
                 await pilot.press("enter")
-                assert temp_db.get_application_profile(app_id) == ("mechanical_engineering", 1)
+                assert temp_db.get_application_profile(app_id) == ("baker", 1)
             else:
                 assert temp_db.get_latest_status(app_id) == "interview 1"
 

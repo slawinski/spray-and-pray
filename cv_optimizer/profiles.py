@@ -10,6 +10,8 @@
   fields below are the only copyable fields, even in a selected entry.
 * ``profile_shared`` requires explicit personal-info field names, exact language
   entry snapshots, and the exact source disclaimer string (or null to omit it).
+  Baker omits LinkedIn/GitHub contacts and may replace individual role selections
+  with an approved ``career_summary`` and empty ``roles``.
 * Roles use ``detailed``/``brief`` detail rules and exact achievement strings.
   Mechanical ``cv_role_detail`` overrides may mark selected IDs as ``ledger``:
   CVs retain identities only; cover letters keep the original role selections.
@@ -40,7 +42,7 @@ class ProfileContext:
     excluded: dict[str, Any]
 
 
-_NAMES = {"it", "mechanical_engineering"}
+_NAMES = {"it", "mechanical_engineering", "baker"}
 _CONTACT = {"name", "email", "phone", "linkedin", "github", "website", "location"}
 _IDENTITY = {"id", "title", "role", "company", "location", "start_date", "end_date"}
 _EDUCATION = {"id", "degree", "university", "location", "start_date", "end_date", "specialization", "thesis"}
@@ -50,7 +52,11 @@ _SECTIONS = {
     },
     "certifications": {"name", "issuer", "issue_date", "expiry_date", "url"},
     "languages": {"language", "proficiency"},
+    "home_practice": {"title", "context", "start_period", "frequency", "bake_count", "batch_size", "sharing_context", "activities"},
+    "workshops": {"name", "provider", "attendance_period", "instructor", "url"},
+    "portfolio_links": {"label", "url", "description"},
 }
+_BAKER_SECTIONS = {"home_practice", "workshops", "portfolio_links"}
 _REQUIRED = {"headline", "summary", "roles", "skills", "education"}
 _OPTIONAL = {"speaking_and_community", "certifications", "hobbies"}
 
@@ -62,7 +68,7 @@ def _require(condition: bool, message: str) -> None:
 
 def validate_profile_name(value: Any) -> str:
     _require(isinstance(value, str) and value in _NAMES,
-             "profile must be 'it' or 'mechanical_engineering'")
+             "profile must be 'it', 'mechanical_engineering', or 'baker'")
     return value
 
 
@@ -135,6 +141,14 @@ def _select(source: list, selectors: Any, where: str) -> list:
 def _snapshots(master: dict, section: str, selectors: Any) -> tuple[list, list]:
     fields = _SECTIONS[section]
     source = [_record(item, fields, section) for item in _list(master.get(section, []), section)]
+    if section in _BAKER_SECTIONS:
+        for record in source:
+            for key, value in record.items():
+                if key == "activities":
+                    for activity in _list(value, f"{section}.{key}"):
+                        _text(activity, f"{section}.{key}")
+                else:
+                    _text(value, f"{section}.{key}")
     for selector in _list(selectors, f"selectors.{section}"):
         _keys(selector, set(), fields, f"selectors.{section}")
     return source, _select(source, selectors, section)
@@ -143,6 +157,8 @@ def _snapshots(master: dict, section: str, selectors: Any) -> tuple[list, list]:
 def _prepare(master: dict, profile: str, policy: dict, roles: dict, education: dict,
              document_type: str) -> ProfileContext:
     optional = _OPTIONAL | ({"cv_role_detail"} if profile == "mechanical_engineering" else set())
+    if profile == "baker":
+        optional |= _BAKER_SECTIONS | {"career_summary"}
     policy = _keys(policy, _REQUIRED, optional, f"profiles.{profile}")
     headline = _text(policy["headline"], f"profiles.{profile}.headline")
     summary = policy["summary"]
@@ -152,12 +168,18 @@ def _prepare(master: dict, profile: str, policy: dict, roles: dict, education: d
         _text(summary, f"profiles.{profile}.summary")
     _narrative(summary, f"profiles.{profile}.summary")
     facts = {"headline": headline, "summary": deepcopy(summary)}
+    if "career_summary" in policy:
+        facts["career_summary"] = _text(policy["career_summary"], "profiles.baker.career_summary")
+        _require(policy["roles"] == {}, "Baker career_summary replaces individual roles; roles must be empty")
     excluded = {"identities": [], "achievements": [], "skills": [], "sections": {}}
 
     shared = _keys(master.get("profile_shared"), {"personal_info", "languages", "disclaimer"}, set(), "profile_shared")
     contact = _record(master.get("personal_info", {}), _CONTACT, "personal_info")
     selected_contact = _select(list(contact), shared["personal_info"], "profile_shared.personal_info")
     facts["personal_info"] = {key: contact[key] for key in selected_contact}
+    if profile == "baker":
+        for key in ("linkedin", "github"):
+            facts["personal_info"].pop(key, None)
     _, facts["languages"] = _snapshots(master, "languages", shared["languages"])
     if shared["disclaimer"] is not None:
         _text(shared["disclaimer"], "profile_shared.disclaimer")
@@ -211,10 +233,20 @@ def _prepare(master: dict, profile: str, policy: dict, roles: dict, education: d
 
     education_ids = _select(list(education), policy["education"], f"profiles.{profile}.education")
     facts["education"] = [_record(education[key], _EDUCATION, "education") for key in education_ids]
+    if profile == "baker":
+        concise_fields = {"id", "degree", "university"}
+        excluded["sections"]["education_fields"] = [
+            {key: value for key, value in entry.items() if key not in concise_fields}
+            for entry in facts["education"]
+        ]
+        facts["education"] = [
+            {key: value for key, value in entry.items() if key in concise_fields}
+            for entry in facts["education"]
+        ]
     excluded["sections"]["education"] = [
         _record(entry, _EDUCATION, "education") for key, entry in education.items() if key not in education_ids
     ]
-    for section in ("speaking_and_community", "certifications", "hobbies"):
+    for section in ("speaking_and_community", "certifications", "hobbies", "home_practice", "workshops", "portfolio_links"):
         if section == "hobbies":
             source = _list(master.get(section, []), section)
             for value in source:
