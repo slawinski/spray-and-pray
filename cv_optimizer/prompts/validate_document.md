@@ -25,6 +25,24 @@ dates, additional degrees, theses or specializations. For engineering CVs, the
 selected expanded degrees may include their supplied dates, specializations and
 theses. Do not borrow from excluded education views.
 
+For baker in either English or Polish, `home_practice` is hobby home baking,
+`workshops` are workshop attendance, and neither is paid employment or a professional
+qualification. Flag inflated hobby duration presented as professional experience,
+inflated frequency or batch size (especially daily production), commercial equipment
+proficiency, sanitary clearance or credentials unsupported by selected facts.
+Photographs, Instagram, a workshop syllabus and vacancy requirements do not establish
+independent skills or products. The portfolio is a link, not additional evidence.
+Other Employment / Pozostałe zatrudnienie is the employment section: require every
+selected title, employer and dates briefly, with no excluded technical achievements.
+For Baker CVs require selected Home Baking Practice / Domowa praktyka piekarska,
+Workshops / Warsztaty, Other Employment / Pozostałe zatrudnienie, Education / Edukacja
+and a labeled clickable portfolio link when corresponding selected facts exist.
+Practice and workshops must remain separate from employment and certifications.
+Education is only selected degree and university, not attendance dates,
+specialization or thesis. Do not treat the selected degree identity as excluded
+merely because another expanded view of that same degree is excluded.
+For IT and engineering, exclude Baker-only practice, workshops, portfolio and skills.
+
 The approved headline/summary can be engineering-led without claiming that the
 latest employment title changed. Respect role_detail: relevance, not recency,
 determines detail; retain selected recent IT jobs briefly and keep CV experience
