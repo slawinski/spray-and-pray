@@ -14,7 +14,8 @@
     "frameworks_and_libraries": ["React", "FastAPI"],
     "tools_and_infrastructure": ["Docker", "Git"],
     "soft_skills": ["Mentoring", "Public Speaking"],
-    "mechanical": ["SolidWorks", "Finite element analysis"]
+    "mechanical": ["SolidWorks", "Finite element analysis"],
+    "baking": ["Sourdough starter maintenance", "Dough mixing and fermentation", "Loaf shaping", "Country loaves"]
   },
   "experience": [
     {
@@ -95,6 +96,21 @@
       "proficiency": "Native"
     }
   ],
+  "home_practice": [{
+    "title": "Home bread baking",
+    "context": "Hobby, not paid employment",
+    "start_period": "early 2023",
+    "frequency": "Approximately once a month",
+    "batch_size": "Three loaves per bake",
+    "activities": ["Maintaining a sourdough starter", "Mixing and fermenting dough", "Shaping loaves", "Baking country loaves"]
+  }],
+  "workshops": [{
+    "name": "Bread basics",
+    "provider": "Example Baking Studio",
+    "attendance_period": "June 2025",
+    "instructor": "Alex Example"
+  }],
+  "portfolio_links": [{"label": "Home baking portfolio", "url": "https://example.com/baking"}],
   "hobbies": ["Hiking", "Photography", "Model engines"],
   "disclaimer": "I give consent for my personal data included in my application to be processed for the purposes of the recruitment process...",
   "profile_shared": {
@@ -134,6 +150,31 @@
         "issue_date": "05/2021"
       }],
       "hobbies": ["Hiking", "Photography"]
+    },
+    "baker": {
+      "headline": "Aspiring Baker",
+      "summary": "Home baking hobbyist seeking a beginner baker or trainee role, changing careers from engineering.",
+      "roles": {
+        "software": {"detail": "brief", "achievements": []},
+        "mechanical": {"detail": "brief", "achievements": []}
+      },
+      "skills": {"baking": ["Sourdough starter maintenance", "Dough mixing and fermentation", "Loaf shaping", "Country loaves"]},
+      "education": ["msc-it"],
+      "home_practice": [{
+        "title": "Home bread baking",
+        "context": "Hobby, not paid employment",
+        "start_period": "early 2023",
+        "frequency": "Approximately once a month",
+        "batch_size": "Three loaves per bake",
+        "activities": ["Maintaining a sourdough starter", "Mixing and fermenting dough", "Shaping loaves", "Baking country loaves"]
+      }],
+      "workshops": [{
+        "name": "Bread basics",
+        "provider": "Example Baking Studio",
+        "attendance_period": "June 2025",
+        "instructor": "Alex Example"
+      }],
+      "portfolio_links": [{"label": "Home baking portfolio", "url": "https://example.com/baking"}]
     },
     "mechanical_engineering": {
       "headline": "Mechanical Engineer with Software Experience",

@@ -40,7 +40,7 @@ class ProfileContext:
     excluded: dict[str, Any]
 
 
-_NAMES = {"it", "mechanical_engineering"}
+_NAMES = {"it", "mechanical_engineering", "baker"}
 _CONTACT = {"name", "email", "phone", "linkedin", "github", "website", "location"}
 _IDENTITY = {"id", "title", "role", "company", "location", "start_date", "end_date"}
 _EDUCATION = {"id", "degree", "university", "location", "start_date", "end_date", "specialization", "thesis"}
@@ -50,7 +50,11 @@ _SECTIONS = {
     },
     "certifications": {"name", "issuer", "issue_date", "expiry_date", "url"},
     "languages": {"language", "proficiency"},
+    "home_practice": {"title", "context", "start_period", "frequency", "batch_size", "activities"},
+    "workshops": {"name", "provider", "attendance_period", "instructor", "url"},
+    "portfolio_links": {"label", "url"},
 }
+_BAKER_SECTIONS = {"home_practice", "workshops", "portfolio_links"}
 _REQUIRED = {"headline", "summary", "roles", "skills", "education"}
 _OPTIONAL = {"speaking_and_community", "certifications", "hobbies"}
 
@@ -62,7 +66,7 @@ def _require(condition: bool, message: str) -> None:
 
 def validate_profile_name(value: Any) -> str:
     _require(isinstance(value, str) and value in _NAMES,
-             "profile must be 'it' or 'mechanical_engineering'")
+             "profile must be 'it', 'mechanical_engineering', or 'baker'")
     return value
 
 
@@ -135,6 +139,14 @@ def _select(source: list, selectors: Any, where: str) -> list:
 def _snapshots(master: dict, section: str, selectors: Any) -> tuple[list, list]:
     fields = _SECTIONS[section]
     source = [_record(item, fields, section) for item in _list(master.get(section, []), section)]
+    if section in _BAKER_SECTIONS:
+        for record in source:
+            for key, value in record.items():
+                if key == "activities":
+                    for activity in _list(value, f"{section}.{key}"):
+                        _text(activity, f"{section}.{key}")
+                else:
+                    _text(value, f"{section}.{key}")
     for selector in _list(selectors, f"selectors.{section}"):
         _keys(selector, set(), fields, f"selectors.{section}")
     return source, _select(source, selectors, section)
@@ -143,6 +155,8 @@ def _snapshots(master: dict, section: str, selectors: Any) -> tuple[list, list]:
 def _prepare(master: dict, profile: str, policy: dict, roles: dict, education: dict,
              document_type: str) -> ProfileContext:
     optional = _OPTIONAL | ({"cv_role_detail"} if profile == "mechanical_engineering" else set())
+    if profile == "baker":
+        optional |= _BAKER_SECTIONS
     policy = _keys(policy, _REQUIRED, optional, f"profiles.{profile}")
     headline = _text(policy["headline"], f"profiles.{profile}.headline")
     summary = policy["summary"]
@@ -211,10 +225,20 @@ def _prepare(master: dict, profile: str, policy: dict, roles: dict, education: d
 
     education_ids = _select(list(education), policy["education"], f"profiles.{profile}.education")
     facts["education"] = [_record(education[key], _EDUCATION, "education") for key in education_ids]
+    if profile == "baker":
+        concise_fields = {"id", "degree", "university"}
+        excluded["sections"]["education_fields"] = [
+            {key: value for key, value in entry.items() if key not in concise_fields}
+            for entry in facts["education"]
+        ]
+        facts["education"] = [
+            {key: value for key, value in entry.items() if key in concise_fields}
+            for entry in facts["education"]
+        ]
     excluded["sections"]["education"] = [
         _record(entry, _EDUCATION, "education") for key, entry in education.items() if key not in education_ids
     ]
-    for section in ("speaking_and_community", "certifications", "hobbies"):
+    for section in ("speaking_and_community", "certifications", "hobbies", "home_practice", "workshops", "portfolio_links"):
         if section == "hobbies":
             source = _list(master.get(section, []), section)
             for value in source:

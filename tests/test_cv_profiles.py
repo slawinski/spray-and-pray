@@ -143,7 +143,7 @@ def test_unknown_profile_names(value):
         validate_profile_name(value)
 
 
-@pytest.mark.parametrize("value", ["it", "mechanical_engineering"])
+@pytest.mark.parametrize("value", ["it", "mechanical_engineering", "baker"])
 def test_known_profile_names(value):
     assert validate_profile_name(value) == value
 
@@ -212,3 +212,64 @@ def test_optional_sections_require_explicit_selection(source):
         assert field not in facts
     assert facts["personal_info"] == {}
     assert facts["languages"] == []
+
+
+@pytest.mark.parametrize("document_type", ["cv", "cover_letter"])
+def test_baker_projection_is_distinct_and_concise(source, document_type):
+    context = resolve_profile(source, "baker", document_type=document_type)
+    assert context.facts["home_practice"] == source["home_practice"]
+    assert context.facts["workshops"] == source["workshops"]
+    assert context.facts["portfolio_links"] == source["portfolio_links"]
+    assert context.facts["education"] == [{k: source["education"][0][k] for k in ("id", "degree", "university")}]
+    assert context.rules["role_detail"] == {r["id"]: "brief" for r in source["experience"]}
+    assert all(not r["achievements"] for r in context.facts["experience"])
+    assert [r["id"] for r in context.facts["experience"]] == [r["id"] for r in source["experience"]]
+    assert "start_date" in context.excluded["sections"]["education_fields"][0]
+    assert "certifications" not in context.facts
+
+
+def test_baking_additions_preserve_existing_writer_projections(source):
+    old = deepcopy(source)
+    del old["profiles"]["baker"]
+    for section in ("home_practice", "workshops", "portfolio_links"):
+        del old[section]
+    del old["skills"]["baking"]
+    for profile in ("it", "mechanical_engineering"):
+        for document_type in ("cv", "cover_letter"):
+            before = resolve_profile(old, profile, document_type=document_type)
+            after = resolve_profile(source, profile, document_type=document_type)
+            assert (before.facts, before.rules) == (after.facts, after.rules)
+            for section in ("home_practice", "workshops", "portfolio_links"):
+                assert after.excluded["sections"][section] == source[section]
+    with pytest.raises(ProfileError, match="not prepared"):
+        resolve_profile(old, "baker")
+
+
+@pytest.mark.parametrize("section", ["home_practice", "workshops", "portfolio_links"])
+@pytest.mark.parametrize("failure", ["stale", "duplicate", "ambiguous", "wildcard", "unknown", "wrong_profile"])
+def test_baker_snapshot_failures_validate_all_policies(source, section, failure):
+    selectors = source["profiles"]["baker"][section]
+    if failure == "stale":
+        selectors[0][next(iter(selectors[0]))] = "Changed"
+    elif failure == "duplicate":
+        selectors.append(deepcopy(selectors[0]))
+    elif failure == "ambiguous":
+        source[section].append(deepcopy(source[section][0]))
+    elif failure == "wildcard":
+        selectors[0] = "*"
+    elif failure == "unknown":
+        selectors[0]["unknown"] = "No"
+    else:
+        source["profiles"]["it"][section] = selectors
+    with pytest.raises(ProfileError):
+        resolve_profile(source, "it")
+
+
+def test_baker_omission_and_independence(source):
+    context = resolve_profile(source, "baker")
+    context.facts["home_practice"][0]["activities"].append("Changed")
+    assert "Changed" not in source["home_practice"][0]["activities"]
+    for section in ("home_practice", "workshops", "portfolio_links"):
+        del source["profiles"]["baker"][section]
+    facts = resolve_profile(source, "baker").facts
+    assert all(s not in facts for s in ("home_practice", "workshops", "portfolio_links"))
