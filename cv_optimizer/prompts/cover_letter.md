@@ -18,6 +18,17 @@ The portfolio link is not additional evidence. Draw from the same selected bakin
 facts as the CV; do not restore excluded technical achievements. Cite only the
 concise selected degree/university if relevant. Translate baking facts naturally
 without broadening them. Keep career-change positioning honest and entry-level.
+Do not infer measurement, process discipline, systematic working habits, reliability,
+learning ability or any other transferable skill from an engineering degree or job
+title alone. Describe the career change without inventing what those jobs taught
+the candidate. Explicitly call the baking practice a hobby, not merely 'experience'.
+Aim for 700–800 characters for the entire salutation/body/sign-off, safely below
+the existing 1000-character hard limit. Use two short body paragraphs rather than
+expanding to match the generic paragraph counts. Prioritize hobby context and the
+trainee target, a few confirmed techniques, and workshop attendance; do not repeat
+the full career chronology, portfolio URL, or every practice detail from the CV.
+If naming a workshop instructor, copy the selected full name exactly, including
+diacritics and hyphens; do not translate, shorten, or change its spelling.
 
 Use engineering-led positioning for the engineering profile without rewriting actual employment titles or dates. Use `role_detail` to select relevant stories, not simply the newest role. Preserve achievement attribution to its source role, even where IT and mechanical roles share an employer. Do not require a software tech stack or invented metric for a mechanical accomplishment. Historical education or tool use does not establish current proficiency or current mechanical practice.
 

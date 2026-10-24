@@ -41,6 +41,10 @@ Practice and workshops must remain separate from employment and certifications.
 Education is only selected degree and university, not attendance dates,
 specialization or thesis. Do not treat the selected degree identity as excluded
 merely because another expanded view of that same degree is excluded.
+For Baker letters, flag inferred transferable abilities (measurement, process
+discipline, systematic habits, reliability or learning ability) attributed to a
+degree or employment title without explicit selected evidence. Home baking must
+be identified as a hobby, not implied to be paid work by ambiguous 'experience'.
 For IT and engineering, exclude Baker-only practice, workshops, portfolio and skills.
 
 The approved headline/summary can be engineering-led without claiming that the

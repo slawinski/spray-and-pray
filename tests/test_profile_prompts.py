@@ -145,3 +145,9 @@ def test_baker_writers_receive_only_selected_sources_and_limits(kind, language):
         if language == "pl":
             assert "## Domowa praktyka piekarska" in system
             assert "## Warsztaty" in system and "## Pozostałe zatrudnienie" in system
+    else:
+        from datetime import date
+        assert date.today().isoformat() in system
+        assert "Do not infer measurement" in system
+        assert "700–800 characters" in system
+        assert "copy the selected full name exactly" in system

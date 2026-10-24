@@ -1,6 +1,7 @@
 import json
 import re
 import logging
+from datetime import date
 from pathlib import Path
 from typing import Dict, Any
 from openai import OpenAI
@@ -136,6 +137,11 @@ class CoverLetterOptimizer:
     ) -> str:
         """Performs a single LLM completion and cleans the raw output."""
         system_prompt = SYSTEM_PROMPT + "\n\n" + self._language_instruction(language)
+        if context.profile == "baker":
+            system_prompt += (
+                f"\n\nCurrent date: {date.today().isoformat()}. "
+                "Use this date, not a template example or workshop date."
+            )
         user_content = (
             f"SELECTED PROFILE: {context.profile}\n"
             f"APPROVED CV DATA:\n{json.dumps(context.facts, indent=2)}\n\n"
