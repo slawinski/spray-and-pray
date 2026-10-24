@@ -319,9 +319,11 @@ class PDFGenerator:
         baker_headings = {
             "home baking practice": "Home Baking Practice",
             "domowa praktyka piekarska": "Home Baking Practice",
+            "domowy wypiek chleba": "Home Baking Practice",
             "workshops": "Workshops", "warsztaty": "Workshops",
             "portfolio": "Portfolio",
             "other employment": "Experience", "pozostałe zatrudnienie": "Experience",
+            "dotychczasowa praca zawodowa": "Experience",
         }
         if lowered in baker_headings:
             return baker_headings[lowered]

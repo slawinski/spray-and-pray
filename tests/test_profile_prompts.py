@@ -148,8 +148,8 @@ def test_baker_writers_receive_only_selected_sources_and_limits(kind, language):
     if kind == "cv":
         assert "Other Employment" in system and "square-bracket" in system
         if language == "pl":
-            assert "## Domowa praktyka piekarska" in system
-            assert "## Warsztaty" in system and "## Pozostałe zatrudnienie" in system
+            assert "## Domowy wypiek chleba" in system
+            assert "## Warsztaty" in system and "## Dotychczasowa praca zawodowa" in system
     else:
         from datetime import date
         assert date.today().isoformat() in system

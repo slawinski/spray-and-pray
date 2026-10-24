@@ -680,8 +680,10 @@ Employment** and **Education**, after Summary. The sidebar includes a labeled,
 clickable **Portfolio** links and selected descriptions alongside contact, skills
 and languages. Baker omits LinkedIn and GitHub from the selected contact fields.
 Polish JDs
-use Polish documents, including **Domowa praktyka piekarska**, **Warsztaty** and
-**Pozostałe zatrudnienie**. The configured candidate portrait appears as on other
+use Polish documents, including **Domowy wypiek chleba**, **Warsztaty** and
+**Dotychczasowa praca zawodowa**. Polish Baker instructions favor natural bakery
+language over literal English translations and state the hobby context once
+without repeated disclaimers. The configured candidate portrait appears as on other
 CVs; bread and Instagram photographs are not embedded. The same selected facts
 govern initial and regenerated letters. Hobby practice is not paid employment,
 and workshop attendance is not certification or professional experience. Advisory

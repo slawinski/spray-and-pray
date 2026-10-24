@@ -33,6 +33,13 @@ the earlier frequency/fixed-batch facts and the role-by-role chronology decision
   just as on other profiles. The no-photos choice applies only to bread/Instagram
   portfolio imagery. This supersedes the earlier Baker photo suppression in
   KTD5 and its implementation/verification notes below.
+- Polish wording revision: write directly for a Polish bakery, using natural
+  terminology and a single clear hobby statement rather than literal English
+  phrasing and repeated disclaimers. Use O mnie, Domowy wypiek chleba,
+  Dotychczasowa praca zawodowa and Wykształcenie as headings. Legacy headings
+  remain renderable/checkable. This changes presentation instructions, not master
+  facts; use the candidate's current Baker career summary without restoring
+  removed background or portfolio descriptions.
 
 ## Goal Capsule
 

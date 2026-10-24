@@ -120,7 +120,7 @@ def test_excluded_title_is_not_a_keyword_ban_on_approved_titles(entry):
                           context, "cv").warnings == ()
 
 
-@pytest.mark.parametrize("section", ["Experience", "Doświadczenie", "Other Employment", "Pozostałe zatrudnienie"])
+@pytest.mark.parametrize("section", ["Experience", "Doświadczenie", "Other Employment", "Pozostałe zatrudnienie", "Dotychczasowa praca zawodowa"])
 def test_excluded_ledger_title_warns_without_matching_employment_identity(section):
     check, _ = validator('{"passed": true, "violations": []}')
     markdown = (f"# Candidate\n## {section}\n"

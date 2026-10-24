@@ -37,7 +37,8 @@ bounds, not fixed quantities. Do not demand a monthly frequency when none is sel
 Sharing bread with friends on private trips must not become customers, catering or
 commercial production. Selected portfolio descriptions may establish authorship and
 features of a baking app, not professional baking qualifications.
-On Baker CVs, Other Employment / Pozostałe zatrudnienie is the career section.
+On Baker CVs, Other Employment / Dotychczasowa praca zawodowa (also the legacy
+Pozostałe zatrudnienie heading) is the career section.
 When `career_summary` is selected, require only a short source-backed paragraph,
 not individual titles, employers or dates. This approved broad career summary is
 allowed even though the underlying individual employment identities are excluded;
@@ -45,8 +46,8 @@ do not restore those roles or infer transferable abilities. Without career_summa
 require every selected title, employer and dates briefly, with no excluded technical
 achievements. Baker cover letters need not repeat the career paragraph or chronology; any
 employment claim such a letter makes must stay source-backed.
-For Baker CVs require selected Home Baking Practice / Domowa praktyka piekarska,
-Workshops / Warsztaty, Other Employment / Pozostałe zatrudnienie, Education / Edukacja
+For Baker CVs require selected Home Baking Practice / Domowy wypiek chleba,
+Workshops / Warsztaty, Other Employment / Dotychczasowa praca zawodowa, Education / Wykształcenie
 and labeled clickable links for each selected portfolio entry, with its description
 when supplied, when corresponding selected facts exist. Do not add LinkedIn or GitHub
 contact links for Baker.
@@ -58,6 +59,12 @@ For Baker letters, flag inferred transferable abilities (measurement, process
 discipline, systematic habits, reliability or learning ability) attributed to a
 degree or employment title without explicit selected evidence. Home baking must
 be identified as a hobby, not implied to be paid work by ambiguous 'experience'.
+One clear hobby statement is sufficient; do not demand repeated disclaimers that
+the activity was unpaid or non-professional. Natural Polish paraphrases, translated
+descriptive portfolio labels and the headings O mnie, Domowy wypiek chleba,
+Dotychczasowa praca zawodowa and Wykształcenie are valid. Legacy Polish headings
+remain valid too. Do not require literal English wording or interpret a faithful
+paraphrase as a new fact. Do not accept invented qualifications or CEFR levels.
 For IT and engineering, exclude Baker-only practice, workshops, portfolio and skills.
 
 The approved headline/summary can be engineering-led without claiming that the

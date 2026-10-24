@@ -174,7 +174,7 @@ def test_workshops_routing_does_not_collide_with_employment():
 def test_baker_sections_links_and_configured_portrait(tmp_path, monkeypatch, polish):
     from cv_optimizer.config import settings
     from cv_optimizer.optimizer import CVOptimizer
-    labels = (["Podsumowanie", "Domowa praktyka piekarska", "Warsztaty", "Pozostałe zatrudnienie", "Edukacja"]
+    labels = (["O mnie", "Domowy wypiek chleba", "Warsztaty", "Dotychczasowa praca zawodowa", "Wykształcenie"]
               if polish else ["Summary", "Home Baking Practice", "Workshops", "Other Employment", "Education"])
     md = "# Jane Example\n### Aspiring Baker\n" + "\n".join(
         f"## {label}\n{content}\n" for label, content in zip(labels, [

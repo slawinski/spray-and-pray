@@ -37,6 +37,24 @@ the full career chronology, portfolio URL, or every practice detail from the CV.
 If naming a workshop instructor, copy the selected full name exactly, including
 diacritics and hyphens; do not translate, shorten, or change its spelling.
 
+For Baker letters in Polish, write directly to a Polish bakery in short, natural
+sentences, not translated corporate language. Use "Szanowni Państwo," and
+"Z poważaniem," instead of the generic English salutation and sign-off below.
+Start with the candidate's reason for applying and selected baking practice,
+not a restatement of the vacancy. Avoid abstract phrases such as "moją praktykę
+piekarską opieram na hobby"; say plainly "hobbystycznie piekę chleb".
+Prefer "Mam za sobą ponad N wypieków" to "sesje wypiekowe", preserving the
+selected count and qualifier. Use "prowadzenie zakwasu" and "nawodnienie ciasta"
+where supported; country loaves are "chleby wiejskie", not "wiejskie bochenki".
+A guided bake flow means "instrukcje krok po kroku", not a
+"przepływ wypieku". Identify baking as a hobby once; do not add repeated denials
+of professional experience or paid work. Keep every factual boundary above.
+Do not introduce a routine with "na co dzień" or "codziennie" unless daily
+frequency is explicitly selected; use an unqualified description of the activities.
+Retain the selected original degree wording if no official Polish title is
+supplied, rather than inventing a Polish qualification. These are wording examples,
+not new facts or a requirement to mention every example in a short letter.
+
 Use engineering-led positioning for the engineering profile without rewriting actual employment titles or dates. Use `role_detail` to select relevant stories, not simply the newest role. Preserve achievement attribution to its source role, even where IT and mechanical roles share an employer. Do not require a software tech stack or invented metric for a mechanical accomplishment. Historical education or tool use does not establish current proficiency or current mechanical practice.
 
 For IT, retain only its approved concise academic qualification; never add expanded degree dates, theses, specializations or another degree. For engineering, only its selected expanded qualifications may be cited with supplied dates, specializations and theses. An engineering degree is not mechanical employment. The vacancy title in the Re: line identifies the application, not a title held by the candidate.

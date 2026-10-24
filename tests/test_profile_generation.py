@@ -502,7 +502,7 @@ def test_baker_real_publication_interleaved_and_regenerated(generation, monkeypa
     monkeypatch.setattr(tracker, "CoverLetterPDFGenerator", CoverLetterPDFGenerator)
     g.jd.write_text("Szukamy początkującego piekarza. Oferujemy pracę i szkolenie. Wymagania: obsługa pieców oraz aktualne badania sanitarne."
                     if language == "pl" else "We are seeking a trainee baker for our team. Commercial ovens and sanitary clearance required.")
-    practice, workshop, employment = (("Domowa praktyka piekarska", "Warsztaty", "Pozostałe zatrudnienie")
+    practice, workshop, employment = (("Domowy wypiek chleba", "Warsztaty", "Dotychczasowa praca zawodowa")
                                       if language == "pl" else ("Home Baking Practice", "Workshops", "Other Employment"))
     g.cv.return_value = (f"# Jane Doe\n### Aspiring Baker\n## Summary\nHome hobbyist seeking trainee work.\n"
                          f"## {practice}\nHobby, early 2023. More than 40 bakes, mostly country loaves, up to three per batch. Bread for friends on shared trips.\n"
