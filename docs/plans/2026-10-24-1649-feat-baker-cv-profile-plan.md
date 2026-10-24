@@ -10,6 +10,26 @@ execution: code
 
 # Baker CV Profile - Plan
 
+## Candidate revision after PR #6 (2026-10-24)
+
+The candidate changed the presentation contract below. This revision supersedes
+the earlier frequency/fixed-batch facts and the role-by-role chronology decisions
+(R5, R8, R10 and the corresponding KTD3/KTD4 details):
+
+- Use over 70 bakes, mostly country loaves, with batches of **up to** four loaves.
+  Do not state a monthly schedule or a fixed number of loaves per bake. A bake
+  means a baking session, not a single loaf.
+- Include frequently supplying bread for friends during group trips to a rented
+  country house as hobby practice, not catering or commercial experience.
+- Replace individual IT/engineering roles, employers and dates with one approved
+  short career summary. The Baker writer receives that summary rather than role
+  records; existing IT and engineering projections remain unchanged.
+- Link the candidate's 5ciastek sourdough assistant at
+  https://5ciastek.triggernote.app/ alongside the Instagram portfolio. Describe
+  the self-built app's fermentation/hydration calculators, guided bake flow and
+  bake history. The source repository is context, not a CV link.
+- Omit LinkedIn and GitHub contact links from Baker CVs and cover letters.
+
 ## Goal Capsule
 
 - **Objective:** The candidate can apply for beginner-baker and trainee roles with documents that present their home baking practice, training, and previous work history accurately.

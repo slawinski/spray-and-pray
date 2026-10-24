@@ -505,12 +505,12 @@ def test_baker_real_publication_interleaved_and_regenerated(generation, monkeypa
     practice, workshop, employment = (("Domowa praktyka piekarska", "Warsztaty", "Pozostałe zatrudnienie")
                                       if language == "pl" else ("Home Baking Practice", "Workshops", "Other Employment"))
     g.cv.return_value = (f"# Jane Doe\n### Aspiring Baker\n## Summary\nHome hobbyist seeking trainee work.\n"
-                         f"## {practice}\nHobby, early 2023. Approximately monthly, three loaves.\n"
+                         f"## {practice}\nHobby, early 2023. More than 40 bakes, mostly country loaves, up to three per batch. Bread for friends on shared trips.\n"
                          f"## {workshop}\nBread basics, Example Baking Studio, June 2025, Alex Example.\n"
-                         f"## {employment}\n### Senior Software Engineer\nTech Corp | 01/2020 - Present\n\n"
-                         "### Mechanical Design Engineer\nExample Pumps | 06/2014 - 03/2019\n"
+                         f"## {employment}\nPrevious career in software and mechanical engineering; now moving into baking.\n"
                          "## Education\n**State University**\n\nMSc in Mechanical Engineering\n"
-                         "## Portfolio\n[Home baking portfolio](https://example.com/baking)\n")
+                         "## Portfolio\n[Home baking portfolio](https://example.com/baking)\n\n"
+                         "[Crumb Companion](https://example.com/sourdough-assistant)\n\nBuilt a sourdough assistant with fermentation and hydration calculators.\n")
     g.letter.return_value = "## Jane Doe\n\n" + ("Szanowni Państwo," if language == "pl" else "Dear Hiring Manager,") + "\n\nHome baking hobbyist seeking trainee work.\n\nJane Doe"
     baker = tracker.track("Example Bakery", "Trainee", str(g.jd), cv_profile="baker", with_cover_letter=True)
     tracker.track("Example Software", "Developer", str(g.jd), cv_profile="it")
@@ -529,9 +529,11 @@ def test_baker_real_publication_interleaved_and_regenerated(generation, monkeypa
     app = g.db.get_application(baker)
     with fitz.open(app[4]) as doc:
         text = " ".join(p.get_text() for p in doc)
-        assert all(word in text for word in (practice, workshop, employment, "Tech Corp", "Example Pumps", "State University"))
+        assert all(word in text for word in (practice, workshop, employment, "Previous career", "Crumb Companion", "State University"))
+        assert "Tech Corp" not in text and "Example Pumps" not in text
         assert not any(p.get_image_info() for p in doc)
         assert any(l.get("uri") == "https://example.com/baking" for p in doc for l in p.get_links())
+        assert any(l.get("uri") == "https://example.com/sourdough-assistant" for p in doc for l in p.get_links())
     with fitz.open(app[8]) as doc:
         assert "Jane Doe" in doc[0].get_text()
     assert g.db.get_application_profile(baker) == ("baker", 0)

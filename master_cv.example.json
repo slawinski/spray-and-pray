@@ -100,8 +100,9 @@
     "title": "Home bread baking",
     "context": "Hobby, not paid employment",
     "start_period": "early 2023",
-    "frequency": "Approximately once a month",
-    "batch_size": "Three loaves per bake",
+    "bake_count": "More than 40 bakes, mostly country loaves",
+    "batch_size": "Up to three loaves per batch",
+    "sharing_context": "Baked bread for friends on shared countryside trips",
     "activities": ["Maintaining a sourdough starter", "Mixing and fermenting dough", "Shaping loaves", "Baking country loaves"]
   }],
   "workshops": [{
@@ -110,7 +111,10 @@
     "attendance_period": "June 2025",
     "instructor": "Alex Example"
   }],
-  "portfolio_links": [{"label": "Home baking portfolio", "url": "https://example.com/baking"}],
+  "portfolio_links": [
+    {"label": "Home baking portfolio", "url": "https://example.com/baking"},
+    {"label": "Crumb Companion", "url": "https://example.com/sourdough-assistant", "description": "Built a sourdough assistant with fermentation and hydration calculators, a guided bake flow and bake history."}
+  ],
   "hobbies": ["Hiking", "Photography", "Model engines"],
   "disclaimer": "I give consent for my personal data included in my application to be processed for the purposes of the recruitment process...",
   "profile_shared": {
@@ -154,18 +158,17 @@
     "baker": {
       "headline": "Aspiring Baker",
       "summary": "Home baking hobbyist seeking a beginner baker or trainee role, changing careers from engineering.",
-      "roles": {
-        "software": {"detail": "brief", "achievements": []},
-        "mechanical": {"detail": "brief", "achievements": []}
-      },
+      "career_summary": "Previous career in software and mechanical engineering; now moving into baking.",
+      "roles": {},
       "skills": {"baking": ["Sourdough starter maintenance", "Dough mixing and fermentation", "Loaf shaping", "Country loaves"]},
       "education": ["msc-it"],
       "home_practice": [{
         "title": "Home bread baking",
         "context": "Hobby, not paid employment",
         "start_period": "early 2023",
-        "frequency": "Approximately once a month",
-        "batch_size": "Three loaves per bake",
+        "bake_count": "More than 40 bakes, mostly country loaves",
+        "batch_size": "Up to three loaves per batch",
+        "sharing_context": "Baked bread for friends on shared countryside trips",
         "activities": ["Maintaining a sourdough starter", "Mixing and fermenting dough", "Shaping loaves", "Baking country loaves"]
       }],
       "workshops": [{
@@ -174,7 +177,10 @@
         "attendance_period": "June 2025",
         "instructor": "Alex Example"
       }],
-      "portfolio_links": [{"label": "Home baking portfolio", "url": "https://example.com/baking"}]
+      "portfolio_links": [
+        {"label": "Home baking portfolio", "url": "https://example.com/baking"},
+        {"label": "Crumb Companion", "url": "https://example.com/sourdough-assistant", "description": "Built a sourdough assistant with fermentation and hydration calculators, a guided bake flow and bake history."}
+      ]
     },
     "mechanical_engineering": {
       "headline": "Mechanical Engineer with Software Experience",

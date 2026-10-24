@@ -221,11 +221,40 @@ def test_baker_projection_is_distinct_and_concise(source, document_type):
     assert context.facts["workshops"] == source["workshops"]
     assert context.facts["portfolio_links"] == source["portfolio_links"]
     assert context.facts["education"] == [{k: source["education"][0][k] for k in ("id", "degree", "university")}]
-    assert context.rules["role_detail"] == {r["id"]: "brief" for r in source["experience"]}
-    assert all(not r["achievements"] for r in context.facts["experience"])
-    assert [r["id"] for r in context.facts["experience"]] == [r["id"] for r in source["experience"]]
+    assert context.rules["role_detail"] == {}
+    assert context.facts["experience"] == []
+    assert context.facts["career_summary"] == source["profiles"]["baker"]["career_summary"]
+    assert "Tech Corp" not in json.dumps(context.facts)
+    assert "Example Pumps" not in json.dumps(context.facts)
+    assert "linkedin" not in context.facts["personal_info"]
+    assert "github" not in context.facts["personal_info"]
+    assert context.facts["personal_info"]["email"] == source["personal_info"]["email"]
+    assert context.facts["personal_info"]["phone"] == source["personal_info"]["phone"]
+    assert "frequency" not in context.facts["home_practice"][0]
     assert "start_date" in context.excluded["sections"]["education_fields"][0]
     assert "certifications" not in context.facts
+
+
+def test_legacy_baker_policy_can_still_select_brief_roles(source):
+    del source["profiles"]["baker"]["career_summary"]
+    source["profiles"]["baker"]["roles"] = {
+        r["id"]: {"detail": "brief", "achievements": []} for r in source["experience"]}
+    context = resolve_profile(source, "baker")
+    assert [r["id"] for r in context.facts["experience"]] == [r["id"] for r in source["experience"]]
+    assert all(not r["achievements"] for r in context.facts["experience"])
+
+
+@pytest.mark.parametrize("value", ["", "*", [], None])
+def test_baker_career_summary_is_approved_nonempty_text(source, value):
+    source["profiles"]["baker"]["career_summary"] = value
+    with pytest.raises(ProfileError):
+        resolve_profile(source, "baker")
+
+
+def test_baker_career_summary_cannot_reintroduce_role_list(source):
+    source["profiles"]["baker"]["roles"] = {"software": {"detail": "brief", "achievements": []}}
+    with pytest.raises(ProfileError, match="replaces individual roles"):
+        resolve_profile(source, "baker")
 
 
 def test_baking_additions_preserve_existing_writer_projections(source):

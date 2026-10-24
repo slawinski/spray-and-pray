@@ -16,8 +16,11 @@ Portfolio, Skills, Languages, GDPR Disclaimer. Use the supplied Polish heading
 instruction for Polish CVs. Skip sections without selected data, never invent them.
 
 Foreground selected `home_practice` as purely hobby home baking, separate from paid
-employment. Retain its approximate start period, frequency and batch size at their
-supplied precision. Describe only selected activities; translate baking descriptions
+employment. Retain the supplied start period, bake count and batch-size upper bound
+without inventing a regular schedule. A bake count counts baking sessions, not loaves;
+"up to" is a maximum, not a fixed batch size. Describe selected sharing_context as
+baking for friends on private trips, not customers, catering or paid production.
+Describe only selected activities; translate baking descriptions
 and skills naturally into the target language without broadening their meaning.
 `workshops` are attendance at workshops: retain name, provider, attendance period and
 instructor, not a certification, apprenticeship or professional qualification.
@@ -26,13 +29,20 @@ daily production, commercial equipment proficiency, sanitary clearance or creden
 Never infer independent skills or products from photographs, Instagram, a syllabus
 or vacancy requests. A portfolio is a link, not additional source evidence.
 
-Under Other Employment retain EVERY selected career entry with actual title,
+When `career_summary` is supplied, render it under Other Employment as one short
+paragraph about the previous career and change of direction. Do not reconstruct a
+role-by-role history, list employers or dates, or infer transferable skills. This
+overrides the generic role layout and every-role requirements below. Otherwise,
+under Other Employment retain EVERY selected career entry with actual title,
 employer and dates, without technical achievements or invented transferable skills.
 Empty achievement arrays require no bullets. Education contains only selected
 degree and university, no specialization, thesis or dates. Portfolio is a labeled
-clickable Markdown link using the exact selected URL: `[label](url)`. This link
+clickable Markdown link for EACH selected entry using its exact URL: `[label](url)`.
+Include its selected description when present. A self-built baking app is a hobby
+project supporting baking interest, not proof of commercial baking expertise. This link
 syntax is the only exception to the square-bracket prohibition. Do not embed images.
 Do not repeat the portfolio in employment or imply it is commercial work.
+Use only selected contact fields; do not add LinkedIn or GitHub links for Baker.
 
 ---
 

@@ -654,21 +654,32 @@ policy fails rather than falling back to another narrative.
 Add canonical `home_practice`, `workshops`, and `portfolio_links` arrays and select
 their exact record snapshots under `profiles.baker`. Only Baker accepts these
 selectors; omission selects nothing. Practice records allow `title`, `context`,
-`start_period`, `frequency`, `batch_size`, and `activities` (a list of strings).
+`start_period`, `bake_count`, `batch_size`, `sharing_context`, and `activities`
+(a list of strings). `frequency` is optional for records that actually need it;
+do not invent a regular schedule. Bake counts mean sessions, not loaves, and
+"up to" batch sizes are upper bounds. Bread shared with friends on private trips
+is hobby practice, not catering or commercial production.
 Workshop records allow `name`, `provider`, `attendance_period`, `instructor`, and
-optional `url`. Portfolio records allow `label` and `url`. Preserve approximate
+optional `url`. Portfolio records allow `label`, `url` and an optional `description`,
+so a self-built baking app can be linked and described alongside a baking portfolio.
+Use the live app URL rather than its source repository. Preserve approximate
 dates and quantities as strings rather than inventing exact dates. Add only
 confirmed techniques to a baking skill category and select its exact strings in
 Baker, not the other document profiles. Do not infer skills from images or syllabi.
 
-Select every authoritative career ID as `brief` with empty `achievements`, and
-select the existing concise degree view. Baker projects only degree and university
+For a short career overview, set `profiles.baker.career_summary` to an approved
+paragraph and `roles` to `{}`. Individual employers, titles and dates are then
+excluded from the writer; the career summary replaces the role-by-role history.
+Older Baker policies without `career_summary` can still select `brief` roles.
+Select the existing concise degree view. Baker projects only degree and university
 (plus the internal ID); it omits dates, thesis and specialization. Do not copy
 example career IDs into a real master or change existing IT/engineering policies.
 
 Baker CVs foreground **Home Baking Practice**, then **Workshops**, **Other
 Employment** and **Education**, after Summary. The sidebar includes a labeled,
-clickable **Portfolio** link alongside contact, skills and languages. Polish JDs
+clickable **Portfolio** links and selected descriptions alongside contact, skills
+and languages. Baker omits LinkedIn and GitHub from the selected contact fields.
+Polish JDs
 use Polish documents, including **Domowa praktyka piekarska**, **Warsztaty** and
 **Pozostałe zatrudnienie**. No photographs are embedded. The same selected facts
 govern initial and regenerated letters. Hobby practice is not paid employment,

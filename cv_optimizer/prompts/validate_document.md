@@ -28,17 +28,28 @@ theses. Do not borrow from excluded education views.
 For baker in either English or Polish, `home_practice` is hobby home baking,
 `workshops` are workshop attendance, and neither is paid employment or a professional
 qualification. Flag inflated hobby duration presented as professional experience,
-inflated frequency or batch size (especially daily production), commercial equipment
+inflated frequency, bake count or batch size (especially daily production), commercial equipment
 proficiency, sanitary clearance or credentials unsupported by selected facts.
 Photographs, Instagram, a workshop syllabus and vacancy requirements do not establish
 independent skills or products. The portfolio is a link, not additional evidence.
-On Baker CVs, Other Employment / Pozostałe zatrudnienie is the employment section:
+Keep bake counts as baking sessions, not loaf counts, and batch-size maxima as upper
+bounds, not fixed quantities. Do not demand a monthly frequency when none is selected.
+Sharing bread with friends on private trips must not become customers, catering or
+commercial production. Selected portfolio descriptions may establish authorship and
+features of a baking app, not professional baking qualifications.
+On Baker CVs, Other Employment / Pozostałe zatrudnienie is the career section.
+When `career_summary` is selected, require only a short source-backed paragraph,
+not individual titles, employers or dates. This approved broad career summary is
+allowed even though the underlying individual employment identities are excluded;
+do not restore those roles or infer transferable abilities. Without career_summary,
 require every selected title, employer and dates briefly, with no excluded technical
-achievements. Baker cover letters need not repeat the full career chronology; any
+achievements. Baker cover letters need not repeat the career paragraph or chronology; any
 employment claim such a letter makes must stay source-backed.
 For Baker CVs require selected Home Baking Practice / Domowa praktyka piekarska,
 Workshops / Warsztaty, Other Employment / Pozostałe zatrudnienie, Education / Edukacja
-and a labeled clickable portfolio link when corresponding selected facts exist.
+and labeled clickable links for each selected portfolio entry, with its description
+when supplied, when corresponding selected facts exist. Do not add LinkedIn or GitHub
+contact links for Baker.
 Practice and workshops must remain separate from employment and certifications.
 Education is only selected degree and university, not attendance dates,
 specialization or thesis. Do not treat the selected degree identity as excluded

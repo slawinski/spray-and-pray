@@ -178,15 +178,17 @@ def test_baker_sections_links_and_explicit_photo_override(tmp_path, monkeypatch,
               if polish else ["Summary", "Home Baking Practice", "Workshops", "Other Employment", "Education"])
     md = "# Jane Example\n### Aspiring Baker\n" + "\n".join(
         f"## {label}\n{content}\n" for label, content in zip(labels, [
-            "Home hobbyist.", "Hobby baking since early 2023, around monthly, three loaves.",
+            "Home hobbyist.", "Hobby baking since early 2023, more than 40 bakes, up to three loaves per batch. Bread for friends on countryside trips.",
             "Bread basics, Example Baking Studio, June 2025, Alex Example.",
-            "### Software Engineer\nTech Corp | 2020 - Present\n\n### Design Engineer\nExample Pumps | 2014 - 2019",
+            "Previous career in software and mechanical engineering; now moving into baking.",
             "**State University**\n\nMSc Mechanical Engineering"]))
     md += "\n## Portfolio\n[Home baking portfolio](https://example.com/baking)\n"
+    md += "\n[Crumb Companion](https://example.com/sourdough-assistant)\n\nBuilt a sourdough assistant with fermentation and hydration calculators.\n"
     md = CVOptimizer("http://fake", "fake", "fake")._clean_output(md)
     sections, headings = PDFGenerator()._parse_to_html_sections(md)
     assert "Bread basics" in sections["Workshops"]
-    assert "Tech Corp" in sections["Experience"] and "Example Pumps" in sections["Experience"]
+    assert "Previous career" in sections["Experience"]
+    assert "<h3>" not in sections["Experience"]
     assert headings["Experience"] == labels[3]
     img = tmp_path / "photo.png"
     _make_test_image(str(img))
@@ -197,8 +199,10 @@ def test_baker_sections_links_and_explicit_photo_override(tmp_path, monkeypatch,
         text = " ".join(page.get_text() for page in doc)
         assert all(label in text for label in labels)
         assert [text.index(label) for label in labels] == sorted(text.index(label) for label in labels)
-        assert all(value in text for value in ("Tech Corp", "Example Pumps", "2020", "2014", "State University"))
-        assert any(link.get("uri") == "https://example.com/baking" for page in doc for link in page.get_links())
+        assert all(value in text for value in ("Previous career", "40 bakes", "State University", "Crumb Companion", "fermentation"))
+        assert "Tech Corp" not in text and "Example Pumps" not in text
+        links = {link.get("uri") for page in doc for link in page.get_links()}
+        assert {"https://example.com/baking", "https://example.com/sourdough-assistant"} <= links
         assert not any(page.get_image_info() for page in doc)
     PDFGenerator().generate(md, str(output))
     with fitz.open(output) as doc:

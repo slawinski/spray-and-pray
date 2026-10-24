@@ -10,6 +10,8 @@
   fields below are the only copyable fields, even in a selected entry.
 * ``profile_shared`` requires explicit personal-info field names, exact language
   entry snapshots, and the exact source disclaimer string (or null to omit it).
+  Baker omits LinkedIn/GitHub contacts and may replace individual role selections
+  with an approved ``career_summary`` and empty ``roles``.
 * Roles use ``detailed``/``brief`` detail rules and exact achievement strings.
   Mechanical ``cv_role_detail`` overrides may mark selected IDs as ``ledger``:
   CVs retain identities only; cover letters keep the original role selections.
@@ -50,9 +52,9 @@ _SECTIONS = {
     },
     "certifications": {"name", "issuer", "issue_date", "expiry_date", "url"},
     "languages": {"language", "proficiency"},
-    "home_practice": {"title", "context", "start_period", "frequency", "batch_size", "activities"},
+    "home_practice": {"title", "context", "start_period", "frequency", "bake_count", "batch_size", "sharing_context", "activities"},
     "workshops": {"name", "provider", "attendance_period", "instructor", "url"},
-    "portfolio_links": {"label", "url"},
+    "portfolio_links": {"label", "url", "description"},
 }
 _BAKER_SECTIONS = {"home_practice", "workshops", "portfolio_links"}
 _REQUIRED = {"headline", "summary", "roles", "skills", "education"}
@@ -156,7 +158,7 @@ def _prepare(master: dict, profile: str, policy: dict, roles: dict, education: d
              document_type: str) -> ProfileContext:
     optional = _OPTIONAL | ({"cv_role_detail"} if profile == "mechanical_engineering" else set())
     if profile == "baker":
-        optional |= _BAKER_SECTIONS
+        optional |= _BAKER_SECTIONS | {"career_summary"}
     policy = _keys(policy, _REQUIRED, optional, f"profiles.{profile}")
     headline = _text(policy["headline"], f"profiles.{profile}.headline")
     summary = policy["summary"]
@@ -166,12 +168,18 @@ def _prepare(master: dict, profile: str, policy: dict, roles: dict, education: d
         _text(summary, f"profiles.{profile}.summary")
     _narrative(summary, f"profiles.{profile}.summary")
     facts = {"headline": headline, "summary": deepcopy(summary)}
+    if "career_summary" in policy:
+        facts["career_summary"] = _text(policy["career_summary"], "profiles.baker.career_summary")
+        _require(policy["roles"] == {}, "Baker career_summary replaces individual roles; roles must be empty")
     excluded = {"identities": [], "achievements": [], "skills": [], "sections": {}}
 
     shared = _keys(master.get("profile_shared"), {"personal_info", "languages", "disclaimer"}, set(), "profile_shared")
     contact = _record(master.get("personal_info", {}), _CONTACT, "personal_info")
     selected_contact = _select(list(contact), shared["personal_info"], "profile_shared.personal_info")
     facts["personal_info"] = {key: contact[key] for key in selected_contact}
+    if profile == "baker":
+        for key in ("linkedin", "github"):
+            facts["personal_info"].pop(key, None)
     _, facts["languages"] = _snapshots(master, "languages", shared["languages"])
     if shared["disclaimer"] is not None:
         _text(shared["disclaimer"], "profile_shared.disclaimer")
