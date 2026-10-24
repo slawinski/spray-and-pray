@@ -10,17 +10,15 @@ from cv_optimizer.tui.app import CvDashboard
 
 
 async def choose(pilot, profile):
-    await pilot.click("#profile-select")
-    await pilot.press("home", "down")
-    if profile == "mechanical_engineering":
-        await pilot.press("down")
-    await pilot.press("enter")
+    # Select by value, not by an assumed option position.
+    pilot.app.screen.query_one("#profile-select", Select).value = profile
     await pilot.click("#confirm")
     await pilot.pause()
 
 
 @pytest.mark.parametrize("action,worker", [("ctrl+r", "_regenerate"), ("ctrl+g", "_generate_cover_letter")])
-def test_first_document_selection_cancel_and_continue(temp_db, tmp_path, monkeypatch, action, worker):
+@pytest.mark.parametrize("profile", ["mechanical_engineering", "baker"])
+def test_first_document_selection_cancel_and_continue(temp_db, tmp_path, monkeypatch, action, worker, profile):
     jd = tmp_path / "vacancy.txt"
     jd.write_text("Synthetic vacancy")
     app_id = temp_db.insert_application("Imported", "Engineer", jd_path=str(jd))
@@ -46,18 +44,21 @@ def test_first_document_selection_cancel_and_continue(temp_db, tmp_path, monkeyp
             assert temp_db.get_application_profile(app_id) == (None, 0)
             generation.assert_not_called()
             await pilot.press(action)
-            await choose(pilot, "mechanical_engineering")
-            assert temp_db.get_application_profile(app_id) == ("mechanical_engineering", 1)
+            await choose(pilot, profile)
+            assert temp_db.get_application_profile(app_id) == (profile, 1)
             generation.assert_not_called()
             assert "Generate" in app.screen.modal_title or "generate" in app.screen.modal_title
             await pilot.click("#yes")
             generation.assert_called_once()
-            assert generation.call_args.args[0]["cv_profile"] == "mechanical_engineering"
+            assert generation.call_args.args[0]["cv_profile"] == profile
             # Subsequent requests inherit stored choice, no profile prompt.
             await pilot.press(action)
             assert list(app.screen.query("#profile-select").results()) == []
             await pilot.click("#no")
             assert generation.call_count == 1
+            await pilot.press("enter")
+            assert ("Baker" if profile == "baker" else "Mechanical Engineering") in str(
+                app.screen.query_one("#text-content", Static).render())
 
     asyncio.run(run())
 
