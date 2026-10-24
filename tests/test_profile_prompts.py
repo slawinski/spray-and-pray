@@ -124,3 +124,24 @@ def test_second_empty_output_fails_without_more_retries(kind):
     with pytest.raises(ValueError, match="empty"):
         writer(kind, client)(prepared(), "JD")
     assert len(client.requests) == 2
+
+
+@pytest.mark.parametrize("kind", ["cv", "cover_letter"])
+@pytest.mark.parametrize("language", ["en", "pl"])
+def test_baker_writers_receive_only_selected_sources_and_limits(kind, language):
+    from pathlib import Path
+    from cv_optimizer.profiles import resolve_profile
+    source = json.loads((Path(__file__).resolve().parent.parent / "master_cv.example.json").read_text())
+    context = resolve_profile(source, "baker", document_type=kind)
+    client = FakeClient("# Jane Example\n## Portfolio\n[Home baking portfolio](https://example.com/baking)")
+    result = writer(kind, client)(context, "Commercial ovens and sanitary clearance required", language)
+    system, user = [item["content"] for item in client.requests[0]["messages"]]
+    assert json.dumps(context.facts, indent=2) in user
+    assert "Built React dashboards" not in user and "excluded" not in user
+    assert all(term in system for term in ("hobby", "workshops" if kind == "cv" else "Workshops", "sanitary clearance", "syllabus", "professional qualification"))
+    assert "[Home baking portfolio](https://example.com/baking)" in result
+    if kind == "cv":
+        assert "Other Employment" in system and "square-bracket" in system
+        if language == "pl":
+            assert "## Domowa praktyka piekarska" in system
+            assert "## Warsztaty" in system and "## Pozostałe zatrudnienie" in system

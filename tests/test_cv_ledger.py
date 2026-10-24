@@ -30,6 +30,8 @@ def many_role_source():
                              [f"Designed engineering fixture {index}.", f"Tested pump assembly {index}."]),
         })
     source["experience"] = roles
+    source["profiles"]["baker"]["roles"] = {
+        r["id"]: {"detail": "brief", "achievements": []} for r in roles}
     source["profiles"]["it"]["roles"] = {
         r["id"]: {"detail": "detailed", "achievements": r["achievements"]} for r in roles[:7]}
     policy = source["profiles"]["mechanical_engineering"]

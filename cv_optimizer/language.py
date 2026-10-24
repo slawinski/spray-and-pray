@@ -210,9 +210,18 @@ def build_language_instruction(language: ApplicationLanguage) -> str:
     )
 
 
-def build_cv_heading_instruction(language: ApplicationLanguage) -> str:
+def build_cv_heading_instruction(language: ApplicationLanguage, profile: str = "it") -> str:
     """Returns CV-specific heading guidance (Polish section headings for 'pl')."""
     if language == "pl":
+        if profile == "baker":
+            return (
+                'For Baker use exactly these Polish headings in this order: '
+                '"## Podsumowanie", "## Domowa praktyka piekarska", "## Warsztaty", '
+                '"## Pozostałe zatrudnienie", "## Edukacja", "## Dane kontaktowe", '
+                '"## Portfolio", "## Umiejętności", "## Języki", "## Klauzula RODO". '
+                'Skip sections without selected data. Translate the approved aspiring-baker '
+                'headline naturally as entry-level positioning, never a qualification.'
+            )
         return (
             "Translate the CV section headings into Polish using exactly these headings: "
             "\"## Podsumowanie\", \"## Doświadczenie\", \"## Dane kontaktowe\", "

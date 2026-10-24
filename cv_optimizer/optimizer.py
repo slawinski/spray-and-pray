@@ -58,7 +58,7 @@ class CVOptimizer:
     ) -> str:
         """Performs a single LLM completion and cleans the raw output."""
         system_prompt = SYSTEM_PROMPT + "\n\n" + build_language_instruction(language)
-        heading_instruction = build_cv_heading_instruction(language)
+        heading_instruction = build_cv_heading_instruction(language, context.profile)
         if heading_instruction:
             system_prompt += "\n\n" + heading_instruction
         user_content = (

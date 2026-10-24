@@ -11,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import fitz
+import pytest
 from cv_optimizer.generator import PDFGenerator
 
 SAMPLE_MD = """# Piotr Slawinski
@@ -163,6 +164,45 @@ def test_polish_headings_render_in_pdf():
     for heading in ["Podsumowanie", "Doświadczenie", "Dane kontaktowe", "Edukacja",
                     "Umiejętności", "Społeczność", "Języki", "Zainteresowania", "Klauzula RODO"]:
         assert heading in text, f"Missing Polish heading in PDF: {heading}"
+
+
+def test_workshops_routing_does_not_collide_with_employment():
+    assert PDFGenerator()._normalize_key("Workshops") == "Workshops"
+
+
+@pytest.mark.parametrize("polish", [False, True])
+def test_baker_sections_links_and_explicit_photo_override(tmp_path, monkeypatch, polish):
+    from cv_optimizer.config import settings
+    from cv_optimizer.optimizer import CVOptimizer
+    labels = (["Podsumowanie", "Domowa praktyka piekarska", "Warsztaty", "Pozostałe zatrudnienie", "Edukacja"]
+              if polish else ["Summary", "Home Baking Practice", "Workshops", "Other Employment", "Education"])
+    md = "# Jane Example\n### Aspiring Baker\n" + "\n".join(
+        f"## {label}\n{content}\n" for label, content in zip(labels, [
+            "Home hobbyist.", "Hobby baking since early 2023, around monthly, three loaves.",
+            "Bread basics, Example Baking Studio, June 2025, Alex Example.",
+            "### Software Engineer\nTech Corp | 2020 - Present\n\n### Design Engineer\nExample Pumps | 2014 - 2019",
+            "**State University**\n\nMSc Mechanical Engineering"]))
+    md += "\n## Portfolio\n[Home baking portfolio](https://example.com/baking)\n"
+    md = CVOptimizer("http://fake", "fake", "fake")._clean_output(md)
+    sections, headings = PDFGenerator()._parse_to_html_sections(md)
+    assert "Bread basics" in sections["Workshops"]
+    assert "Tech Corp" in sections["Experience"] and "Example Pumps" in sections["Experience"]
+    assert headings["Experience"] == labels[3]
+    img = tmp_path / "photo.png"
+    _make_test_image(str(img))
+    monkeypatch.setattr(settings, "candidate_photo_path", str(img))
+    output = tmp_path / "baker.pdf"
+    PDFGenerator().generate(md, str(output), photo_path="")
+    with fitz.open(output) as doc:
+        text = " ".join(page.get_text() for page in doc)
+        assert all(label in text for label in labels)
+        assert [text.index(label) for label in labels] == sorted(text.index(label) for label in labels)
+        assert all(value in text for value in ("Tech Corp", "Example Pumps", "2020", "2014", "State University"))
+        assert any(link.get("uri") == "https://example.com/baking" for page in doc for link in page.get_links())
+        assert not any(page.get_image_info() for page in doc)
+    PDFGenerator().generate(md, str(output))
+    with fitz.open(output) as doc:
+        assert doc[0].get_image_info()
 
 
 if __name__ == "__main__":
