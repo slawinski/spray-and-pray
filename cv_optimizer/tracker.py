@@ -205,11 +205,8 @@ def _generate_document(app_id: int, master_cv_path: str, document_type: str,
         base_name += "_Cover_Letter"
     pdf_path = Path(jd_path).parent / f"{base_name}.pdf"
     renderer = PDFGenerator() if document_type == "cv" else CoverLetterPDFGenerator()
-    render = renderer.generate
-    if document_type == "cv" and profile == "baker":
-        render = lambda markdown, path: renderer.generate(markdown, path, photo_path="")
     published = publish_document(app_id, profile, revision, markdown, pdf_path,
-                                 render, document_type)
+                                 renderer.generate, document_type)
     if result.summary and on_warning:
         try:
             on_warning(f"{document_type}: {result.summary}")

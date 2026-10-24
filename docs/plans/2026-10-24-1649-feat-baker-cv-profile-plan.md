@@ -29,6 +29,10 @@ the earlier frequency/fixed-batch facts and the role-by-role chronology decision
   the self-built app's fermentation/hydration calculators, guided bake flow and
   bake history. The source repository is context, not a CV link.
 - Omit LinkedIn and GitHub contact links from Baker CVs and cover letters.
+- Portrait clarification: retain the configured candidate portrait on Baker CVs,
+  just as on other profiles. The no-photos choice applies only to bread/Instagram
+  portfolio imagery. This supersedes the earlier Baker photo suppression in
+  KTD5 and its implementation/verification notes below.
 
 ## Goal Capsule
 

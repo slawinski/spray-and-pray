@@ -171,7 +171,7 @@ def test_workshops_routing_does_not_collide_with_employment():
 
 
 @pytest.mark.parametrize("polish", [False, True])
-def test_baker_sections_links_and_explicit_photo_override(tmp_path, monkeypatch, polish):
+def test_baker_sections_links_and_configured_portrait(tmp_path, monkeypatch, polish):
     from cv_optimizer.config import settings
     from cv_optimizer.optimizer import CVOptimizer
     labels = (["Podsumowanie", "Domowa praktyka piekarska", "Warsztaty", "Pozostałe zatrudnienie", "Edukacja"]
@@ -194,7 +194,7 @@ def test_baker_sections_links_and_explicit_photo_override(tmp_path, monkeypatch,
     _make_test_image(str(img))
     monkeypatch.setattr(settings, "candidate_photo_path", str(img))
     output = tmp_path / "baker.pdf"
-    PDFGenerator().generate(md, str(output), photo_path="")
+    PDFGenerator().generate(md, str(output))
     with fitz.open(output) as doc:
         text = " ".join(page.get_text() for page in doc)
         assert all(label in text for label in labels)
@@ -203,10 +203,7 @@ def test_baker_sections_links_and_explicit_photo_override(tmp_path, monkeypatch,
         assert "Tech Corp" not in text and "Example Pumps" not in text
         links = {link.get("uri") for page in doc for link in page.get_links()}
         assert {"https://example.com/baking", "https://example.com/sourdough-assistant"} <= links
-        assert not any(page.get_image_info() for page in doc)
-    PDFGenerator().generate(md, str(output))
-    with fitz.open(output) as doc:
-        assert doc[0].get_image_info()
+        assert sum(len(page.get_image_info()) for page in doc) == 1
 
 
 if __name__ == "__main__":

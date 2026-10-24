@@ -513,6 +513,8 @@ def test_baker_real_publication_interleaved_and_regenerated(generation, monkeypa
                          "[Crumb Companion](https://example.com/sourdough-assistant)\n\nBuilt a sourdough assistant with fermentation and hydration calculators.\n")
     g.letter.return_value = "## Jane Doe\n\n" + ("Szanowni Państwo," if language == "pl" else "Dear Hiring Manager,") + "\n\nHome baking hobbyist seeking trainee work.\n\nJane Doe"
     baker = tracker.track("Example Bakery", "Trainee", str(g.jd), cv_profile="baker", with_cover_letter=True)
+    with fitz.open(g.db.get_application(baker)[4]) as doc:
+        assert sum(len(p.get_image_info()) for p in doc) == 1
     tracker.track("Example Software", "Developer", str(g.jd), cv_profile="it")
     tracker.track("Example Engineering", "Engineer", str(g.jd), cv_profile="mechanical_engineering")
     tracker.reoptimize(baker)
@@ -531,7 +533,7 @@ def test_baker_real_publication_interleaved_and_regenerated(generation, monkeypa
         text = " ".join(p.get_text() for p in doc)
         assert all(word in text for word in (practice, workshop, employment, "Previous career", "Crumb Companion", "State University"))
         assert "Tech Corp" not in text and "Example Pumps" not in text
-        assert not any(p.get_image_info() for p in doc)
+        assert sum(len(p.get_image_info()) for p in doc) == 1
         assert any(l.get("uri") == "https://example.com/baking" for p in doc for l in p.get_links())
         assert any(l.get("uri") == "https://example.com/sourdough-assistant" for p in doc for l in p.get_links())
     with fitz.open(app[8]) as doc:

@@ -49,7 +49,7 @@ Everything runs locally. There is no backend service, no account, and no data le
   - **Front-loaded keywords** in the Summary and first Experience bullets.
   - **Human readability first** — ATS passes get you screened, but a recruiter gets you hired.
 - Renders a styled two-column PDF (header, sidebar with skills/contact, main column with experience/education).
-- Optionally embeds a candidate photo (`candidate.jpeg`) top-left in the header, sized to match the name + title block. Baker CVs always suppress this photo.
+- Optionally embeds a candidate photo (`candidate.jpeg`) top-left in the header, sized to match the name + title block, including on Baker CVs.
 
 ### 2. ATS-Optimized Cover Letters
 - Generates a tailored cover letter alongside the CV (`cv_optimizer/prompts/cover_letter.md`).
@@ -681,7 +681,8 @@ clickable **Portfolio** links and selected descriptions alongside contact, skill
 and languages. Baker omits LinkedIn and GitHub from the selected contact fields.
 Polish JDs
 use Polish documents, including **Domowa praktyka piekarska**, **Warsztaty** and
-**Pozostałe zatrudnienie**. No photographs are embedded. The same selected facts
+**Pozostałe zatrudnienie**. The configured candidate portrait appears as on other
+CVs; bread and Instagram photographs are not embedded. The same selected facts
 govern initial and regenerated letters. Hobby practice is not paid employment,
 and workshop attendance is not certification or professional experience. Advisory
 checks flag inflation, unsupported commercial/credential claims, missing selected
