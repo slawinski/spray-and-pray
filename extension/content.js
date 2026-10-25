@@ -1,5 +1,4 @@
 (function () {
-  // These are hosting/recruiting platforms, not evidence of the hiring employer.
   const portalNames = new Set([
     'pracuj', 'pracujpl', 'grupapracuj', 'erecruiter', 'erecruiterpl', 'linkedin', 'indeed',
     'glassdoor', 'justjoinit', 'nofluffjobs', 'theprotocol', 'theprotocolit',
@@ -15,7 +14,6 @@
       .replace(/[^\p{L}\p{N}]/gu, '');
     if (!key || /^(unknown|unknowncompany|na|none|null|confidential|undisclosed)$/.test(key)) return '';
     if (portalNames.has(key) || /\b(job\s*(board|portal|search)|portal pracy|oferty pracy)\b/i.test(name)) return '';
-    // A URL or bare domain identifies a website, not an employer name.
     if (/^(https?:\/\/|www\.)/i.test(name) || /^[\w-]+(?:\.[\w-]+)+(?:\/\S*)?$/.test(name)) return '';
     return name;
   }
@@ -55,12 +53,13 @@
       'script[type="application/ld+json"]',
     );
     let fallback = null;
+    let fallbackScore = -1;
     for (const script of scripts) {
       try {
         const data = JSON.parse(sanitizeJsonLd(script.textContent));
         const items = Array.isArray(data) ? [...data] : [data];
-        while (items.length) {
-          const item = items.shift();
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
           if (!item || typeof item !== 'object') continue;
           if (Array.isArray(item['@graph'])) items.push(...item['@graph']);
           const types = Array.isArray(item['@type']) ? item['@type'] : [item['@type']];
@@ -80,7 +79,11 @@
             if (role && company && jd) {
               return { role, company, jd };
             }
-            fallback = fallback || { role, company, jd };
+            const score = (role ? 2 : 0) + (jd ? 2 : 0) + (company ? 1 : 0);
+            if (score > fallbackScore) {
+              fallback = { role, company, jd };
+              fallbackScore = score;
+            }
           }
         }
       } catch {
@@ -103,7 +106,7 @@
         return { role: title.slice(0, first).trim(), company: title.slice(first + 2, last).trim() };
       }
     }
-    const at = title.match(/^(.+?)\s+at\s+(.+?)(?:\s+[|•]\s+.*)?$/i);
+    const at = title.match(/^(.+?)\s+at\s+(.+?)(?:\s+[|•–—-]\s+.*)?$/i);
     return at ? { role: at[1].trim(), company: at[2].trim() } : null;
   }
 
@@ -167,8 +170,8 @@
     const fromTitle = titleEmployer();
     let role = textOf(document.querySelector('h1')) || fromTitle?.role;
 
-    if (ogTitle) {
-      if (!role) role = ogTitle.split(/[|\u2022\u2013\u2014-]/)[0].trim();
+    if (ogTitle && !role) {
+      role = ogTitle.split(/[|\u2022\u2013\u2014-]/)[0].trim();
     }
 
     const jd = ogDesc || metaDesc || extractDescriptionText();
@@ -235,12 +238,12 @@
     "justjoin.it": () => {
       // Try JSON-LD first (most stable)
       const jsonld = extractFromJsonLd();
+      const companyEl = document.querySelector('a[href*="companies="] h2');
       if (jsonld && jsonld.role && jsonld.jd) {
-        return jsonld;
+        return { ...jsonld, company: jsonld.company || textOf(companyEl) };
       }
 
       const titleEl = document.querySelector("h1");
-      const companyEl = document.querySelector('a[href*="companies="] h2');
       const descEl = document.querySelector("div.mui-n1fnon");
 
       // Extract tech stack keywords
@@ -283,12 +286,12 @@
     },
     "nofluffjobs.com": () => {
       const jsonld = extractFromJsonLd();
+      const companyLink = document.querySelector("#postingCompanyUrl");
       if (jsonld && jsonld.role && jsonld.jd) {
-        return jsonld;
+        return { ...jsonld, company: jsonld.company || textOf(companyLink) };
       }
 
       const titleEl = document.querySelector("common-posting-header h1");
-      const companyLink = document.querySelector("#postingCompanyUrl");
       const descEl =
         document.querySelector("#posting-description") ||
         document.querySelector('[data-cy-section="JobOffer_Requirements"]');
@@ -374,10 +377,6 @@
     },
     "greenhouse.io": () => {
       const jsonld = extractFromJsonLd();
-      if (jsonld && jsonld.role && jsonld.jd) {
-        return jsonld;
-      }
-
       const titleEl =
         document.querySelector("h1.section-header--large") ||
         document.querySelector(".job__title h1");
@@ -389,6 +388,9 @@
       } else {
         const logoAlt = document.querySelector(".logo")?.alt || "";
         company = logoAlt.replace(/\s*Logo\s*$/i, "").trim();
+      }
+      if (jsonld && jsonld.role && jsonld.jd) {
+        return { ...jsonld, company: jsonld.company || company };
       }
 
       const descEl = document.querySelector(".job__description");

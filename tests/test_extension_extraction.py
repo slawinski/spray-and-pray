@@ -26,8 +26,9 @@ def extract(*, url="https://jobs.example.test/offer", title="Engineer", company=
     script = r"""
     const fs = require('node:fs'), vm = require('node:vm');
     const data = JSON.parse(process.argv[2]);
-    const node = text => ({innerText: text, textContent: text,
-                          getAttribute: () => null});
+    const node = text => typeof text === 'string'
+      ? {innerText: text, textContent: text, getAttribute: () => null}
+      : {...text, getAttribute: () => null};
     const elements = Object.fromEntries(Object.entries(data.elements).map(([k,v]) => [k, node(v)]));
     const document = {
       title: data.title,
@@ -120,8 +121,47 @@ def test_non_latin_employer_is_preserved():
     assert extract(jsonld=[job_posting({"name": "株式会社テスト"})])["company"] == "株式会社テスト"
 
 
-def test_title_employer_wins_over_site_name_and_keeps_hyphens():
-    result = extract(title="Engineer at Smith-Jones Ltd | Job Board", site_name="Job Board")
+@pytest.mark.parametrize("domain,selector", [
+    ("justjoin.it", 'a[href*="companies="] h2'),
+    ("nofluffjobs.com", "#postingCompanyUrl"),
+])
+@pytest.mark.parametrize("organization", [None, {"name": "eRecruiter"}])
+def test_jsonld_missing_employer_keeps_site_specific_visible_evidence(domain, selector, organization):
+    result = extract(url=f"https://{domain}/offer", jsonld=[job_posting(organization)],
+                     elements={selector: "Real Employer"})
+    assert result["company"] == "Real Employer"
+    assert result["jd"] == DESCRIPTION
+
+
+def test_incomplete_first_jsonld_does_not_hide_later_usable_posting():
+    result = extract(url="https://boards.greenhouse.io/company/jobs/123", title="", role=None,
+                     jsonld=[{"@type": "JobPosting"}, job_posting(None)])
+    assert result == {"role": "Engineer", "company": "Unknown", "jd": DESCRIPTION}
+
+
+def test_greenhouse_jsonld_missing_employer_keeps_visible_logo_evidence():
+    result = extract(url="https://boards.greenhouse.io/company/jobs/123",
+                     jsonld=[job_posting(None)], elements={".logo": {"alt": "Real Employer Logo"}})
+    assert result["company"] == "Real Employer"
+
+
+def test_incomplete_first_jsonld_does_not_hide_later_employer_with_dom_description():
+    result = extract(jsonld=[{"@type": "JobPosting"}, {
+        "@type": "JobPosting", "title": "Engineer", "hiringOrganization": "Real Employer",
+    }])
+    assert result["company"] == "Real Employer"
+
+
+def test_partial_entries_from_unrelated_postings_are_not_combined():
+    result = extract(jsonld=[{
+        "@type": "JobPosting", "title": "Other Role", "hiringOrganization": "Other Employer",
+    }, job_posting(None)])
+    assert result == {"role": "Engineer", "company": "Unknown", "jd": DESCRIPTION}
+
+
+@pytest.mark.parametrize("separator", ["|", "•", "-", "–", "—"])
+def test_title_employer_wins_over_site_name_and_keeps_hyphens(separator):
+    result = extract(title=f"Engineer at Smith-Jones Ltd {separator} Job Board", site_name="Job Board")
     assert result["company"] == "Smith-Jones Ltd"
 
 
