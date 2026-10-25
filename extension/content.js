@@ -1,4 +1,23 @@
 (function () {
+  const portalNames = new Set([
+    'pracuj', 'pracujpl', 'grupapracuj', 'erecruiter', 'erecruiterpl', 'linkedin', 'indeed',
+    'glassdoor', 'justjoinit', 'nofluffjobs', 'theprotocol', 'theprotocolit',
+    'greenhouse', 'lever', 'workable', 'smartrecruiters', 'workingnomads',
+    'wellfound', 'monster', 'ziprecruiter', 'stepstone', 'jooble', 'adzuna',
+  ]);
+
+  function employerName(value) {
+    if (typeof value !== 'string') return '';
+    const name = value.replace(/\s+/g, ' ').trim();
+    const key = name.toLowerCase()
+      .replace(/\s+(sp\.?\s*z\.?\s*o\.?\s*o\.?|s\.?a\.?|inc\.?|ltd\.?|llc|limited|corporation)$/i, '')
+      .replace(/[^\p{L}\p{N}]/gu, '');
+    if (!key || /^(unknown|unknowncompany|na|none|null|confidential|undisclosed)$/.test(key)) return '';
+    if (portalNames.has(key) || /\b(job\s*(board|portal|search)|portal pracy|oferty pracy)\b/i.test(name)) return '';
+    if (/^(https?:\/\/|www\.)/i.test(name) || /^[\w-]+(?:\.[\w-]+)+(?:\/\S*)?$/.test(name)) return '';
+    return name;
+  }
+
   function sanitizeJsonLd(raw) {
     // Escape literal control chars inside JSON strings (some sites emit unescaped newlines)
     let result = '';
@@ -33,16 +52,22 @@
     const scripts = document.querySelectorAll(
       'script[type="application/ld+json"]',
     );
+    let fallback = null;
+    let fallbackScore = -1;
     for (const script of scripts) {
       try {
         const data = JSON.parse(sanitizeJsonLd(script.textContent));
-        const items = data["@graph"] || [data];
-        for (const item of items) {
-          if (item["@type"] === "JobPosting" || item.title) {
+        const items = Array.isArray(data) ? [...data] : [data];
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (!item || typeof item !== 'object') continue;
+          if (Array.isArray(item['@graph'])) items.push(...item['@graph']);
+          const types = Array.isArray(item['@type']) ? item['@type'] : [item['@type']];
+          if (types.includes('JobPosting') || (item.title && item.hiringOrganization)) {
             const role = item.title;
-            const company =
-              item.hiringOrganization?.name ||
-              item.hiringOrganization?.legalName;
+            const organization = item.hiringOrganization;
+            const company = employerName(organization) ||
+              employerName(organization?.name) || employerName(organization?.legalName);
             const rawJd = item.description || item.jd;
             // Strip HTML tags and decode entities from JSON-LD descriptions
             let jd = rawJd;
@@ -54,17 +79,53 @@
             if (role && company && jd) {
               return { role, company, jd };
             }
+            const score = (role ? 2 : 0) + (jd ? 2 : 0) + (company ? 1 : 0);
+            if (score > fallbackScore) {
+              fallback = { role, company, jd };
+              fallbackScore = score;
+            }
           }
         }
       } catch {
         continue;
       }
     }
-    return null;
+    return fallback;
   }
 
   function textOf(el) {
     return el ? (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim() : '';
+  }
+
+  function titleEmployer() {
+    const title = document.querySelector('meta[property="og:title"]')?.getAttribute('content') || document.title;
+    // eRecruiter titles are "role, employer, location". Keep employer commas/dashes.
+    if (/(^|\.)erecruiter\.pl$/.test(window.location.hostname)) {
+      const first = title.indexOf(', '), last = title.lastIndexOf(', ');
+      if (first > 0 && last > first) {
+        return { role: title.slice(0, first).trim(), company: title.slice(first + 2, last).trim() };
+      }
+    }
+    const at = title.match(/^(.+?)\s+at\s+(.+?)(?:\s+[|•–—-]\s+.*)?$/i);
+    return at ? { role: at[1].trim(), company: at[2].trim() } : null;
+  }
+
+  function resolveEmployer(candidate) {
+    const primary = employerName(candidate) || employerName(extractFromJsonLd()?.company);
+    if (primary) return primary;
+    for (const selector of [
+      '[itemprop="hiringOrganization"] [itemprop="name"]',
+      '[itemprop="hiringOrganization"]',
+      '[data-test="text-employer-name"]',
+      '[data-testid="company-name"]',
+      '[data-testid="employer-name"]',
+    ]) {
+      for (const el of document.querySelectorAll(selector)) {
+        const name = employerName(el.getAttribute('content') || textOf(el));
+        if (name) return name;
+      }
+    }
+    return employerName(titleEmployer()?.company) || 'Unknown';
   }
 
   function extractDescriptionText() {
@@ -97,7 +158,7 @@
   function extractGeneric() {
     // 1. Structured data (JSON-LD) is the most reliable source.
     const jsonld = extractFromJsonLd();
-    if (jsonld && jsonld.role && jsonld.company && jsonld.jd) return jsonld;
+    if (jsonld && jsonld.role && jsonld.jd) return jsonld;
 
     const meta = (sel) => {
       const el = document.querySelector(sel);
@@ -106,25 +167,17 @@
     const ogTitle = meta('meta[property="og:title"]');
     const ogDesc = meta('meta[property="og:description"]');
     const metaDesc = meta('meta[name="description"]');
-    const siteName = meta('meta[property="og:site_name"]');
+    const fromTitle = titleEmployer();
+    let role = textOf(document.querySelector('h1')) || fromTitle?.role;
 
-    let role = textOf(document.querySelector('h1'));
-    let company = siteName;
-
-    if (ogTitle) {
-      // "Senior Frontend Engineer at Acme | Board" → role + company
-      const at = ogTitle.match(/^(.+?)\s+at\s+(.+)$/i);
-      if (at) {
-        role = role || at[1].trim();
-        company = company || at[2].split(/[|\u2022\u2013\u2014-]/)[0].trim();
-      }
-      if (!role) role = ogTitle.split(/[|\u2022\u2013\u2014-]/)[0].trim();
+    if (ogTitle && !role) {
+      role = ogTitle.split(/[|\u2022\u2013\u2014-]/)[0].trim();
     }
 
     const jd = ogDesc || metaDesc || extractDescriptionText();
 
     if (role && jd) {
-      return { role, company: company || 'Unknown', jd };
+      return { role, company: jsonld?.company || '', jd };
     }
     return null;
   }
@@ -169,29 +222,28 @@
         document.querySelector(".jobs-description-content__text") ||
         document.querySelector("article");
 
-      if (!titleEl || !companyEl || !descEl) {
+      if (!titleEl || !descEl) {
         const missing = [];
         if (!titleEl) missing.push("Role");
-        if (!companyEl) missing.push("Company");
         if (!descEl) missing.push("Job Description");
         return { error: `Could not find fields: ${missing.join(", ")}` };
       }
 
       return {
         role: titleEl.innerText.trim(),
-        company: companyEl.innerText.trim(),
+        company: textOf(companyEl),
         jd: descEl.innerText.trim(),
       };
     },
     "justjoin.it": () => {
       // Try JSON-LD first (most stable)
       const jsonld = extractFromJsonLd();
-      if (jsonld && jsonld.role && jsonld.company && jsonld.jd) {
-        return jsonld;
+      const companyEl = document.querySelector('a[href*="companies="] h2');
+      if (jsonld && jsonld.role && jsonld.jd) {
+        return { ...jsonld, company: jsonld.company || textOf(companyEl) };
       }
 
       const titleEl = document.querySelector("h1");
-      const companyEl = document.querySelector('a[href*="companies="] h2');
       const descEl = document.querySelector("div.mui-n1fnon");
 
       // Extract tech stack keywords
@@ -217,17 +269,16 @@
         }
       }
 
-      if (!titleEl || !companyEl || !descEl) {
+      if (!titleEl || !descEl) {
         const missing = [];
         if (!titleEl) missing.push("Role");
-        if (!companyEl) missing.push("Company");
         if (!descEl) missing.push("Job Description");
         return { error: `Could not find fields: ${missing.join(", ")}` };
       }
 
       return {
         role: titleEl.innerText.trim(),
-        company: companyEl.innerText.trim(),
+        company: textOf(companyEl),
         jd: techStack
           ? descEl.innerText.trim() + "\n\nTECH STACK: " + techStack
           : descEl.innerText.trim(),
@@ -235,12 +286,12 @@
     },
     "nofluffjobs.com": () => {
       const jsonld = extractFromJsonLd();
-      if (jsonld && jsonld.role && jsonld.company && jsonld.jd) {
-        return jsonld;
+      const companyLink = document.querySelector("#postingCompanyUrl");
+      if (jsonld && jsonld.role && jsonld.jd) {
+        return { ...jsonld, company: jsonld.company || textOf(companyLink) };
       }
 
       const titleEl = document.querySelector("common-posting-header h1");
-      const companyLink = document.querySelector("#postingCompanyUrl");
       const descEl =
         document.querySelector("#posting-description") ||
         document.querySelector('[data-cy-section="JobOffer_Requirements"]');
@@ -259,17 +310,16 @@
           .join(", ");
       }
 
-      if (!titleEl || !companyLink || !descEl) {
+      if (!titleEl || !descEl) {
         const missing = [];
         if (!titleEl) missing.push("Role");
-        if (!companyLink) missing.push("Company");
         if (!descEl) missing.push("Job Description");
         return { error: `Could not find fields: ${missing.join(", ")}` };
       }
 
       return {
         role: titleEl.innerText.trim(),
-        company: companyLink.innerText.trim(),
+        company: textOf(companyLink),
         jd: techStack
           ? descEl.innerText.trim() + "\n\nREQUIREMENTS: " + techStack
           : descEl.innerText.trim(),
@@ -310,10 +360,9 @@
         }
       }
 
-      if (!roleEl || !company || descParts.length === 0) {
+      if (!roleEl || descParts.length === 0) {
         const missing = [];
         if (!roleEl) missing.push("Role");
-        if (!company) missing.push("Company");
         if (descParts.length === 0) missing.push("Job Description");
         return { error: `Could not find fields: ${missing.join(", ")}` };
       }
@@ -328,10 +377,6 @@
     },
     "greenhouse.io": () => {
       const jsonld = extractFromJsonLd();
-      if (jsonld && jsonld.role && jsonld.company && jsonld.jd) {
-        return jsonld;
-      }
-
       const titleEl =
         document.querySelector("h1.section-header--large") ||
         document.querySelector(".job__title h1");
@@ -344,14 +389,8 @@
         const logoAlt = document.querySelector(".logo")?.alt || "";
         company = logoAlt.replace(/\s*Logo\s*$/i, "").trim();
       }
-      if (!company) {
-        const pathParts = window.location.pathname.split("/").filter(Boolean);
-        if (pathParts.length > 0) {
-          company = pathParts[0]
-            .split("-")
-            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-            .join(" ");
-        }
+      if (jsonld && jsonld.role && jsonld.jd) {
+        return { ...jsonld, company: jsonld.company || company };
       }
 
       const descEl = document.querySelector(".job__description");
@@ -362,10 +401,9 @@
         jd = "Location: " + locationEl.innerText.trim() + "\n\n" + jd;
       }
 
-      if (!titleEl || !company || !jd) {
+      if (!titleEl || !jd) {
         const missing = [];
         if (!titleEl) missing.push("Role");
-        if (!company) missing.push("Company");
         if (!jd) missing.push("Job Description");
         return { error: `Could not find fields: ${missing.join(", ")}` };
       }
@@ -396,10 +434,9 @@
       const descEl = document.querySelector(".jd-description");
       const jd = descEl ? descEl.innerText.trim() : "";
 
-      if (!role || !company || !jd) {
+      if (!role || !jd) {
         const missing = [];
         if (!role) missing.push("Role");
-        if (!company) missing.push("Company");
         if (!jd) missing.push("Job Description");
         return { error: `Could not find fields: ${missing.join(", ")}` };
       }
@@ -413,20 +450,16 @@
 
   // Check if the current domain matches any supported extractor strategy
   for (const domain in extractors) {
-    if (hostname.includes(domain)) {
+    if (hostname === domain || hostname.endsWith('.' + domain)) {
       extractor = extractors[domain];
       break;
     }
   }
 
-  if (!extractor) {
-    const generic = extractGeneric();
-    if (generic && generic.role && generic.jd) {
-      return generic;
-    }
+  const result = extractor ? extractor() : extractGeneric();
+  if (!result) {
     return { error: "Could not auto-extract this job. Use manual entry in the popup." };
   }
-
-  // Execute the strategy and return the object
-  return extractor();
+  if (result.error) return result;
+  return { ...result, company: resolveEmployer(result.company) };
 })();
