@@ -15,7 +15,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
 from textual.reactive import var
 from textual.widgets import DataTable, Footer, Header, Input, Label, Static
-from textual import work
+from textual import events, work
 from textual.worker import Worker, WorkerState
 
 from cv_optimizer import db
@@ -102,6 +102,15 @@ def _detail_section(content: Text, title: str) -> None:
 
 class ApplicationTable(DataTable):
     BINDINGS = [Binding("enter", "select_cursor", "Detail")]
+
+    async def on_click(self, event: events.Click) -> None:
+        event.prevent_default()
+        # Retain table navigation, but only activate a row on a true double-click.
+        if event.button == 1 and event.chain == 2:
+            await super()._on_click(event)
+        else:
+            with self.prevent(DataTable.RowSelected):
+                await super()._on_click(event)
 
     def on_resize(self) -> None:
         self.app.call_after_refresh(self.app._reflow_table)

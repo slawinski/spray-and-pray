@@ -1,10 +1,61 @@
 import asyncio
 import json
 
+import pytest
 from rich.text import Text
-from textual.widgets import Static
+from textual.widgets import DataTable, Static
 
 from cv_optimizer.tui.app import CvDashboard
+
+
+def test_separated_single_clicks_select_without_opening_details(temp_db):
+    for company in ("First company", "Second company"):
+        temp_db.insert_application(company, "Engineer")
+
+    async def run():
+        app = CvDashboard()
+        async with app.run_test(size=(160, 40)) as pilot:
+            await pilot.pause()
+            dashboard = app.screen
+            table = app.query_one("#apps-table", DataTable)
+            expected = app.filtered[1]
+            assert await pilot.click(table, offset=(2, 2))
+            await pilot.pause()
+            assert app.screen is dashboard
+            assert app._selected_app()["id"] == expected["id"]
+
+            await pilot.pause(app.CLICK_CHAIN_TIME_THRESHOLD + 0.1)
+            assert await pilot.click(table, offset=(2, 2))
+            await pilot.pause()
+            assert app.screen is dashboard, "A later single click must not open details"
+            assert app._selected_app()["id"] == expected["id"]
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("row", [0, 1])
+def test_double_click_opens_clicked_row_details_and_enter_still_works(temp_db, row):
+    for company in ("First company", "Second company"):
+        temp_db.insert_application(company, "Engineer")
+
+    async def run():
+        app = CvDashboard()
+        async with app.run_test(size=(160, 40)) as pilot:
+            await pilot.pause()
+            dashboard = app.screen
+            table = app.query_one("#apps-table", DataTable)
+            expected = app.filtered[row]
+            assert await pilot.click(table, offset=(2, row + 1), times=2)
+            await pilot.pause()
+            assert app.screen is not dashboard
+            assert expected["company"] in app.screen.query_one("#text-content", Static).render().plain
+            assert app._selected_app()["id"] == expected["id"]
+
+            await pilot.press("escape", "enter")
+            assert app.screen is not dashboard
+            assert expected["company"] in app.screen.query_one("#text-content", Static).render().plain
+
+    asyncio.run(run())
 
 
 def test_detail_hierarchy_keeps_literal_values_and_separates_evidence(temp_db):
