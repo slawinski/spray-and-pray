@@ -51,8 +51,11 @@ A guided bake flow means "instrukcje krok po kroku", not a
 of professional experience or paid work. Keep every factual boundary above.
 Do not introduce a routine with "na co dzień" or "codziennie" unless daily
 frequency is explicitly selected; use an unqualified description of the activities.
-Retain the selected original degree wording if no official Polish title is
-supplied, rather than inventing a Polish qualification. These are wording examples,
+If mentioning education, use a supplied Polish university name and translate the
+selected degree level and subject descriptively, without inventing an official
+programme or professional title. An MSc in Mechanical Engineering can be described
+as "studia magisterskie z inżynierii mechanicznej"; a missing official Polish diploma
+title is not a reason to leave the whole qualification in English. These are wording examples,
 not new facts or a requirement to mention every example in a short letter.
 
 Use engineering-led positioning for the engineering profile without rewriting actual employment titles or dates. Use `role_detail` to select relevant stories, not simply the newest role. Preserve achievement attribution to its source role, even where IT and mechanical roles share an employer. Do not require a software tech stack or invented metric for a mechanical accomplishment. Historical education or tool use does not establish current proficiency or current mechanical practice.

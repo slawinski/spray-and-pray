@@ -65,6 +65,11 @@ descriptive portfolio labels and the headings O mnie, Domowy wypiek chleba,
 Dotychczasowa praca zawodowa and Wykształcenie are valid. Legacy Polish headings
 remain valid too. Do not require literal English wording or interpret a faithful
 paraphrase as a new fact. Do not accept invented qualifications or CEFR levels.
+For Polish Baker documents, a supplied Polish university name can replace the
+English part of a bilingual name. A descriptive Polish translation of the selected
+degree level and subject is valid: "Studia magisterskie: inżynieria mechaniczna"
+faithfully describes an MSc in Mechanical Engineering without claiming a different
+programme or a new formal professional title. Do not demand English degree wording.
 For IT and engineering, exclude Baker-only practice, workshops, portfolio and skills.
 
 The approved headline/summary can be engineering-led without claiming that the
