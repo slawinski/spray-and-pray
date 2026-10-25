@@ -11,7 +11,7 @@ from textual.widgets.option_list import Option
 from cv_optimizer import db
 
 BASE_STATUSES = ["draft", "applied", "ghosted", "withdrawn", "rejected", "offer", "accepted"]
-PROFILE_LABELS = {"it": "IT", "mechanical_engineering": "Mechanical Engineering"}
+PROFILE_LABELS = {"it": "IT", "mechanical_engineering": "Mechanical Engineering", "baker": "Baker"}
 
 
 class ResizeGuard(Static, can_focus=True):

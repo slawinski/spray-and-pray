@@ -55,7 +55,8 @@ def test_fresh_insert_and_dictionary_metadata(temp_db):
     assert apps[selected]["cv_profile_revision"] == 0
 
 
-def test_selection_change_and_same_selection(temp_db, tmp_path):
+@pytest.mark.parametrize("profile", ["mechanical_engineering", "baker"])
+def test_selection_change_and_same_selection(temp_db, tmp_path, profile):
     cv = tmp_path / "cv.pdf"
     letter = tmp_path / "letter.pdf"
     cv.write_bytes(b"CV")
@@ -67,9 +68,12 @@ def test_selection_change_and_same_selection(temp_db, tmp_path):
     before = db.get_application(app_id)
     assert db.set_application_profile(app_id, "it") == ("it", 0)
     assert db.get_application(app_id) == before
-    assert db.set_application_profile(app_id, "mechanical_engineering") == ("mechanical_engineering", 1)
+    assert db.set_application_profile(app_id, profile) == (profile, 1)
     assert db.get_application(app_id)[4] is None
     assert db.get_application(app_id)[8] is None
+    assert db.set_application_profile(app_id, profile) == (profile, 1)
+    db.init_db()
+    assert db.get_application_profile(app_id) == (profile, 1)
     assert db.set_application_profile(app_id, "it") == ("it", 2)
     assert db.get_application_profile(other) == ("mechanical_engineering", 0)
     assert db.get_latest_status(app_id) == "applied"

@@ -120,7 +120,7 @@ def test_excluded_title_is_not_a_keyword_ban_on_approved_titles(entry):
                           context, "cv").warnings == ()
 
 
-@pytest.mark.parametrize("section", ["Experience", "Doświadczenie"])
+@pytest.mark.parametrize("section", ["Experience", "Doświadczenie", "Other Employment", "Pozostałe zatrudnienie", "Dotychczasowa praca zawodowa"])
 def test_excluded_ledger_title_warns_without_matching_employment_identity(section):
     check, _ = validator('{"passed": true, "violations": []}')
     markdown = (f"# Candidate\n## {section}\n"
@@ -144,3 +144,27 @@ def test_empty_document_is_not_approved():
     assert "empty" in str(result.warnings)
     assert "incomplete" in result.summary
     assert client.requests == []
+
+
+def test_practice_and_workshop_headings_are_not_employment():
+    check, _ = validator('{"passed": true, "violations": []}')
+    markdown = "# Candidate\n## Workshops\n### Life Cycle Data Engineer\n## Home Baking Practice\nEDC | 2015-2019"
+    assert check.validate(markdown, prepared(), "cv").warnings == ()
+
+
+@pytest.mark.parametrize("kind", ["cv", "cover_letter"])
+@pytest.mark.parametrize("language", ["en", "pl"])
+@pytest.mark.parametrize("claim", ["Four years of professional baking", "Daily production", "Commercial ovens", "Sanitary clearance", "Certified baker"])
+def test_baker_semantic_findings_are_advisory_and_receive_bounded_evidence(kind, language, claim):
+    from pathlib import Path
+    from cv_optimizer.profiles import resolve_profile
+    source = json.loads((Path(__file__).resolve().parent.parent / "master_cv.example.json").read_text())
+    context = resolve_profile(source, "baker", document_type=kind)
+    check, client = validator(json.dumps({"passed": False, "violations": [{"quote": claim, "reason": "Unsupported candidate claim"}]}))
+    result = check.validate("# Candidate\n" + claim, context, kind, language)
+    assert claim in str(result.warnings) and claim not in result.summary
+    payload = json.loads(client.requests[0]["messages"][1]["content"])
+    assert payload["facts"] == context.facts and payload["excluded"] == context.excluded
+    system = client.requests[0]["messages"][0]["content"]
+    for term in ("home_practice", "workshops", "portfolio", "daily production", "sanitary clearance", "Other Employment", "Pozostałe zatrudnienie"):
+        assert term in system

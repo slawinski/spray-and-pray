@@ -56,7 +56,8 @@ def _employment_text(markdown: str, document_type: str) -> str:
         heading = re.match(r"^##\s+(.+)$", plain)
         if heading:
             section = heading[1].casefold()
-        elif section in ("experience", "doświadczenie"):
+        elif section in ("experience", "doświadczenie", "other employment", "pozostałe zatrudnienie",
+                         "dotychczasowa praca zawodowa"):
             employment.append(plain)
     return "\n".join(employment)
 

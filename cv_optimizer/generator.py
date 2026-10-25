@@ -131,7 +131,7 @@ class PDFGenerator:
             main_width = page_width - (2 * margin) - sidebar_width - gutter
             
             # Build main column HTML
-            main_keys = ["Summary", "Experience", "Education", "Community"]
+            main_keys = ["Summary", "Home Baking Practice", "Workshops", "Experience", "Education", "Community"]
             main_html_parts = []
             for key in main_keys:
                 if key in sections:
@@ -206,7 +206,7 @@ class PDFGenerator:
             # Sidebar
             sidebar_x1 = main_x1 + main_width + gutter
             sidebar_rect = fitz.Rect(sidebar_x1, margin + header_height + 10, page_width - margin, page_height - margin)
-            sidebar_keys = ["Personal Info", "Skills", "Languages", "Hobbies"]
+            sidebar_keys = ["Personal Info", "Portfolio", "Skills", "Languages", "Hobbies"]
             sidebar_html_parts = []
             for key in sidebar_keys:
                 if key in sections:
@@ -316,6 +316,17 @@ class PDFGenerator:
 
     def _normalize_key(self, key: str) -> str:
         lowered = key.strip().lower()
+        baker_headings = {
+            "home baking practice": "Home Baking Practice",
+            "domowa praktyka piekarska": "Home Baking Practice",
+            "domowy wypiek chleba": "Home Baking Practice",
+            "workshops": "Workshops", "warsztaty": "Workshops",
+            "portfolio": "Portfolio",
+            "other employment": "Experience", "pozostałe zatrudnienie": "Experience",
+            "dotychczasowa praca zawodowa": "Experience",
+        }
+        if lowered in baker_headings:
+            return baker_headings[lowered]
         if "experience" in lowered or "employment" in lowered or "work" in lowered: return "Experience"
         if "profile" in lowered or "summary" in lowered or "about" in lowered: return "Summary"
         if "contact" in lowered or "detail" in lowered or "personal" in lowered or "link" in lowered: return "Personal Info"

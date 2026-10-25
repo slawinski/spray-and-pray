@@ -20,7 +20,7 @@ def test_track_request_requires_explicit_profile(fields):
         server.TrackRequest(company="Example", role="Engineer", jd="Synthetic vacancy", **fields)
 
 
-@pytest.mark.parametrize("profile", ["it", "mechanical_engineering"])
+@pytest.mark.parametrize("profile", ["it", "mechanical_engineering", "baker"])
 def test_request_background_runner_tracker_propagation(temp_db, monkeypatch, profile):
     tracked = Mock(return_value=123)
     monkeypatch.setattr(tracker, "track", tracked)
@@ -103,14 +103,14 @@ def test_popup_both_flows_require_and_send_shared_selection():
             await elements[button].click();
             assert.equal(requests.length, before);
             assert.match(elements.status.textContent, /select a CV profile/);
-            for (const profile of ['it', 'mechanical_engineering']) {
+            for (const profile of ['it', 'mechanical_engineering', 'baker']) {
                 elements['cv-profile'].value = profile;
                 await elements[button].click();
                 assert.equal(requests.at(-1).cv_profile, profile);
                 assert.equal(elements[button].disabled, false);
             }
         }
-        assert.equal(requests.length, 4);
+        assert.equal(requests.length, 6);
         let finishExtraction;
         let extractionStarted;
         const started = new Promise(resolve => {extractionStarted = resolve;});
@@ -118,14 +118,29 @@ def test_popup_both_flows_require_and_send_shared_selection():
             extractionStarted();
             return new Promise(resolve => {finishExtraction = resolve;});
         };
-        elements['cv-profile'].value = 'it';
+        elements['cv-profile'].value = 'baker';
         const pending = elements['extract-btn'].click();
         await started;
         elements['cv-profile'].value = 'mechanical_engineering';
         finishExtraction([{result: {company: 'Example', role: 'Engineer', jd: 'Synthetic vacancy'}}]);
         await pending;
-        assert.equal(requests.at(-1).cv_profile, 'it');
+        assert.equal(requests.at(-1).cv_profile, 'baker');
     })().catch(error => {console.error(error); process.exitCode = 1;});
     """
     popup = Path(__file__).resolve().parent.parent / "extension" / "popup.js"
     subprocess.run([node, "-e", script, str(popup)], check=True, capture_output=True, text=True)
+
+
+def test_popup_offers_baker_without_changing_unselected_default():
+    from html.parser import HTMLParser
+    class Options(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.options = []
+        def handle_starttag(self, tag, attrs):
+            if tag == "option":
+                self.options.append(dict(attrs))
+    parser = Options()
+    parser.feed((Path(__file__).resolve().parent.parent / "extension/popup.html").read_text())
+    assert "baker" in [option.get("value") for option in parser.options]
+    assert [o["value"] for o in parser.options if "selected" in o] == [""]

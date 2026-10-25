@@ -42,14 +42,14 @@ Everything runs locally. There is no backend service, no account, and no data le
 
 ### 1. ATS-Optimized CV Generation
 - Takes a `master_cv.json` and a job description, produces a tailored CV in Markdown.
-- Uses the application's manually selected **IT** or **Mechanical Engineering** profile to select eligible facts before writing; the full career record is not sent to the document writer.
+- Uses the application's selected **IT**, **Mechanical Engineering**, or **Baker** profile to select eligible facts before writing; the full career record is not sent to the document writer.
 - Uses a dedicated LLM prompt (`cv_optimizer/prompts/optimize.md`) that enforces:
   - **Exact keyword matching** — literal string comparison against the JD (e.g. `React.js` not `React`).
   - **Anti-hallucination** — every skill and achievement must trace back to the Master CV. Gaps are never fabricated.
   - **Front-loaded keywords** in the Summary and first Experience bullets.
   - **Human readability first** — ATS passes get you screened, but a recruiter gets you hired.
 - Renders a styled two-column PDF (header, sidebar with skills/contact, main column with experience/education).
-- Optionally embeds a candidate photo (`candidate.jpeg`) top-left in the header, sized to match the name + title block.
+- Optionally embeds a candidate photo (`candidate.jpeg`) top-left in the header, sized to match the name + title block, including on Baker CVs.
 
 ### 2. ATS-Optimized Cover Letters
 - Generates a tailored cover letter alongside the CV (`cv_optimizer/prompts/cover_letter.md`).
@@ -419,7 +419,7 @@ fake `applied` status. Document generation stays a deliberate, per-job user
 action in the TUI (`ctrl+r`, `ctrl+g`).
 
 New discovery drafts have **no profile selected**. The first CV or cover-letter
-action prompts for IT or Mechanical Engineering; cancelling leaves the draft
+action prompts for IT, Mechanical Engineering, or Baker; cancelling leaves the draft
 unselected. The detail panel shows the stored choice. Use `v` to select or change
 it explicitly. Each application's CV and letter reuse that choice independently
 of other applications. Changing it clears both document-ready paths but leaves
@@ -546,7 +546,7 @@ allow headers, but has no authentication and permits origin-free local clients.
 2. Load the `extension/` directory as an unpacked extension:
    - Chrome: `chrome://extensions` → Developer mode → *Load unpacked*
    - Firefox: `about:debugging` → *Load Temporary Add-on*
-3. Browse any supported job board, click the extension icon, explicitly select **IT** or **Mechanical Engineering**, and click **Optimize for this Job**. The same required selector applies to manual entry; there is no automatic profile choice.
+3. Browse any supported job board, click the extension icon, explicitly select **IT**, **Mechanical Engineering**, or **Baker**, and click **Optimize for this Job**. The same required selector applies to manual entry; no profile is inferred from the vacancy.
 4. The completion notification distinguishes tracked-only failure, CV ready with letter failure, and both documents ready. An accepted request alone does not mean documents are ready.
 
 ### 3. Web server API
@@ -561,7 +561,7 @@ uvicorn server:app --host localhost --port 8000 --reload
 |---|---|---|
 | `GET` | `/reports` | Local read-only Search Focus Reporting workspace |
 | `GET` | `/api/reports/snapshot` | Fresh evidence bundle; optional `start`, `end`, `profile`, normalized `source` filters |
-| `POST` | `/api/track` | Start CV + cover letter pipeline. Body: `{company, role, jd, cv_profile, url?, source?}`; `cv_profile` must be `"it"` or `"mechanical_engineering"` |
+| `POST` | `/api/track` | Start CV + cover letter pipeline. Body: `{company, role, jd, cv_profile, url?, source?}`; `cv_profile` must be `"it"`, `"mechanical_engineering"`, or `"baker"` |
 | `POST` | `/api/cover-letter/{app_id}` | Generate cover letter for an existing application |
 | `GET` | `/api/open/{app_id}` | Reveal CV PDF in Finder |
 | `GET` | `/api/open-cover-letter/{app_id}` | Reveal cover letter PDF in Finder |
@@ -622,7 +622,7 @@ eligibility rather than maintaining separate biographies:
 - `profile_shared` explicitly lists personal-info **field names**, exact language
   entry snapshots, and the exact source `disclaimer` string (or `null` to omit
   consent text). It does not copy unknown fields automatically.
-- `profiles.it` and `profiles.mechanical_engineering` each require an approved
+- Each prepared policy (`profiles.it`, `profiles.mechanical_engineering`, `profiles.baker`) requires an approved
   `headline`, a `summary` string or structured-object snapshot, `roles`, `skills`,
   and `education`. Positioning is approved per profile, not taken implicitly from
   the unrestricted master summary or most recent job title. Historical job titles
@@ -642,7 +642,58 @@ eligibility rather than maintaining separate biographies:
   keep their existing presentation. Overrides on the IT profile are not allowed.
 - Optional `speaking_and_community` and `certifications` selectors are exact
   source-entry snapshots; `hobbies` selectors are exact strings. Omission selects
-  nothing. Newly added facts are not automatically eligible for either profile.
+  nothing. Newly added facts are not automatically eligible for any profile.
+
+### Preparing Baker documents
+
+Keep your real data in ignored `master_cv.json`; the shipped example and automated
+tests are synthetic, not the candidate's baking or career record. Existing masters
+with only IT and engineering policies remain valid; requesting an unprepared Baker
+policy fails rather than falling back to another narrative.
+
+Add canonical `home_practice`, `workshops`, and `portfolio_links` arrays and select
+their exact record snapshots under `profiles.baker`. Only Baker accepts these
+selectors; omission selects nothing. Practice records allow `title`, `context`,
+`start_period`, `bake_count`, `batch_size`, `sharing_context`, and `activities`
+(a list of strings). `frequency` is optional for records that actually need it;
+do not invent a regular schedule. Bake counts mean sessions, not loaves, and
+"up to" batch sizes are upper bounds. Bread shared with friends on private trips
+is hobby practice, not catering or commercial production.
+Workshop records allow `name`, `provider`, `attendance_period`, `instructor`, and
+optional `url`. Portfolio records allow `label`, `url` and an optional `description`,
+so a self-built baking app can be linked and described alongside a baking portfolio.
+Use the live app URL rather than its source repository. Preserve approximate
+dates and quantities as strings rather than inventing exact dates. Add only
+confirmed techniques to a baking skill category and select its exact strings in
+Baker, not the other document profiles. Do not infer skills from images or syllabi.
+
+For a short career overview, set `profiles.baker.career_summary` to an approved
+paragraph and `roles` to `{}`. Individual employers, titles and dates are then
+excluded from the writer; the career summary replaces the role-by-role history.
+Older Baker policies without `career_summary` can still select `brief` roles.
+Select the existing concise degree view. Baker projects only degree and university
+(plus the internal ID); it omits dates, thesis and specialization. Do not copy
+example career IDs into a real master or change existing IT/engineering policies.
+
+Baker CVs foreground **Home Baking Practice**, then **Workshops**, **Other
+Employment** and **Education**, after Summary. The sidebar includes a labeled,
+clickable **Portfolio** links and selected descriptions alongside contact, skills
+and languages. Baker omits LinkedIn and GitHub from the selected contact fields.
+Polish JDs
+use Polish documents, including **Domowy wypiek chleba**, **Warsztaty** and
+**Dotychczasowa praca zawodowa**. Polish Baker instructions favor natural bakery
+language over literal English translations and state the hobby context once
+without repeated disclaimers. The configured candidate portrait appears as on other
+CVs; bread and Instagram photographs are not embedded. The same selected facts
+govern initial and regenerated letters. Hobby practice is not paid employment,
+and workshop attendance is not certification or professional experience. Advisory
+checks flag inflation, unsupported commercial/credential claims, missing selected
+sections/portfolio and excluded technical achievements; they do not block publication.
+
+Source and selector edits take effect on the next generation or regeneration;
+they never rewrite saved files or change an application's selection. Review the
+generated Markdown and PDF in both languages before applying. Baker adds document
+eligibility, not bakery discovery, profile-aware scoring or interview behavior.
 
 For example, retain the original concise IT master's record as `msc-it`; add
 separate expanded master's and bachelor's records (`msc-expanded`, `bsc`) for
@@ -668,7 +719,7 @@ When editing selected source text, update its exact selector too, including
 language, community, and certification snapshots. Duplicate IDs, ambiguous or
 dangling references, wildcards, missing prepared policies, and invalid supplied
 policies stop generation with a configuration error. There is no raw-master
-fallback; both supplied policies are validated even when only one is requested.
+fallback; all supplied policies are validated even when only one is requested.
 
 The old-CV recovery was a **one-time candidate-reviewed import**, not a reusable
 import tool. Only confirmed source facts belong in the master; absent metrics,
@@ -786,7 +837,7 @@ tests are intentionally opt-in.
 - **No dependency lockfile.** Dependencies are installed ad hoc; there is no `requirements.txt` or `pyproject.toml`. Pin them for reproducibility.
 - **Personal data is gitignored.** `master_cv.json`, `applications.db`, and `applications/` are not version-controlled. Back them up yourself.
 - **PDF layout is fragile.** The CV PDF uses hard-coded dimensions (A4 mediabox, fixed sidebar width). Large deviations in content length or diacritics may need layout tuning.
-- **Checks are not a correctness guarantee.** Source projection limits writer input; deterministic and independent semantic checks reject detected violations before publication. Semantic checks can still miss errors. Always review generated CVs and letters before submitting.
+- **Checks are not a correctness guarantee.** Source projection limits writer input; deterministic and independent semantic checks warn about detected violations before publication. Checks are advisory and can still miss errors. Always review generated CVs and letters before submitting.
 - **ATS optimization is heuristic.** "ATS-optimized" means following well-known parser heuristics (literal keyword matching, clean text, standard headings) — it does not guarantee passage through any specific ATS vendor.
 - **Cover letter scope.** The cover letter generator assumes a generic "Dear Hiring Manager" salutation; it cannot infer a specific recruiter's name.
 

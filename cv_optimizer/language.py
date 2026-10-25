@@ -210,9 +210,61 @@ def build_language_instruction(language: ApplicationLanguage) -> str:
     )
 
 
-def build_cv_heading_instruction(language: ApplicationLanguage) -> str:
+def build_cv_heading_instruction(language: ApplicationLanguage, profile: str = "it") -> str:
     """Returns CV-specific heading guidance (Polish section headings for 'pl')."""
     if language == "pl":
+        if profile == "baker":
+            return (
+                'For Baker use exactly these Polish headings in this order: '
+                '"## O mnie", "## Domowy wypiek chleba", "## Warsztaty", '
+                '"## Dotychczasowa praca zawodowa", "## Wykształcenie", "## Dane kontaktowe", '
+                '"## Portfolio", "## Umiejętności", "## Języki", "## Klauzula RODO". '
+                'Skip sections without selected data. Translate the approved aspiring-baker '
+                'headline concisely as "Początkujący piekarz", not a long '
+                '"Kandydat na stanowisko..." label; this is entry-level positioning, '
+                'never a qualification.\n\n'
+                'Write directly for a Polish bakery, not as a literal translation of an '
+                'English corporate CV. Prefer short, concrete sentences and a consistent '
+                'first-person voice for the introduction, practice and career paragraph. '
+                'Open with hobby bread baking and the application goal, not the unnatural '
+                'label "piekarz domowy". Keep O mnie to two short sentences about the '
+                'hobby and job target. Put counts and start dates in the baking section '
+                'and previous career details in the career section, without repeating '
+                'them in the introduction. '
+                'Use "Mam za sobą ponad N wypieków" for a selected bake count, not '
+                '"sesje wypiekowe"; preserve the selected number and qualifier. '
+                'Translate country loaves as "chleby wiejskie", not "wiejskie bochenki". '
+                'Prefer "prowadzenie zakwasu", "formowanie bochenków" and '
+                '"nawodnienie ciasta" to literal English calques. Describe a guided bake '
+                'flow as "instrukcje krok po kroku", never "prowadzony przepływ wypieku". '
+                'Translate descriptive portfolio labels into Polish while preserving app '
+                'names and URLs; a home baking portfolio can be labeled "Moje wypieki". '
+                'Include any supplied app description rather than dropping it; if none '
+                'is selected, keep the link alone and do not infer features from its URL. '
+                'Translate language proficiency labels idiomatically; '
+                '"Full professional proficiency" can be "biegła znajomość", not '
+                '"pełna znajomość zawodowa". '
+                'Do not invent CEFR levels. Education must also read naturally in Polish. '
+                'Use the supplied Polish university name rather than repeating its English '
+                'translation; for a bilingual name use the Polish form only. Translate the '
+                'selected degree level and subject descriptively: for example, an MSc in '
+                'Mechanical Engineering is "Studia magisterskie: inżynieria mechaniczna". '
+                'This describes the supplied qualification, not a newly asserted official '
+                'programme or professional title. Do not invent a different programme, '
+                'specialization or the formal title "magister inżynier" unless selected '
+                'facts establish it. Do not leave a whole degree line in English merely '
+                'because an official Polish diploma title is unavailable.\n\n'
+                'Identify home baking as a hobby once clearly, then describe the facts '
+                'without repeated disclaimers such as "nie była to działalność zarobkowa" '
+                'or "a nie zawodowa". These are truthfulness constraints, not text to '
+                'repeat in the CV. Do not turn private baking into professional experience. '
+                'Summarize the previous career plainly without repeating the introduction '
+                'or the application target, retaining every career field named in '
+                'career_summary rather than dropping one for brevity. Style improvements '
+                'must not remove selected app descriptions or career fields. '
+                'Examples illustrate wording only; never add '
+                'facts, activities or app features absent from the selected data.'
+            )
         return (
             "Translate the CV section headings into Polish using exactly these headings: "
             "\"## Podsumowanie\", \"## Doświadczenie\", \"## Dane kontaktowe\", "

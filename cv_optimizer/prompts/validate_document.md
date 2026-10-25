@@ -25,6 +25,53 @@ dates, additional degrees, theses or specializations. For engineering CVs, the
 selected expanded degrees may include their supplied dates, specializations and
 theses. Do not borrow from excluded education views.
 
+For baker in either English or Polish, `home_practice` is hobby home baking,
+`workshops` are workshop attendance, and neither is paid employment or a professional
+qualification. Flag inflated hobby duration presented as professional experience,
+inflated frequency, bake count or batch size (especially daily production), commercial equipment
+proficiency, sanitary clearance or credentials unsupported by selected facts.
+Photographs, Instagram, a workshop syllabus and vacancy requirements do not establish
+independent skills or products. The portfolio is a link, not additional evidence.
+Keep bake counts as baking sessions, not loaf counts, and batch-size maxima as upper
+bounds, not fixed quantities. Do not demand a monthly frequency when none is selected.
+Sharing bread with friends on private trips must not become customers, catering or
+commercial production. Selected portfolio descriptions may establish authorship and
+features of a baking app, not professional baking qualifications.
+On Baker CVs, Other Employment / Dotychczasowa praca zawodowa (also the legacy
+Pozostałe zatrudnienie heading) is the career section.
+When `career_summary` is selected, require only a short source-backed paragraph,
+not individual titles, employers or dates. This approved broad career summary is
+allowed even though the underlying individual employment identities are excluded;
+do not restore those roles or infer transferable abilities. Without career_summary,
+require every selected title, employer and dates briefly, with no excluded technical
+achievements. Baker cover letters need not repeat the career paragraph or chronology; any
+employment claim such a letter makes must stay source-backed.
+For Baker CVs require selected Home Baking Practice / Domowy wypiek chleba,
+Workshops / Warsztaty, Other Employment / Dotychczasowa praca zawodowa, Education / Wykształcenie
+and labeled clickable links for each selected portfolio entry, with its description
+when supplied, when corresponding selected facts exist. Do not add LinkedIn or GitHub
+contact links for Baker.
+Practice and workshops must remain separate from employment and certifications.
+Education is only selected degree and university, not attendance dates,
+specialization or thesis. Do not treat the selected degree identity as excluded
+merely because another expanded view of that same degree is excluded.
+For Baker letters, flag inferred transferable abilities (measurement, process
+discipline, systematic habits, reliability or learning ability) attributed to a
+degree or employment title without explicit selected evidence. Home baking must
+be identified as a hobby, not implied to be paid work by ambiguous 'experience'.
+One clear hobby statement is sufficient; do not demand repeated disclaimers that
+the activity was unpaid or non-professional. Natural Polish paraphrases, translated
+descriptive portfolio labels and the headings O mnie, Domowy wypiek chleba,
+Dotychczasowa praca zawodowa and Wykształcenie are valid. Legacy Polish headings
+remain valid too. Do not require literal English wording or interpret a faithful
+paraphrase as a new fact. Do not accept invented qualifications or CEFR levels.
+For Polish Baker documents, a supplied Polish university name can replace the
+English part of a bilingual name. A descriptive Polish translation of the selected
+degree level and subject is valid: "Studia magisterskie: inżynieria mechaniczna"
+faithfully describes an MSc in Mechanical Engineering without claiming a different
+programme or a new formal professional title. Do not demand English degree wording.
+For IT and engineering, exclude Baker-only practice, workshops, portfolio and skills.
+
 The approved headline/summary can be engineering-led without claiming that the
 latest employment title changed. Respect role_detail: relevance, not recency,
 determines detail; retain selected recent IT jobs briefly and keep CV experience
