@@ -61,7 +61,8 @@ Everything runs locally. There is no backend service, no account, and no data le
 ### 3. 1-Click Browser Extension
 - Chrome/Firefox extension (Manifest V3, vanilla JS) that scrapes the current tab's job posting and POSTs it to the local API.
 - Supports job boards with site-specific selectors plus a JSON-LD fallback:
-  - LinkedIn, justjoin.it, nofluffjobs.com, theprotocol.it, greenhouse.io, workingnomads.com
+   - LinkedIn, justjoin.it, nofluffjobs.com, theprotocol.it, greenhouse.io, workingnomads.com
+- Employer extraction uses listing-specific structured data, employer fields, or supported title formats (including eRecruiter). It never uses the site's name alone as the employer. Recognized job-platform names and bare domains are rejected across extraction paths; missing employers become `Unknown`. Portal recognition is heuristic, so unfamiliar platform names explicitly presented as employers may still need manual correction.
 - After explicit profile selection, starts generation of the JD copy, CV (`.md` + `.pdf`), and cover letter (`.md` + `.pdf`) on a single click. Documents become ready only after successful checking and publication; completion can be partial.
 
 ### 4. Application Tracking
@@ -794,7 +795,7 @@ must-have still does. Historical `match-v1` rows remain stored and versioned.
 ## Testing
 
 Install `pytest` and a compatible `httpx` for FastAPI TestClient tests. Node.js
-must be on PATH for reporting browser-state, rendering and integration checks;
+must be on PATH for extension extraction and reporting browser-state, rendering and integration checks;
 their Node-backed checks must actually run before shipping (not silently skip).
 No npm dependencies or paid model calls are needed for reporting tests.
 
