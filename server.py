@@ -90,6 +90,8 @@ class TrackRequest(BaseModel):
     source: str = None
 
 def send_discord_notification(title: str, description: str, color: int, url: str = None):
+    if not settings.enable_notifications:
+        return
     webhook_url = settings.discord_webhook_url
     if not webhook_url:
         logger.warning("Discord webhook URL not configured. Skipping push notification.")
@@ -118,13 +120,19 @@ def send_discord_notification(title: str, description: str, color: int, url: str
     except Exception as e:
         logger.warning(f"Failed to send Discord notification: {e}")
 
+def _send_desktop_notification(title: str, message: str):
+    if not settings.enable_notifications:
+        return
+    try:
+        os.system(f"""osascript -e 'display notification "{message}" with title "{title}"'""")
+    except Exception:
+        logger.warning("Desktop notification failed", exc_info=True)
+
+
 def _notify_document_ready(*, title: str, description: str, desktop_message: str,
                            color: int, url: str = None):
     """Completion delivery is best effort; documents are already published."""
-    try:
-        os.system(f"""osascript -e 'display notification "{desktop_message}" with title "CV Optimizer"'""")
-    except Exception:
-        logger.warning("Desktop document notification failed", exc_info=True)
+    _send_desktop_notification("CV Optimizer", desktop_message)
     try:
         send_discord_notification(title=title, description=description, color=color, url=url)
     except Exception:
@@ -176,7 +184,7 @@ def run_cv_optimizer(company: str, role: str, jd_text: str, job_url: str = None,
             
     except Exception as e:
         logger.error(f"Error executing optimization: {e}")
-        os.system(f"""osascript -e 'display notification "Error executing command." with title "❌ CV Optimizer"'""")
+        _send_desktop_notification("❌ CV Optimizer", "Error executing command.")
         send_discord_notification(
             title="❌ CV Generation Failed",
             description=f"Failed to generate CV for **{role}** at **{company}**. See local logs for details.",
@@ -637,7 +645,7 @@ def _run_cover_letter_generation(app_id: int):
         )
     except Exception as e:
         logger.error(f"Cover letter generation failed: {e}")
-        os.system(f"""osascript -e 'display notification "Cover letter generation failed for application #{app_id}" with title "❌ Cover Letter Failed"'""")
+        _send_desktop_notification("❌ Cover Letter Failed", f"Cover letter generation failed for application #{app_id}")
         send_discord_notification(
             title="❌ Cover Letter Generation Failed",
             description=f"Failed to generate cover letter for application #{app_id}. See local logs for details.",

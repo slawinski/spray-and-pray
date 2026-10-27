@@ -12,6 +12,8 @@ logger = logging.getLogger(__name__)
 
 
 def _macos_notification(title: str, message: str) -> None:
+    if not settings.enable_notifications:
+        return
     try:
         import subprocess
 
@@ -29,6 +31,8 @@ def _macos_notification(title: str, message: str) -> None:
 
 
 def _discord_summary(imported: list[dict]) -> None:
+    if not settings.enable_notifications:
+        return
     webhook_url = settings.discord_webhook_url
     if not webhook_url:
         logger.info("Discord webhook not configured; skipping summary")

@@ -263,6 +263,7 @@ def test_checker_constructor_and_warning_delivery_failure_do_not_block(generatio
 def test_server_advisory_completion_is_safe_and_best_effort(generation, monkeypatch, caplog,
                                                           later_letter, delivery_fails):
     import server
+    monkeypatch.setattr(server.settings, "enable_notifications", True)
     g = generation
     g.checker.side_effect = RuntimeError("PRIVATE EXCERPT AND PROVIDER ERROR")
     notify = Mock(side_effect=RuntimeError("delivery failed") if delivery_fails else None)
@@ -412,6 +413,7 @@ def test_initial_letter_does_not_silently_follow_changed_profile(generation, mon
 @pytest.mark.parametrize("outcome", ["tracked", "cv", "warning_letter", "both", "changed"])
 def test_server_reports_actual_current_paths(generation, monkeypatch, outcome):
     import server
+    monkeypatch.setattr(server.settings, "enable_notifications", True)
     g = generation
     if outcome == "tracked":
         g.cv.side_effect = ValueError("CV rejected")

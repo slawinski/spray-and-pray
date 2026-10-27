@@ -263,10 +263,16 @@ cp master_cv.example.json master_cv.json
 | Variable | Required | Description |
 |---|---|---|
 | `DEEPSEEK_API_KEY` | ✅ | API key for the LLM provider (DeepSeek by default) |
-| `DISCORD_WEBHOOK_URL` | ❌ | Discord webhook for push notifications |
+| `ENABLE_NOTIFICATIONS` | ❌ | Opt-in for Discord and desktop notifications; defaults to `false` |
+| `DISCORD_WEBHOOK_URL` | ❌ | Discord webhook; also requires `ENABLE_NOTIFICATIONS=true` |
 | `OLLAMA_BASE_URL` | ❌ | Optional local Ollama endpoint |
 | `OLLAMA_API_KEY` | ❌ | Optional Ollama key |
 | `SERPAPI_API_KEY` | ❌ | SerpApi key for Google Jobs discovery (`./cv-opt discover`) |
+
+Discord and desktop notifications are off by default, including generation success/failure messages and discovery summaries.
+Set `ENABLE_NOTIFICATIONS=true` in `.env` to enable both channels, then restart the server, TUI, and any running discovery processes.
+Discord also needs `DISCORD_WEBHOOK_URL`; desktop delivery does not.
+This setting does not affect in-app feedback, logging, or whether discovery runs.
 
 ### Discovery configuration (`job_search.json`)
 

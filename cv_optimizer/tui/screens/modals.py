@@ -92,6 +92,11 @@ class ResponsiveModal(ModalScreen):
     BINDINGS = [("escape", "cancel", "Cancel")]
 
     def on_mount(self) -> None:
+        for field in self.query("Input, Select"):
+            if (field.focusable and not getattr(field, "read_only", False)
+                    and all(node.display for node in field.ancestors_with_self)):
+                self.set_focus(field)
+                break
         self.reflow()
 
     def on_resize(self) -> None:
