@@ -15,6 +15,27 @@ def seed(db, count=75):
         db.insert_status(app_id, "draft")
 
 
+@pytest.mark.parametrize("size", [(40, 12), (80, 24), (120, 24), (200, 50)])
+def test_interview_round_numbers_are_visible_in_rendered_rows(temp_db, size):
+    for round_number in (1, 12):
+        app_id = temp_db.insert_application(f"Round {round_number}", "Engineer")
+        temp_db.insert_status(app_id, "applied")
+        temp_db.insert_status(app_id, f"interview {round_number}")
+
+    async def run():
+        app = CvDashboard()
+        async with app.run_test(size=size) as pilot:
+            await pilot.pause()
+            table = app.query_one(DataTable)
+            rendered = "\n".join(table.render_line(y).text for y in range(table.size.height))
+            prefix = "interview" if size[0] < 80 else "Int."
+            for round_number in (1, 12):
+                assert f"{prefix} {round_number}" in rendered
+            assert table.max_scroll_x == 0
+
+    asyncio.run(run())
+
+
 @pytest.mark.parametrize("size", [(40, 12), (80, 24), (120, 24), (180, 24), (240, 50)])
 def test_document_checks_and_added_date_remain_visible(temp_db, size):
     cv_only = temp_db.insert_application("CV ready", "Engineer", cv_path="cv.pdf")
