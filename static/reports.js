@@ -64,23 +64,83 @@
   function sankeyChart(report) {
     const nodes = report.nodes || [], links = report.links || [];
     if (!nodes.length) return '<p>No recorded paths in this selection.</p>';
-    const positions = [...new Set(nodes.map(n=>n.position))];
-    const lanes = positions.map(p=>nodes.filter(n=>n.position===p));
+    const positions = [...new Set(nodes.map(n=>n.position))].sort((a,b)=>a-b);
     const maxCount = Math.max(1,...nodes.map(n=>n.count));
-    const height = Math.max(220, ...lanes.map(l=>l.length*100+40));
-    const width = Math.max(850,positions.length*310);
-    const coordinates = new Map();
-    lanes.forEach((lane,p)=>lane.forEach((n,i)=>coordinates.set(n.key,{x:p*310+16,y:i*100+46,h:Math.max(8,n.count/maxCount*45)})));
-    const offsetsOut = new Map(), offsetsIn = new Map();
-    const paths = links.map(l=>{
-      const a=coordinates.get(l.source),b=coordinates.get(l.target);
-      if (!a || !b) return '';
-      const w = l.count/maxCount*45, out=offsetsOut.get(l.source)||0, inc=offsetsIn.get(l.target)||0;
-      offsetsOut.set(l.source,out+w); offsetsIn.set(l.target,inc+w);
-      return `<path d="M ${a.x+14} ${a.y+out+w/2} C ${a.x+155} ${a.y+out+w/2}, ${b.x-140} ${b.y+inc+w/2}, ${b.x} ${b.y+inc+w/2}" stroke-width="${w}"/>`;
+    const scale = 200/maxCount;
+    const width = Math.max(850,(positions.length-1)*310+46);
+    const coordinates = new Map(nodes.map(n=>[n.key,{...n,column:positions.indexOf(n.position),incoming:[],outgoing:[]}]));
+    const lanes = positions.map((_,p)=>[...coordinates.values()].filter(n=>n.column===p));
+    // Reserve an invisible lane in every skipped column instead of drawing through other flows.
+    const routes = links.map(l=>{
+      const source=coordinates.get(l.source), target=coordinates.get(l.target), w=Math.max(1,l.count*scale);
+      const route=[source];
+      for(let column=source.column+1;column<target.column;column++) {
+        const bypass={column,count:l.count,bypass:true,incoming:[],outgoing:[]};
+        lanes[column].push(bypass); route.push(bypass);
+      }
+      route.push(target);
+      return route.slice(1).map((b,i)=>{
+        const edge={source:route[i],target:b,w};
+        edge.source.outgoing.push(edge); b.incoming.push(edge); return edge;
+      });
+    });
+    const orderLane=lane=>lane.forEach((n,i)=>{n.order=i;});
+    lanes.forEach(orderLane);
+    let bestLanes=lanes.map(lane=>lane.slice()), fewestCrossings=Infinity;
+    // Order from both ends so shared outcomes can gather flows without reversing them.
+    for(let pass=0;pass<12;pass++) {
+      const backward=pass%2===0;
+      for(const lane of backward ? [...lanes].reverse() : lanes) {
+        const rank=n=>{
+          const edges=backward ? n.outgoing : n.incoming;
+          return edges.length ? edges.reduce((sum,e)=>sum+e[backward ? 'target' : 'source'].order,0)/edges.length : n.order;
+        };
+        const ranks=new Map(lane.map(n=>[n,rank(n)]));
+        lane.sort((a,b)=>ranks.get(a)-ranks.get(b)); orderLane(lane);
+      }
+      let crossings=0;
+      for(const lane of lanes) {
+        const edges=lane.flatMap(n=>n.outgoing);
+        for(let i=0;i<edges.length;i++) for(let j=i+1;j<edges.length;j++) {
+          if((edges[i].source.order-edges[j].source.order)*(edges[i].target.order-edges[j].target.order)<0) crossings++;
+        }
+      }
+      if(crossings<fewestCrossings) {fewestCrossings=crossings; bestLanes=lanes.map(lane=>lane.slice());}
+      if(!crossings) break;
+    }
+    let height=220;
+    bestLanes.forEach((lane,p)=>{
+      let y=64;
+      lane.forEach((n,i)=>{
+        n.order=i; n.x=p*310+16; n.y=y;
+        n.h=Math.max(n.bypass ? 0 : 8,n.count*scale,
+          n.incoming.reduce((sum,e)=>sum+e.w,0),n.outgoing.reduce((sum,e)=>sum+e.w,0));
+        y+=n.h+72;
+      });
+      height=Math.max(height,y);
+    });
+    lanes.flat().forEach(n=>{
+      for(const [edges,neighbor,port] of [[n.incoming,'source','endY'],[n.outgoing,'target','startY']]) {
+        edges.sort((a,b)=>a[neighbor].y-b[neighbor].y);
+        let offset=n.y+(n.h-edges.reduce((sum,e)=>sum+e.w,0))/2;
+        edges.forEach(e=>{e[port]=offset+e.w/2; offset+=e.w;});
+      }
+    });
+    const paths = routes.map(route=>{
+      const first=route[0];
+      let d=`M ${first.source.x+14} ${first.startY}`;
+      route.forEach((e,i)=>{
+        d+=` C ${e.source.x+155} ${e.startY}, ${e.target.x-140} ${e.endY}, ${e.target.x} ${e.endY}`;
+        if(i<route.length-1) d+=` L ${e.target.x+14} ${e.endY}`;
+      });
+      return `<path d="${d}" stroke-width="${first.w}"/>`;
     }).join('');
-    return `<div class="chart-scroll"><svg class="sankey" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Recorded application transitions; adjacent tables contain exact counts"><title>Recorded transition occurrences, not current-status totals</title>${paths}`+
-      nodes.map(n=>{const c=coordinates.get(n.key);const words=(n.label+' · '+n.count).match(/.{1,28}(?:\s|$)|\S+/g)||[];return `<rect x="${c.x}" y="${c.y}" width="14" height="${c.h}"/><text x="${c.x}" y="${c.y-24}">${words.map((word,i)=>`<tspan x="${c.x}" dy="${i?16:0}">${escape(word)}</tspan>`).join('')}</text>`;}).join('')+'</svg></div>';
+    return `<div class="chart-scroll"><svg class="sankey" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Application paths including inferred interview waiting; adjacent tables contain exact counts"><title>Path-step occurrences, including inferred waiting, not current-status totals</title>${paths}`+
+      nodes.map(n=>{
+        const c=coordinates.get(n.key), words=(`${n.label} (${n.count})`).match(/.{1,28}(?:\s|$)|\S+/g)||[];
+        const alignRight=c.column>0 && c.column===positions.length-1, x=c.x+(alignRight ? 14 : 0);
+        return `<rect x="${c.x}" y="${c.y}" width="14" height="${c.h}"/><text x="${x}" y="${c.y-12-(words.length-1)*16}" text-anchor="${alignRight ? 'end' : 'start'}">${words.map((word,i)=>`<tspan x="${x}" dy="${i?16:0}">${escape(word)}</tspan>`).join('')}</text>`;
+      }).join('')+'</svg></div>';
   }
   function cohortHeatmap(groups, link) {
     const weeks = [...new Set(groups.map(g=>g.week))].filter(Boolean);
@@ -126,11 +186,11 @@
   function presentation(bundle, route, link) {
     const name=route.report, reports=bundle.reports;
     if (name==='overview') {
-      return `<section class="brief"><h2>Where to focus next</h2><p>${escape(bundle.brief.message)}</p>`+
-        (bundle.brief.leads.length ? `<ol>${bundle.brief.leads.map(l=>`<li><h3>${link(l.report,l.group_key,l.text)}</h3><p>${escape(l.caveat)}</p>${l.comparison_group_key ? `<p>${link(l.report,l.comparison_group_key,'Inspect comparison group')}</p>` : ''}</li>`).join('')}</ol>` : `<p>${link('channel','','Inspect channel coverage')} · ${link('targeting','','Inspect assessment coverage')} · ${link('skills','','Inspect requirement evidence')}</p>`)+
-        `<details><summary>Evidence sufficiency rules</summary>${bundle.brief.reasons.map(r=>`<p>${escape(r)}</p>`).join('')}</details></section>`+
+      return `<section><h2>Recorded application paths</h2><p>${link('sankey','','Open full Sankey and transition evidence')}</p><p>${escape(reports.sankey.caveat)}</p>${safeSankeyChart(reports.sankey)}${evidenceTable('sankey',reports.sankey.current || [],'Current-status counts · separate from transition occurrences',link)}</section>`+
         `<p class="population">${bundle.selected_ids.length} distinct applied applications · ${link('overview','never-applied',bundle.never_applied_ids.length+' never-applied records excluded')} · ${link('overview','unknown-date',bundle.unknown_date_excluded_ids.length+' unknown applied dates excluded by date range')}</p>`+
-        `<section><h2>Recorded application paths</h2><p>${link('sankey','','Open full Sankey and transition evidence')}</p><p>${escape(reports.sankey.caveat)}</p>${safeSankeyChart(reports.sankey)}${evidenceTable('sankey',reports.sankey.current || [],'Current-status counts · separate from transition occurrences',link)}</section>`;
+        `<section class="brief"><h2>Where to focus next</h2><p>${escape(bundle.brief.message)}</p>`+
+        (bundle.brief.leads.length ? `<ol>${bundle.brief.leads.map(l=>`<li><h3>${link(l.report,l.group_key,l.text)}</h3><p>${escape(l.caveat)}</p>${l.comparison_group_key ? `<p>${link(l.report,l.comparison_group_key,'Inspect comparison group')}</p>` : ''}</li>`).join('')}</ol>` : `<p>${link('channel','','Inspect channel coverage')} · ${link('targeting','','Inspect assessment coverage')} · ${link('skills','','Inspect requirement evidence')}</p>`)+
+        `<details><summary>Evidence sufficiency rules</summary>${bundle.brief.reasons.map(r=>`<p>${escape(r)}</p>`).join('')}</details></section>`;
     }
     const report=reports[name];
     let html=`<h2>${escape(report.title)}</h2>`;
@@ -150,7 +210,7 @@
     if (name==='targeting' || name==='channel') html+=`<h3>Fully observed 30-day comparison subset</h3><p>Same application scope; only valid dates with at least 30 recorded days of follow-up and non-anomalous interview intervals. These are the exact populations tested by the brief.</p>${evidenceTable(name,report.comparisons || [],'30-day interview attainment',link,true)}`;
     if (name==='targeting') html+=`<h3>Latest descriptive assessments · timing separated</h3>${evidenceTable(name,report.descriptive || [],'Descriptive fit; not a pre-outcome recommendation',link,true)}`;
     if (name==='skills') html+=`<h3>Normalized requirements</h3>${skillMatrix(report.requirements || [],link)}${evidenceTable(name,report.requirements || [],'Raw requirement variants and exact assessed applications',link)}`;
-    if (name==='sankey') html+=table('Transition occurrence counts versus distinct contributors',['Recorded transition','Occurrences','Distinct applications','Inspect'],report.groups.map(g=>[escape(g.label),String(g.occurrences),String(g.denominator),link(name,g.key,'Contributors')]))+evidenceTable(name,report.current || [],'Current-status counts · not flows',link);
+    if (name==='sankey') html+=table('Path-step occurrences versus distinct contributors',['Path step','Occurrences','Distinct applications','Basis','Inspect'],report.groups.map(g=>[escape(g.label),String(g.occurrences),String(g.denominator),g.derived ? 'Inferred: 30 days at the same interview step' : 'Recorded transition',link(name,g.key,'Contributors')]))+evidenceTable(name,report.current || [],'Current-status counts · not flows',link);
     if (name==='inventory') {
       html+=`<h3>Collection freshness</h3><p>Last completed collection: ${escape(report.last_completed_at)} · elapsed recorded days: ${report.freshness_days == null ? 'unavailable' : report.freshness_days.toFixed(1)}. ${(report.older_than_30_days_ids || []).length} postings older than 30 days; ${(report.unknown_freshness_ids || []).length} with unknown freshness. Runs ${report.runs_available ? 'available' : 'unavailable'}.</p>`;
       try {html+=salaryChart(report.salary_groups || []);} catch (_) {html+='<p>Salary visualization unavailable; inspect units and ranges in evidence.</p>';}

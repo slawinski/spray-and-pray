@@ -470,8 +470,8 @@ actions are unchanged.
 uvicorn server:app --host localhost --port 8000
 ```
 
-The overview leads with up to three evidence-backed investigation leads and a
-Sankey summary. Navigation opens channel, cohorts, stage loss, targeting, skill
+The overview leads with the Sankey summary, followed by up to three
+evidence-backed investigation leads. Navigation opens channel, cohorts, stage loss, targeting, skill
 gaps, aging, opportunity inventory, and full Sankey views. Each report has a
 readable table alongside its native chart. Use ordinary links/buttons with
 Tab and Enter to inspect exact supporting records; evidence headings receive
@@ -497,8 +497,14 @@ or incompatible database.
   never-applied drafts are separate. Unknown applied dates remain in all-dates
   scope but are excluded from explicit date ranges. Current status and ever
   reaching a stage are different measures; equal status timestamps use history
-  ID order. Sankey counts transition occurrences, not applications summed over
+  ID order. Sankey counts path-step occurrences, not applications summed over
   edges, and excludes draft-only preparation and transient ghosted steps.
+- An interview unchanged for **30 days or more** gains an inferred Sankey
+  endpoint, **No recorded outcome · mid-interview**. Age is measured from entry
+  into the current interview round, not from application date; repeated entries
+  of the same status do not reset it. A new round or recorded outcome removes
+  the inference on refresh. These links are marked as inferred in the evidence
+  table; stored statuses, history, and the current-status counts stay unchanged.
 - Automatic `ghosted` means **no recorded outcome**, not confirmed employer
   ghosting. Aging separates waiting before and after engagement. All durations
   are **recorded time**: activation, backfilling, undo and deleted history limit
