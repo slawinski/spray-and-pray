@@ -38,11 +38,12 @@ STATUS_COLORS = {
     "ghosted": "grey37",
 }
 
-def _status_rich(status: str) -> str:
+def _status_rich(status: str, *, compact: bool = False) -> str:
     base = status.split()[0] if status.split()[0] in STATUS_COLORS else "applied"
     color = STATUS_COLORS.get(base, "white")
     if base == "interview":
-        return f"[bold {color}]{status}[/]"
+        label = f"Int. {status.split()[-1]}" if compact else status
+        return f"[bold {color}]{label}[/]"
     return f"[{color}]{status}[/]"
 
 
@@ -321,7 +322,7 @@ class CvDashboard(App):
                 values = {
                     "Company": Text(app["company"], no_wrap=True, overflow="ellipsis"),
                     "Role": Text(app["role"], no_wrap=True, overflow="ellipsis"),
-                    "Status": _status_rich(app["latest_status"]), "Match": _match_rich(match_score),
+                    "Status": _status_rich(app["latest_status"], compact=True), "Match": _match_rich(match_score),
                     "Readiness": _readiness_compact(self.readiness.get(app["id"])),
                     "Source": Text(_source_name(app)),
                     "Added": created, "#": str(idx + 1),
