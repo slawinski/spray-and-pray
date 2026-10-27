@@ -33,6 +33,7 @@ class Settings(BaseModel):
     match_prompt_version: str = Field(default="match-prompt-v2")
 
     discord_webhook_url: str | None = Field(default=os.getenv("DISCORD_WEBHOOK_URL"))
+    enable_notifications: bool = Field(default=_env_flag("ENABLE_NOTIFICATIONS"))
 
     # Automated job discovery (TUI [J], `cv-opt discover`, launchd agent).
     # Opt-in via ENABLE_DISCOVERY=true — off by default so scheduled runs
