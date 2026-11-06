@@ -34,15 +34,15 @@ def test_sankey_routes_shared_outcomes_without_crossing_flows(aligned_outcomes):
     run_node(r"""
     const assert = require('node:assert/strict'), ui = require(process.argv[1]);
     const nodeData = ALIGNED_OUTCOMES
-      ? [[0,'applied',184],[1,'interview 1',14],[2,'interview 2',8],[3,'interview 3',1],
-         [4,'No recorded outcome',131],[4,'withdrawn',3],[4,'rejected',45]]
+      ? [[0,'applied',185],[1,'interview 1',14],[2,'interview 2',8],[3,'interview 3',1],
+         [4,'Ghosted',131],[4,'withdrawn',3],[4,'rejected',45],[4,'accepted',1]]
       : [[0,'applied',184],[1,'waiting',131],[1,'interview 1',14],[1,'withdrawn',1],
          [2,'interview 2',8],[3,'interview 3',1],[3,'withdrawn',2],[4,'rejected',45]];
     const nodes = nodeData
       .map(([position,label,count])=>({key:position+':'+label,position,label,count}));
     const linkData = ALIGNED_OUTCOMES
       ? [[0,1,14],[0,4,131],[0,5,1],[0,6,38],[1,2,8],
-         [1,6,2],[2,3,1],[2,5,2],[2,6,4],[3,6,1]]
+         [1,6,2],[2,3,1],[2,5,2],[2,6,4],[3,6,1],[0,7,1]]
       : [[0,1,131],[0,2,14],[0,3,1],[0,7,38],[2,4,8],
          [2,7,2],[4,5,1],[4,6,2],[4,7,4],[5,7,1]];
     const links = linkData
@@ -94,7 +94,19 @@ def test_sankey_routes_shared_outcomes_without_crossing_flows(aligned_outcomes):
       nodes.map(n=>`${n.label} (${n.count})`));
     if(ALIGNED_OUTCOMES) {
       const rects = [...html.matchAll(/<rect x="([^"]+)"/g)].map(m=>Number(m[1]));
-      assert.ok(rects.slice(-3).every(x=>x===Math.max(...rects)),'Final outcomes align right');
-      assert.ok(captions.slice(-3).every(m=>m[0].includes('text-anchor="end"')),'Outcome captions extend inward');
+      assert.ok(rects.slice(-4).every(x=>x===Math.max(...rects)),'Final outcomes align right');
+      assert.ok(captions.slice(-4).every(m=>m[0].includes('text-anchor="end"')),'Outcome captions extend inward');
     }
     """.replace('ALIGNED_OUTCOMES', 'true' if aligned_outcomes else 'false'))
+
+
+def test_sankey_evidence_explains_fourteen_day_inference():
+    run_node(r"""
+    const assert = require('node:assert/strict'), ui = require(process.argv[1]);
+    const group = {key:'waiting',label:'interview 1 → No recorded outcome · mid-interview',
+      ids:[1],denominator:1,occurrences:1,derived:true};
+    const report = {title:'Paths',state:'ready',groups:[group],current:[],nodes:[],links:[]};
+    const html = ui.presentation({reports:{sankey:report}},{report:'sankey'},()=> '');
+    assert.match(html,/Inferred: 14 days at the same interview step/);
+    assert.ok(!html.includes('30 days'));
+    """)
