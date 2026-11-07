@@ -18,36 +18,41 @@ def status_label(status, engaged=False):
 
 def sankey_report(facts):
     pairs, links, current, nodes = (defaultdict(list) for _ in range(4))
+    derived_nodes = set()
     chains = []
     for f in facts:
         chain = clean_chain([e['status'] for e in f['history']])
-        if interview(f['current_status']) and f['stage_age_days'] is not None and f['stage_age_days'] >= 30:
+        if interview(f['current_status']) and f['stage_age_days'] is not None and f['stage_age_days'] >= 14:
             chain.append(MID_INTERVIEW_WAITING)
         chains.append(chain)
     final_position = max((len(chain)-1 for chain in chains), default=0)
-    final_statuses = {'rejected', 'withdrawn', 'ghosted', MID_INTERVIEW_WAITING}
+    final_statuses = {'accepted', 'rejected', 'withdrawn', 'ghosted', MID_INTERVIEW_WAITING}
     for f, chain in zip(facts, chains):
         current[status_label(f['current_status'], f['engaged'])].append(f)
         labels = [status_label(s, f['engaged']) for s in chain]
+        chart_labels = ['Ghosted' if s in ('ghosted', MID_INTERVIEW_WAITING) else label
+                        for s, label in zip(chain, labels)]
         path = [(final_position, label) if chain[position] in final_statuses and position == len(chain)-1
                 else (position, label+' (later reopened)' if chain[position] in final_statuses else label)
-                for position, label in enumerate(labels)]
-        for node in path:
+                for position, label in enumerate(chart_labels)]
+        for node, status in zip(path, chain):
             nodes[node].append(f['id'])
+            if status == MID_INTERVIEW_WAITING:
+                derived_nodes.add(node)
         for position in range(len(chain)-1):
             pairs[chain[position], chain[position+1], labels[position], labels[position+1]].append(f['id'])
-            links[path[position], path[position+1]].append(f['id'])
+            links[path[position], path[position+1], chain[position+1] == MID_INTERVIEW_WAITING].append(f['id'])
     return model('Recorded application paths',
                   [group(['transition', a, b, la, lb], f'{la} → {lb}', ids, occurrences=len(ids),
                          derived=b == MID_INTERVIEW_WAITING, **{'from': a, 'to': b})
                   for (a, b, la, lb), ids in sorted(pairs.items())], facts,
                   TIME_CAVEAT + ' Link weights count path-step occurrences, not current statuses or distinct applications. '
-                  'Mid-interview waiting is inferred after 30 days without a change in interview step; it does not change recorded statuses or history. '
+                  'Ghosted combines recorded ghosted outcomes and mid-interview waiting inferred after 14 days without a change in interview step; it does not change recorded statuses or history. '
                   'Draft preparation and transient ghosted steps are omitted.',
                  nodes=[{'key': f'{position}:{label}', 'position': position, 'label': label,
-                          'ids': sorted(set(ids)), 'count': len(ids), 'derived': label == MID_INTERVIEW_WAITING}
+                          'ids': sorted(set(ids)), 'count': len(ids), 'derived': (position, label) in derived_nodes}
                          for (position, label), ids in sorted(nodes.items())],
                   links=[{'source': f'{p}:{a}', 'target': f'{q}:{b}', 'source_position': p, 'target_position': q,
-                           'count': len(ids), 'ids': sorted(set(ids)), 'derived': b == MID_INTERVIEW_WAITING}
-                          for ((p, a), (q, b)), ids in sorted(links.items())],
+                           'count': len(ids), 'ids': sorted(set(ids)), 'derived': derived}
+                           for ((p, a), (q, b), derived), ids in sorted(links.items())],
                  current=[group(['current', label], label, members) for label, members in sorted(current.items())])
